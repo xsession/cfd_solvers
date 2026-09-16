@@ -5,3 +5,5 @@ cmake-build-*/
 *.user
 *.swp
 .DS_Store
+
+build-*/

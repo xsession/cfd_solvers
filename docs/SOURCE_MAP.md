@@ -16,7 +16,7 @@ Target families:
 - dynamic meshes/AMR
 - function-object style diagnostics and post-processing
 
-Phase 4A adds the clean-room `PolyMesh` owner/neighbour topology, boundary patches, cell-parallel Gauss gradient/divergence, an orthogonal two-point Laplacian, shared matrix-free CG, and a staggered conservative pressure projection. The Phase-4B baseline adds linear/upwind face schemes, conservative convective divergence, and a transient periodic staggered Navier-Stokes Taylor-Green solver. The next FVM milestone is collocated unstructured momentum transport, non-orthogonal correction, Rhie-Chow-style flux handling, and SIMPLE/PISO/PIMPLE-style coupling.
+Phase 4A adds the clean-room `PolyMesh` owner/neighbour topology, boundary patches, cell-parallel Gauss gradient/divergence, an orthogonal two-point Laplacian, shared matrix-free CG, and a staggered conservative pressure projection. Phase 4B adds linear/upwind face schemes, conservative convective divergence and transient Taylor-Green flow. Phase 4C adds collocated unstructured momentum, non-orthogonal correction, Rhie-Chow-style flux handling and SIMPLE/PISO/PIMPLE-style coupling. v0.5.0 moves collocated momentum to shared ILU(0)-GMRES and adds bounded reconstruction plus generic scalar transport. Remaining FVM targets are turbulence, compressible/energy/species flow, VOF/multiphase, moving mesh/AMR and CHT.
 
 ## FluidX3D -> LBM performance architecture
 
@@ -43,7 +43,7 @@ Target families:
 - coupled multiphysics and nonlinear Newton loops
 - adaptivity/error estimators
 
-Phase 1 implements a minimal assembled linear Poisson FEM problem to establish the API.
+v0.6.0 extends the original minimal FEM proof into a reusable reference-element/assembly layer: Line2/Tri3/Quad4/Tet4/Hex8/Prism6/Pyramid5 topology, shape functions, quadrature, isoparametric Jacobians, mixed scalar boundary conditions, assembled/matrix-free Tri3 Laplace, 2-D heat/elasticity/electrostatics/DC conduction, axisymmetric elasticity and a convergent 3-D Tet4 Poisson baseline. Nonlinear mechanics, frequency-domain EM, adaptivity and distributed FEM remain planned.
 
 ## openEMS FDTD -> electromagnetic time domain
 
@@ -57,7 +57,7 @@ Target families:
 - near-to-far field transforms
 - MPI/SYCL domain decomposition
 
-Phase 1 implements the 1-D Yee update and CFL-safe timestep.
+The 1-D Yee/CFL baseline now includes heterogeneous dielectric/conductive coefficients, hard/soft sources, first-order Mur absorption and reusable time/DFT monitors. v0.6.0 also adds a 3-D Cartesian Maxwell PEC baseline. CPML/PML, dispersive/anisotropic materials, ports, NF2FF/SAR and distributed SYCL FDTD remain planned.
 
 ## Optiland -> optics
 
@@ -71,7 +71,7 @@ Target families:
 - optical optimization
 - large batched ray tracing on SYCL
 
-Phase 1 implements vector, reflection and Snell refraction primitives.
+The optics layer now includes reflection/Snell primitives, sequential spherical/plane real-ray tracing, paraxial first-order tracing, Sellmeier dispersion, Jones/Stokes polarization, dielectric Fresnel coefficients and normal-incidence multilayer thin films. Non-sequential tracing, wave/physical optics, full analysis/tolerancing/optimization and SYCL batched tracing remain planned.
 
 ## Phase 3 runtime references
 

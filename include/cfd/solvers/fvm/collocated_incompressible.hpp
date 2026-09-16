@@ -1,9 +1,11 @@
 #pragma once
 
 #include "cfd/core/conjugate_gradient.hpp"
+#include "cfd/core/iterative_solvers.hpp"
 #include "cfd/fvm/pressure_velocity.hpp"
 #include "cfd/fvm/schemes.hpp"
 
+#include <array>
 #include <cstddef>
 #include <functional>
 #include <string_view>
@@ -15,7 +17,10 @@ struct CollocatedIncompressibleConfig {
     double density{1.0};
     double kinematic_viscosity{1.0e-2};
     double dt{1.0e-2};                 // physical dt for PISO/PIMPLE; pseudo-dt for SIMPLE
-    std::size_t momentum_sweeps{3};
+    std::size_t momentum_sweeps{3}; // legacy fixed-point fallback
+    bool use_krylov_momentum{true};
+    std::size_t momentum_iterations{300};
+    double momentum_tolerance{1.0e-10};
     std::size_t pressure_iterations{1000};
     double pressure_tolerance{1.0e-10};
     std::size_t nonorthogonal_correctors{2};
@@ -72,6 +77,7 @@ public:
     [[nodiscard]] const std::vector<Vec3>& h_by_a() const noexcept { return h_by_a_; }
     [[nodiscard]] const std::vector<double>& pressure_mobility() const noexcept { return pressure_mobility_; }
     [[nodiscard]] const CollocatedIncompressibleConfig& config() const noexcept { return config_; }
+    [[nodiscard]] const std::array<cfd::core::IterativeSolverResult, 3>& momentum_results() const noexcept { return momentum_results_; }
     [[nodiscard]] double time() const noexcept { return time_; }
     [[nodiscard]] std::size_t steps() const noexcept { return steps_; }
     [[nodiscard]] double continuity_l2() const;
@@ -92,6 +98,8 @@ private:
     std::vector<double> pressure_rhs_;
     std::vector<double> pressure_face_coefficient_;
     cfd::core::ConjugateGradientWorkspace pressure_workspace_;
+    std::array<cfd::core::KrylovWorkspace, 3> momentum_workspace_;
+    std::array<cfd::core::IterativeSolverResult, 3> momentum_results_{};
     cfd::core::ConjugateGradientResult pressure_result_{};
     double time_{};
     std::size_t steps_{};

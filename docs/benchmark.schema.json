@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/cfd_solvers/benchmark.schema.json",
+  "title": "cfd_solvers benchmark result v1",
+  "type": "object",
+  "required": [
+    "schema", "lattice", "backend", "streaming", "device", "nx", "ny", "nz",
+    "q", "steps", "seconds", "mlups", "estimated_ddf_gbps", "allocated_ddf_mib",
+    "single_grid_ddf_mib", "mass_error_abs", "mass_error_rel"
+  ],
+  "properties": {
+    "schema": {"const": "cfd_solvers.benchmark.v1"},
+    "lattice": {"enum": ["d2q9", "d3q19", "d3q27"]},
+    "backend": {"type": "string"},
+    "streaming": {"type": "string"},
+    "device": {"type": "string"},
+    "nx": {"type": "integer", "minimum": 1},
+    "ny": {"type": "integer", "minimum": 1},
+    "nz": {"type": "integer", "minimum": 1},
+    "q": {"type": "integer", "minimum": 1},
+    "steps": {"type": "integer", "minimum": 1},
+    "seconds": {"type": "number", "exclusiveMinimum": 0},
+    "mlups": {"type": "number", "minimum": 0},
+    "estimated_ddf_gbps": {"type": "number", "minimum": 0},
+    "allocated_ddf_mib": {"type": "number", "minimum": 0},
+    "single_grid_ddf_mib": {"type": "number", "minimum": 0},
+    "mass_error_abs": {"type": "number", "minimum": 0},
+    "mass_error_rel": {"type": "number", "minimum": 0},
+    "commit": {"type": "string"},
+    "timestamp_utc": {"type": "string"}
+  },
+  "additionalProperties": true
+}

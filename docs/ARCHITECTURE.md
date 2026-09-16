@@ -76,7 +76,7 @@ The correctness oracle can still exchange complete boundary cells, while the pro
 
 Phase 4A adds a topology-first `PolyMesh` with cell volumes/centres, owner/neighbour face connectivity, oriented face-area vectors, boundary patches and prebuilt cell-to-face adjacency. The first reusable operators are cell-parallel Gauss gradient/divergence and an orthogonal two-point Laplacian. A periodic staggered pressure-projection kernel uses the shared matrix-free CG solver as the first incompressible pressure/velocity coupling baseline.
 
-This layer is deliberately below OpenFOAM-class feature parity: non-orthogonal correction, convection schemes/limiters, collocated Rhie-Chow coupling and SIMPLE/PISO/PIMPLE algorithms remain subsequent work.
+Later phases now add non-orthogonal correction, bounded convection, collocated Rhie-Chow-style fluxes, SIMPLE/PISO/PIMPLE control and shared ILU(0)-GMRES momentum solves. The continuum layer is still below OpenFOAM-class parity because turbulence, compressible/reacting flow, multiphase/VOF, moving mesh/AMR and CHT remain incomplete.
 
 ## Precision policy
 
@@ -93,3 +93,15 @@ Phase 4B adds reusable linear/upwind face interpolation and conservative scalar/
 ## Collocated FVM pressure/velocity coupling
 
 Phase 4C adds `pressure_velocity` geometry/BC/flux primitives and `CollocatedIncompressible`. Momentum prediction retains pressure-free `HbyA` and cell `V/aP`; Rhie-Chow-style face flux uses direct pressure differences, while the orthogonal pressure contribution forms a matrix-free SPD operator and non-orthogonal flux is iterated explicitly. SIMPLE, PISO and PIMPLE-style controls share this same discretization rather than duplicating solver kernels.
+
+## FEM reference-element layer
+
+v0.6.0 introduces a reusable reference-element kernel spanning line, triangle, quadrilateral, tetrahedron, hexahedron, prism and pyramid topologies. Shape functions, reference gradients, Gaussian quadrature and isoparametric Jacobians are separated from physics assembly. The first shared applications are scalar diffusion/Poisson/heat, electrostatics/DC conduction and linear elasticity, including axisymmetric and 3-D Tet4 baselines.
+
+## FDTD material/monitor layer
+
+The FDTD path keeps electromagnetic field updates separate from source, material and monitor policies. Heterogeneous dielectric/loss coefficients are precomputed outside the hot loop; hard/soft excitation, first-order Mur absorption and time/DFT monitors are reusable components. The 3-D Maxwell path is currently a correctness baseline and does not yet claim CPML/openEMS feature parity.
+
+## Optical-system layer
+
+Sequential real-ray surfaces, paraxial first-order propagation, material dispersion and polarization/coating primitives share small value types rather than Python-style dynamic objects. This preserves readability while leaving a direct path to structure-of-arrays batched SYCL kernels in later phases.

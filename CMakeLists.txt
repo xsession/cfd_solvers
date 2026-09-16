@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(cfd_solvers VERSION 0.4.2 LANGUAGES CXX)
+project(cfd_solvers VERSION 0.6.1 LANGUAGES CXX)
 
 option(CFD_ENABLE_OPENMP "Enable multicore CPU execution through OpenMP" ON)
 option(CFD_ENABLE_SYCL "Enable AdaptiveCpp/SYCL accelerator backend" OFF)
@@ -23,9 +23,47 @@ add_library(cfd_solvers
     src/fvm/projection2d.cpp
     src/fvm/collocated_incompressible.cpp
     src/fvm/incompressible2d.cpp
+    src/fvm/scalar_transport.cpp
     src/fem/poisson1d.cpp
+    src/fem/mesh2d.cpp
+    src/fem/mesh3d.cpp
+    src/fem/reference_element.cpp
+    src/fem/assembly.cpp
+    src/fem/scalar_diffusion2d.cpp
+    src/fem/electromagnetics2d.cpp
+    src/fem/poisson2d.cpp
+    src/fem/poisson3d.cpp
+    src/fem/heat2d.cpp
+    src/fem/elasticity2d.cpp
+    src/fem/axisymmetric_elasticity.cpp
+    src/fem/nonlinear_poisson2d.cpp
+    src/fem/adaptivity.cpp
+    src/fem/darcy2d.cpp
+    src/fem/magnetostatics2d.cpp
+    src/fem/modal_bar1d.cpp
     src/fdtd/maxwell1d.cpp
+    src/fdtd/monitor.cpp
+    src/fdtd/port.cpp
+    src/fdtd/maxwell3d.cpp
+    src/fdtd/vtk_io.cpp
     src/optics/ray.cpp
+    src/optics/sequential.cpp
+    src/optics/materials.cpp
+    src/optics/paraxial.cpp
+    src/optics/polarization.cpp
+    src/optics/gaussian_beam.cpp
+    src/chemistry/kinetics.cpp
+    src/chemistry/implicit_reactor.cpp
+    src/chemistry/aqueous_equilibrium.cpp
+    src/electrochemistry/electrochemistry.cpp
+    src/electrochemistry/corrosion1d.cpp
+    src/electrochemistry/nernst_planck1d.cpp
+    src/electrochemistry/nernst_planck_poly.cpp
+    src/electrochemistry/mixed_potential.cpp
+    src/multiphysics/field_registry.cpp
+    src/multiphysics/transfer.cpp
+    src/multiphysics/partitioned.cpp
+    src/multiphysics/electro_thermal.cpp
 )
 add_library(cfd::solvers ALIAS cfd_solvers)
 
@@ -88,7 +126,7 @@ if(CFD_ENABLE_SYCL)
     endif()
 endif()
 
-add_executable(cfd-solve apps/cfd-solve.cpp)
+add_executable(cfd-solve apps/cfd-solve.cpp apps/continuation_cases.cpp)
 target_link_libraries(cfd-solve PRIVATE cfd::solvers)
 if(CFD_ENABLE_SYCL)
     add_sycl_to_target(TARGET cfd-solve SOURCES apps/cfd-solve.cpp)
@@ -111,6 +149,15 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
         add_sycl_to_target(TARGET cfd-tests SOURCES tests/test_main.cpp)
     endif()
     add_test(NAME cfd-tests COMMAND cfd-tests)
+    add_executable(cfd-extension-tests tests/test_extensions.cpp)
+    target_link_libraries(cfd-extension-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-extension-tests COMMAND cfd-extension-tests)
+    if(CFD_ENABLE_SYCL)
+        add_sycl_to_target(TARGET cfd-extension-tests SOURCES tests/test_extensions.cpp)
+    endif()
+    foreach(case_name lbm-trt fvm-workspace fdtd-pml1d chemistry-reactor chemistry-equilibrium optics-gaussian multiphysics-thermoelastic)
+        add_test(NAME cfd-${case_name}-smoke COMMAND cfd-solve ${case_name})
+    endforeach()
     add_executable(cfd-sanitize-smoke tests/test_sanitize_smoke.cpp)
     target_link_libraries(cfd-sanitize-smoke PRIVATE cfd::solvers)
     if(CFD_ENABLE_SYCL)
@@ -118,12 +165,29 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     endif()
     add_test(NAME cfd-sanitize-smoke COMMAND cfd-sanitize-smoke)
     add_test(NAME cfd-bench-smoke COMMAND cfd-bench --lattice d3q19 --nx 8 --ny 8 --nz 8 --warmup 1 --steps 2 --threads 1 --csv)
+    add_test(NAME cfd-bench-json-smoke COMMAND cfd-bench --lattice d3q19 --nx 8 --ny 8 --nz 8 --warmup 1 --steps 2 --threads 1 --json)
     add_test(NAME cfd-halo-plan-smoke COMMAND cfd-halo-plan --lattice d3q27 --nx 8 --ny 8 --nz 8)
     add_test(NAME cfd-fvm-operators-smoke COMMAND cfd-solve fvm-operators3d)
     add_test(NAME cfd-fvm-projection-smoke COMMAND cfd-solve fvm-projection2d)
     add_test(NAME cfd-fvm-navier-stokes-smoke COMMAND cfd-solve fvm-taylor-green2d)
     add_test(NAME cfd-fvm-collocated-skew-smoke COMMAND cfd-solve fvm-collocated-skew)
     add_test(NAME cfd-fvm-collocated-channel-smoke COMMAND cfd-solve fvm-collocated-channel)
+    add_test(NAME cfd-fvm-scalar-transport-smoke COMMAND cfd-solve fvm-scalar-transport)
+    add_test(NAME cfd-fem-poisson3d-smoke COMMAND cfd-solve fem-poisson3d)
+    add_test(NAME cfd-fem-nonlinear-smoke COMMAND cfd-solve fem-nonlinear-poisson)
+    add_test(NAME cfd-fem-darcy-smoke COMMAND cfd-solve fem-darcy)
+    add_test(NAME cfd-fem-magnetostatic-smoke COMMAND cfd-solve fem-magnetostatic)
+    add_test(NAME cfd-fem-modal-smoke COMMAND cfd-solve fem-modal-bar)
+    add_test(NAME cfd-fdtd-mur1d-smoke COMMAND cfd-solve fdtd-mur1d)
+    add_test(NAME cfd-fdtd-dispersive-smoke COMMAND cfd-solve fdtd-dispersive1d)
+    add_test(NAME cfd-fdtd-port-vtk-smoke COMMAND cfd-solve fdtd-port-vtk)
+    add_test(NAME cfd-multiphysics-coupling-smoke COMMAND cfd-solve multiphysics-coupling)
+    add_test(NAME cfd-multiphysics-joule-heat-smoke COMMAND cfd-solve multiphysics-joule-heat)
+    add_test(NAME cfd-optics-lens-smoke COMMAND cfd-solve optics-lens)
+    add_test(NAME cfd-electrochem-corrosion-smoke COMMAND cfd-solve electrochem-corrosion1d)
+    add_test(NAME cfd-electrochem-pnp-smoke COMMAND cfd-solve electrochem-pnp1d)
+    add_test(NAME cfd-electrochem-pnp-poly-smoke COMMAND cfd-solve electrochem-pnp-poly)
+    add_test(NAME cfd-electrochem-galvanic-smoke COMMAND cfd-solve electrochem-galvanic)
 
     if(CFD_ENABLE_MPI)
         add_executable(cfd-mpi-tests tests/test_mpi.cpp)

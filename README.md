@@ -6,22 +6,38 @@ The long-term goal is a readable solver collection covering CFD, FEM multiphysic
 
 The project is inspired by the capabilities and engineering lessons of OpenFOAM, FluidX3D, Elmer FEM, openEMS FDTD and Optiland. It is **not** a source-code merge or mechanical translation. The source projects have different licenses, and FluidX3D has additional restrictions, so performance techniques are independently implemented from publications and public descriptions.
 
-## Phase 4C status
+## v0.6.1 status - nonlinear/adaptive FEM and additional Elmer-class physics
 
-Phase 4C adds the first collocated arbitrary-`PolyMesh` incompressible pressure/velocity coupling layer on top of the Phase-4A/4B finite-volume foundation:
+The machine-checkable integration program now reports **137/398 capabilities (34.4%)** complete. The tracker remains conservative: a capability is checked only when implementation and validation are both present. Phase 0 traceability/release infrastructure is complete; the Elmer-class FEM family is now 27/46 (58.7%), openEMS-class FDTD is 8/26, and Optiland-class optics is 12/43.
 
-- cell-centred momentum prediction with reusable `HbyA` and `V/aP` pressure mobility;
-- Rhie-Chow-style face flux using direct owner/neighbour pressure differences;
-- explicit non-orthogonal pressure-flux correction with repeated correction loops;
-- fixed-value, zero-gradient and slip velocity patches;
-- fixed-value and zero-gradient pressure patches;
-- SIMPLE pseudo-steady coupling;
-- transient PISO-style pressure correctors;
-- PIMPLE-style outer momentum/pressure coupling;
-- deterministic sheared-hexa mesh generator for non-orthogonal regression;
-- pressure-driven Poiseuille, lid-driven cavity and sheared-mesh coupling tests/CLI cases.
+This checkpoint builds on v0.6.0 and adds:
 
-The existing staggered Taylor-Green solver remains as an independent transient correctness baseline. The collocated path is intentionally still smaller than OpenFOAM: there is no general fvMatrix/source/turbulence/dynamic-mesh framework yet. See `docs/PHASE4C_COLLOCATED.md`.
+- generic Newton nonlinear solves with backtracking and ILU(0)-GMRES linearization;
+- nonlinear Tri3 Poisson/reaction validation;
+- residual/jump error estimation, Dorfler marking and conforming longest-edge adaptive refinement;
+- saturated Darcy porous flow;
+- 2-D magnetostatics using an out-of-plane vector potential;
+- generalized sparse FEM eigenanalysis and a fixed-free bar modal benchmark.
+
+The v0.6.0 breadth work remains part of this tree, including:
+
+- reference-element topology, shape functions, gradients and Gaussian quadrature for Line2/Tri3/Quad4/Tet4/Hex8/Prism6/Pyramid5;
+- isoparametric mapping/Jacobians and physical shape gradients;
+- reusable Tri3 CSR and matrix-free Laplace assembly;
+- mixed Dirichlet/Neumann/Robin scalar FEM boundaries;
+- 2-D Poisson/heat/linear-elasticity, electrostatics and DC conduction;
+- axisymmetric linear elasticity with the cylindrical `2*pi*r` weak form and hoop strain;
+- convergent 3-D Tet4 Poisson assembly;
+- 3-D Cartesian Maxwell FDTD baseline;
+- heterogeneous dielectric/conductive 1-D FDTD coefficients, hard/soft sources, first-order Mur absorption, time probes and DFT monitors;
+- sequential real-ray tracing plus paraxial first-order optics;
+- Sellmeier glass dispersion, Jones/Stokes polarization, Fresnel interfaces and normal-incidence multilayer thin films;
+- benchmark NDJSON output plus history summarization;
+- tag-driven release artifacts: source archives, delta patch, Git bundle and SHA-256 manifest.
+
+The v0.5.0 sparse/FVM/electrochemistry work remains part of this tree, including ILU(0)-GMRES collocated momentum solves, Nernst-Planck/PNP transport, Scharfetter-Gummel fluxes, Butler-Volmer/Faradaic boundaries and galvanic mixed-potential calculations.
+
+See `docs/INTEGRATION_TRACKER.md`, `docs/PHASE4E_FEM_CORE.md`, `docs/PHASE4F_FEM_ADVANCED.md`, `docs/PHASE5_FDTD_BASELINE.md`, `docs/PHASE6_OPTICS_BASELINE.md`, and `docs/VALIDATION.md`.
 
 ## Build
 
@@ -47,6 +63,19 @@ Examples:
 ./build/cfd-solve fvm-collocated-channel
 ./build/cfd-solve fvm-collocated-cavity
 ./build/cfd-solve fvm-collocated-skew
+./build/cfd-solve fvm-scalar-transport
+./build/cfd-solve fem-poisson3d
+./build/cfd-solve fem-nonlinear-poisson
+./build/cfd-solve fem-darcy
+./build/cfd-solve fem-magnetostatic
+./build/cfd-solve fem-modal-bar
+./build/cfd-solve fdtd-mur1d
+./build/cfd-solve optics-lens
+./build/cfd-solve electrochem-corrosion1d
+./build/cfd-solve electrochem-pnp1d
+./build/cfd-solve electrochem-pnp-poly
+./build/cfd-solve electrochem-galvanic
+./scripts/integration_status.py
 ```
 
 ## Benchmark

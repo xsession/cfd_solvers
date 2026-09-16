@@ -1,5 +1,64 @@
 # Changelog
 
+## Unreleased - CPU solver continuation and local MPI validation
+
+- Added periodic CPU TRT collision for D2Q9/D3Q19/D3Q27, including split Guo forcing.
+- Added reusable scalar FVM workspaces, minmod/van-Leer reconstruction, and scalar-transport matrix/ILU caching.
+- Added reversible kinetics, caller-owned reaction buffers, adaptive implicit isothermal integration and ideal acid/base pH equilibrium.
+- Added conic/even-asphere ray intersections and Gaussian-beam ABCD propagation.
+- Added thermal-strain loading for plane-stress/plane-strain FEM and analytical DC -> heat -> expansion validation.
+- Corrected the 1-D FDTD magnetic sign, material CFL/ADE guards, initialization reset, old-time FEM boundary mass contribution and final-iteration coupling residual.
+- Validated the existing 1-D matched layer and ADE material work with absorption, analytical response and refinement regressions.
+- Added seven CLI cases, a focused numerical regression target, and its sanitizer CI coverage.
+- Executed four-rank distributed CPU regressions locally with MPICH in WSL; GPU validation remains open.
+
+See `docs/CONTINUATION_CPU.md` for API assumptions, performance measurements and remaining work.
+
+## 0.6.1 - nonlinear/adaptive FEM, porous flow, magnetostatics and modal analysis
+
+- Added a reusable Newton solver with backtracking line search and ILU(0)-GMRES Jacobian solves.
+- Added a nonlinear Tri3 Poisson/reaction manufactured-solution regression using the shared Newton stack.
+- Added residual/flux-jump Poisson error estimation, Dorfler marking and conforming longest-edge Tri3 refinement.
+- Added saturated isotropic Darcy porous-flow FEM with analytical channel validation.
+- Added 2-D magnetostatics through the out-of-plane magnetic vector potential and reconstructed magnetic flux density.
+- Added a sparse generalized eigenvalue solver using M-orthogonal deflated inverse iteration and shared PCG inner solves.
+- Added a fixed-free Line2 bar modal/eigenfrequency application with consistent mass and analytical mode validation.
+- Added CLI/CTest smoke cases and sanitizer coverage for the new FEM capabilities.
+- Integration tracker advanced to 137/398 validated capabilities (34.4%), with Elmer-class FEM at 27/46 (58.7%).
+
+## 0.6.0 - FEM/FDTD/optics breadth and release traceability
+
+- Completed the Phase-0 release/benchmark traceability checklist with machine-readable benchmark NDJSON, history summarization, and a tag-driven artifact workflow.
+- Added a reusable FEM reference-element catalogue for Line2, Tri3, Quad4, Tet4, Hex8, Prism6 and Pyramid5 with shape functions, gradients, quadrature, isoparametric mapping and Jacobians.
+- Added reusable Tri3 CSR/matrix-free Laplace assembly and mixed Dirichlet/Neumann/Robin scalar-diffusion boundaries.
+- Added 2-D Poisson, heat, linear elasticity, electrostatics and DC conduction applications using shared FEM infrastructure.
+- Added axisymmetric linear elasticity with cylindrical weighting and hoop strain.
+- Added a convergent 3-D Tet4 Poisson baseline.
+- Added a 3-D Maxwell FDTD baseline plus 1-D material preprocessing, hard/soft sources, first-order Mur boundaries, time probes and DFT monitors.
+- Added sequential and paraxial optics, Sellmeier materials, Jones/Stokes polarization, Fresnel coefficients and normal-incidence multilayer transfer matrices.
+- Added CLI/CTest smoke cases for 3-D FEM, Mur FDTD and sequential/paraxial optics.
+- Expanded sanitizer smoke coverage across the new FEM/FDTD/optics paths.
+- Integration tracker advanced to 132/397 validated capabilities (33.2%).
+
+## 0.5.0 - tracked integration, sparse numerics and electrochemistry foundation
+
+- Added a 386-item checkable integration tracker spanning the OpenFOAM, FluidX3D, Elmer, openEMS, Optiland and chemistry/electrochemistry target capabilities.
+- Added pinned upstream provenance manifest and integration-status reporter.
+- Added CSR sparse matrix assembly/SpMV, Jacobi-PCG, BiCGStab, ILU(0) and restarted GMRES.
+- Replaced the default collocated momentum fixed-point sweeps with an ILU(0)-GMRES full-momentum solve while retaining the legacy fallback for A/B validation.
+- Added bounded limited-linear MUSCL/Barth-Jespersen-style finite-volume reconstruction.
+- Added elementary Arrhenius/mass-action reaction networks.
+- Added Nernst, Butler-Volmer and Faraday electrochemistry helpers.
+- Added nonlinear 1-D corrosion current/recession solver with electrolyte ohmic feedback.
+- Added conservative 1-D multi-species Nernst-Planck transport with diffusion, advection and electromigration.
+- Added arbitrary-`PolyMesh` Nernst-Planck transport with electroneutral and Poisson electrostatic formulations.
+- Added Scharfetter-Gummel exponential-fit drift-diffusion fluxes.
+- Added Butler-Volmer/Faradaic reactive electrode species-flux boundaries and anodic dissolution coupling.
+- Added a multi-reaction galvanic/mixed-potential solver.
+- Added implicit generic `PolyMesh` scalar advection-diffusion transport through the shared CSR/ILU-GMRES layer.
+- Added chemistry/electrochemistry research and validation documentation plus CLI/CTest smoke cases.
+
+
 ## 0.4.2 - Phase 4C collocated pressure/velocity coupling
 
 ### Added

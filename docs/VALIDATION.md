@@ -37,6 +37,18 @@ The regression suite preserves the Phase-2/3 LBM and distributed gates and now a
 - non-orthogonal PISO/PIMPLE continuity correction on a deterministic sheared mesh;
 - collocated SIMPLE pressure-driven channel agreement with the analytical Poiseuille profile;
 - collocated SIMPLE lid-driven-cavity recirculation and continuity gates.
+- FEM reference-element partition-of-unity, gradient-sum and reference-measure quadrature checks for Line2/Tri3/Quad4/Tet4/Hex8/Prism6/Pyramid5;
+- Tri3 assembled-CSR versus matrix-free Laplace action parity;
+- exact mixed Dirichlet/Neumann/Robin scalar-FEM manufactured solution;
+- electrostatic parallel-plate and DC-conduction uniform-field/current checks;
+- axisymmetric-elasticity uniform-dilatation patch test including hoop strain;
+- 3-D Tet4 Poisson manufactured-solution mesh-refinement convergence;
+- heterogeneous/lossy 1-D FDTD material update, hard/soft source semantics and first-order Mur reflection suppression;
+- time-probe sample counts and DFT amplitude recovery;
+- 3-D Maxwell PEC stability/finite-field baseline;
+- Sellmeier dispersion, Jones/Stokes conversion, Fresnel normal-incidence reflectance and quarter-wave thin-film antireflection checks;
+- sequential real-ray and paraxial focal-distance/spot regressions;
+- benchmark NDJSON schema smoke validation.
 
 CPU/SYCL tests are deliberately part of the normal test executable rather than a separate benchmark so accelerator changes cannot bypass correctness gates.
 
@@ -44,14 +56,14 @@ CPU/SYCL tests are deliberately part of the normal test executable rather than a
 
 Validated in the development container on 2026-09-16:
 
-- GCC 14.2 Release + OpenMP build + all nine local CTest targets, including Phase-3 distributed emulation and Phase-4C collocated FVM smoke cases: pass;
-- Clang 17 Release build + all nine local CTest targets: pass (OpenMP runtime was unavailable in that Clang environment, so it exercised the serial fallback);
-- GCC Release serial build (`CFD_ENABLE_OPENMP=OFF`) + all nine local CTest targets: pass;
-- GCC AddressSanitizer + UndefinedBehaviorSanitizer Debug build, serial CPU backend: the dedicated sanitizer smoke target passes with the Phase-4C sheared-mesh collocated PIMPLE smoke case included. The long physical-regression executable is intentionally not used as the sanitizer gate because its thousands of O0 instrumented time steps are impractically slow; the full numerical suite is covered by the Release configurations above.
+- GCC 14.2 Release + OpenMP build + all **18** local CTest targets: pass;
+- Clang 17 Release serial-fallback build + all **18** local CTest targets: pass;
+- GCC 14.2 Release serial build (`CFD_ENABLE_OPENMP=OFF`) + all **18** local CTest targets: pass;
+- GCC AddressSanitizer + UndefinedBehaviorSanitizer serial build: dedicated `cfd-sanitize-smoke` passes with FEM, FDTD, optics, FVM and electrochemistry coverage. The long physical-regression executable remains outside the sanitizer gate because the O0-instrumented workload is disproportionately slow; Release builds carry the full numerical suite.
 
-Neither MPI nor a SYCL compiler/runtime is installed in the development container. MPI source/app/test translation units and the combined MPI+SYCL Phase-3B headers/CLI/tests were locally syntax-checked against minimal API shims, while real four-rank OpenMPI execution is configured in GitHub Actions. These syntax checks are not runtime validation. Accelerator execution still requires an AdaptiveCpp-enabled GPU runner before SYCL support is considered hardware-validated.
+Neither MPI nor an AdaptiveCpp/SYCL runtime is installed in the development container. MPI/SYCL source paths remain covered by their existing syntax/CI wiring, while real multi-rank and accelerator execution remains a hardware validation item.
 
-Each release patch is verified with `git apply --check`, `git diff --check`, a clean rebuild, and CTest after application to the previous source release. Phase 4C uses the Phase-4B/0.4.1 source release as that baseline.
+Each release patch is verified with `git apply --check`, `git diff --check`, a clean rebuild, and CTest after application to the previous source release. v0.6.0 uses the sealed v0.5.0 source release as its patch/rebuild baseline.
 The strong/weak scaling shell driver is also smoke-tested with mocked MPI/solver executables to validate its CSV schema and weak-axis dimension scaling without requiring MPI locally.
 
 ## Development-container benchmark snapshot
@@ -108,3 +120,13 @@ Development-container examples on the small regression cases:
 - 12x10x1 xy-sheared mesh: continuity L2 falls from about `3.01e-1` to `1.20e-4` after one PISO step and about `2.00e-5` with two PIMPLE outer correctors.
 
 These cases validate the current pressure/velocity coupling and mesh correction. They are not high-Re benchmark claims or full OpenFOAM-equivalence claims.
+
+## v0.6.1 FEM advanced gates
+
+- nonlinear Tri3 Poisson/reaction manufactured solution converges through shared Newton + ILU(0)-GMRES and remains below the FEM error gate;
+- residual/jump estimator + Dorfler marking selects a strict subset on the manufactured Poisson case, conforming longest-edge refinement validates, and refined error is lower than the coarse error;
+- saturated Darcy channel reproduces the analytical streamwise velocity with negligible transverse component;
+- 2-D magnetostatic vector-potential manufactured solution and reconstructed magnetic flux are finite and convergent;
+- fixed-free Line2 generalized eigenmodes agree with analytical axial-bar eigenfrequencies;
+- dedicated CLI smoke tests cover nonlinear FEM, Darcy, magnetostatics and modal analysis;
+- the sanitizer smoke target exercises nonlinear solve, adaptive mesh generation, Darcy, magnetostatics and the generalized eigen path on small meshes.

@@ -1,16 +1,40 @@
 #include "cfd/core/parallel.hpp"
+#include "continuation_cases.hpp"
+#include "cfd/chemistry/kinetics.hpp"
+#include "cfd/electrochemistry/electrochemistry.hpp"
+#include "cfd/solvers/electrochemistry/corrosion1d.hpp"
+#include "cfd/solvers/electrochemistry/nernst_planck1d.hpp"
+#include "cfd/solvers/electrochemistry/nernst_planck_poly.hpp"
+#include "cfd/solvers/electrochemistry/mixed_potential.hpp"
 #include "cfd/solvers/fdtd/maxwell1d.hpp"
+#include "cfd/solvers/fdtd/maxwell3d.hpp"
+#include "cfd/solvers/fdtd/port.hpp"
+#include "cfd/solvers/fdtd/vtk_io.hpp"
 #include "cfd/solvers/fem/poisson1d.hpp"
+#include "cfd/solvers/fem/poisson3d.hpp"
+#include "cfd/solvers/fem/nonlinear_poisson2d.hpp"
+#include "cfd/solvers/fem/darcy2d.hpp"
+#include "cfd/solvers/fem/magnetostatics2d.hpp"
+#include "cfd/solvers/fem/modal_bar1d.hpp"
 #include "cfd/solvers/fvm/diffusion2d.hpp"
 #include "cfd/solvers/fvm/projection2d.hpp"
 #include "cfd/solvers/fvm/incompressible2d.hpp"
 #include "cfd/solvers/fvm/collocated_incompressible.hpp"
+#include "cfd/solvers/fvm/scalar_transport.hpp"
 #include "cfd/fvm/operators.hpp"
 #include "cfd/fvm/schemes.hpp"
 #include "cfd/fvm/poly_mesh.hpp"
 #include "cfd/solvers/lbm/d2q9.hpp"
 #include "cfd/solvers/lbm/esoteric_pull.hpp"
 #include "cfd/solvers/optics/ray.hpp"
+#include "cfd/solvers/optics/sequential.hpp"
+#include "cfd/solvers/optics/paraxial.hpp"
+#include "cfd/solvers/optics/materials.hpp"
+#include "cfd/solvers/optics/polarization.hpp"
+#include "cfd/multiphysics/field_registry.hpp"
+#include "cfd/multiphysics/transfer.hpp"
+#include "cfd/multiphysics/partitioned.hpp"
+#include "cfd/multiphysics/electro_thermal.hpp"
 #if defined(CFD_HAS_SYCL)
 #include "cfd/solvers/lbm/d2q9_sycl.hpp"
 #include "cfd/solvers/lbm/esoteric_pull_sycl.hpp"
@@ -20,6 +44,10 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <numbers>
+#include <vector>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -29,6 +57,13 @@ namespace {
 void print_list() {
     std::cout
         << "Available solvers:\n"
+        << "  lbm-trt               periodic D3Q19 two-relaxation-time CPU baseline\n"
+        << "  fvm-workspace         scalar workspace and operator-cache benchmark\n"
+        << "  fdtd-pml1d            matched-layer pulse absorption\n"
+        << "  chemistry-reactor     reversible stiff isothermal batch reaction\n"
+        << "  chemistry-equilibrium ideal acid/base speciation and charge-balanced pH\n"
+        << "  optics-gaussian       ABCD Gaussian-beam focusing\n"
+        << "  multiphysics-thermoelastic DC conduction -> heat -> thermal expansion\n"
         << "  lbm-d2q9-cpu           legacy two-grid periodic BGK D2Q9 baseline (OpenMP)\n"
         << "  lbm-d2q9-inplace-cpu   single-grid periodic BGK D2Q9 (OpenMP)\n"
         << "  lbm-d3q19-cpu          single-grid periodic BGK D3Q19 (OpenMP)\n"
@@ -49,9 +84,25 @@ void print_list() {
         << "  fvm-collocated-channel pressure-driven collocated SIMPLE Poiseuille channel\n"
         << "  fvm-collocated-cavity  collocated SIMPLE lid-driven cavity\n"
         << "  fvm-collocated-skew    sheared-mesh PISO/PIMPLE pressure-coupling regression\n"
+        << "  fvm-scalar-transport   implicit PolyMesh scalar advection-diffusion demo\n"
         << "  fem-poisson1d          linear finite-element Poisson solver\n"
+        << "  fem-poisson3d          Tet4 finite-element manufactured Poisson case\n"
+        << "  fem-nonlinear-poisson  nonlinear Tri3 Newton/ILU-GMRES manufactured case\n"
+        << "  fem-darcy              saturated porous Darcy-flow channel\n"
+        << "  fem-magnetostatic      2-D magnetic vector-potential manufactured case\n"
+        << "  fem-modal-bar          fixed-free bar generalized eigenfrequency case\n"
         << "  fdtd-maxwell1d         Yee-grid electromagnetic time-domain solver\n"
-        << "  optics-snell           geometric-optics refraction/reflection demo\n";
+        << "  fdtd-mur1d             dielectric/lossy 1-D FDTD with Mur absorbing boundaries\n"
+        << "  fdtd-dispersive1d      Debye/Drude/Lorentz ADE material smoke case\n"
+        << "  fdtd-port-vtk          PMC + synthetic S-parameters + VTK export\n"
+        << "  multiphysics-coupling field registry, conservative transfer, Aitken fixed point\n"
+        << "  multiphysics-joule-heat DC conduction -> Joule source -> transient FEM heat\n"
+        << "  optics-snell           geometric-optics refraction/reflection demo\n"
+        << "  optics-lens            sequential/paraxial lens + coating/material demo\n"
+        << "  electrochem-corrosion1d ohmic electrolyte + Butler-Volmer corrosion cell\n"
+        << "  electrochem-pnp1d      conservative 1-D Nernst-Planck transport demo\n"
+        << "  electrochem-pnp-poly   PolyMesh Poisson-Nernst-Planck charged-slab demo\n"
+        << "  electrochem-galvanic   multi-reaction galvanic mixed-potential demo\n";
 }
 
 int run_lbm_cpu_legacy() {
@@ -444,6 +495,80 @@ int run_fem() {
     return 0;
 }
 
+int run_fem_poisson3d() {
+    constexpr double pi=3.1415926535897932384626433832795;
+    cfd::fem::Poisson3D solver(cfd::fem::make_box_tet_mesh(10,10,10));
+    solver.solve([](cfd::fem::Point3 p){return 3.0*pi*pi*std::sin(pi*p.x)*std::sin(pi*p.y)*std::sin(pi*p.z);},
+        [](cfd::fem::Point3){return 0.0;});
+    double e2=0.0,x2=0.0;
+    for(std::size_t i=0;i<solver.mesh().node_count();++i){const auto p=solver.mesh().nodes[i];const double exact=std::sin(pi*p.x)*std::sin(pi*p.y)*std::sin(pi*p.z);const double e=solver.solution()[i]-exact;e2+=e*e;x2+=exact*exact;}
+    std::cout << "case=fem-poisson3d nodes=" << solver.mesh().node_count()
+              << " elements=" << solver.mesh().element_count()
+              << " relative_L2=" << std::sqrt(e2/x2)
+              << " iterations=" << solver.linear_result().iterations
+              << " converged=" << (solver.linear_result().converged?1:0) << '\n';
+    return solver.linear_result().converged?0:2;
+}
+
+int run_fem_nonlinear_poisson() {
+    const double pi=std::numbers::pi_v<double>;
+    constexpr double beta=3.0;
+    cfd::fem::NonlinearPoisson2DConfig cfg; cfg.cubic_coefficient=beta;
+    cfd::fem::NonlinearPoisson2D solver(cfd::fem::make_rectangle_tri_mesh(32,32),cfg);
+    const auto exact=[&](cfd::fem::Node2 p){return std::sin(pi*p.x)*std::sin(pi*p.y);};
+    solver.solve([&](cfd::fem::Node2 p){const double u=exact(p);return 2.0*pi*pi*u+beta*u*u*u;},
+                 [](cfd::fem::Node2){return 0.0;});
+    double e2=0.0,x2=0.0;
+    for(std::size_t i=0;i<solver.mesh().node_count();++i){const double ex=exact(solver.mesh().nodes[i]);const double e=solver.solution()[i]-ex;e2+=e*e;x2+=ex*ex;}
+    std::cout << "case=fem-nonlinear-poisson relative_L2=" << std::sqrt(e2/x2)
+              << " newton_iterations=" << solver.nonlinear_result().iterations
+              << " residual_rms=" << solver.nonlinear_result().residual_rms
+              << " converged=" << (solver.nonlinear_result().converged?1:0) << '\n';
+    return solver.nonlinear_result().converged?0:2;
+}
+
+int run_fem_darcy() {
+    using Type=cfd::fem::ScalarBoundaryType;
+    constexpr double permeability=2.0e-12,viscosity=1.0e-3,p_left=1.0e5,length=2.0;
+    cfd::fem::Darcy2DConfig cfg;cfg.viscosity=viscosity;
+    cfd::fem::Darcy2D solver(cfd::fem::make_rectangle_tri_mesh(40,20,length,1.0),cfg);
+    solver.set_boundary(0,{Type::dirichlet,[](cfd::fem::Node2){return p_left;},{}});
+    solver.set_boundary(1,{Type::dirichlet,[](cfd::fem::Node2){return 0.0;},{}});
+    solver.solve([](cfd::fem::Node2){return permeability;});
+    const auto v=solver.element_velocity([](cfd::fem::Node2){return permeability;});
+    double mean=0.0;for(const auto&a:v)mean+=a.x;mean/=static_cast<double>(v.size());
+    const double exact=permeability/viscosity*p_left/length;
+    std::cout << "case=fem-darcy mean_vx=" << mean << " exact_vx=" << exact
+              << " relative_error=" << std::abs(mean-exact)/exact
+              << " iterations=" << solver.linear_result().iterations << '\n';
+    return 0;
+}
+
+int run_fem_magnetostatic() {
+    using Type=cfd::fem::ScalarBoundaryType;
+    const double pi=std::numbers::pi_v<double>,nu=2.5;
+    cfd::fem::Magnetostatics2D solver(cfd::fem::make_rectangle_tri_mesh(32,32));
+    for(int p=0;p<4;++p)solver.set_boundary(p,{Type::dirichlet,[](cfd::fem::Node2){return 0.0;},{}});
+    const auto exact=[&](cfd::fem::Node2 x){return std::sin(pi*x.x)*std::sin(pi*x.y);};
+    solver.solve([&](cfd::fem::Node2){return nu;},[&](cfd::fem::Node2 x){return 2.0*pi*pi*nu*exact(x);});
+    double e2=0.0,x2=0.0;for(std::size_t i=0;i<solver.mesh().node_count();++i){const double ex=exact(solver.mesh().nodes[i]);const double e=solver.vector_potential()[i]-ex;e2+=e*e;x2+=ex*ex;}
+    std::cout << "case=fem-magnetostatic relative_L2=" << std::sqrt(e2/x2)
+              << " iterations=" << solver.linear_result().iterations
+              << " converged=" << (solver.linear_result().converged?1:0) << '\n';
+    return solver.linear_result().converged?0:2;
+}
+
+int run_fem_modal_bar() {
+    cfd::fem::BarModal1DConfig cfg;cfg.elements=100;cfg.length=1.7;cfg.young_modulus=70.0e9;cfg.density=2700.0;
+    cfg.eigen.relative_tolerance=2.0e-8;
+    const cfd::fem::BarModal1D solver(cfg);
+    const auto modes=solver.solve(3U);
+    std::cout << "case=fem-modal-bar";
+    for(std::size_t i=0;i<modes.size();++i)std::cout << " f" << (i+1U) << "_Hz=" << modes[i].frequency_hz;
+    std::cout << '\n';
+    return 0;
+}
+
 int run_fdtd() {
     cfd::fdtd::Maxwell1D solver({2048, 1.0e-3, 0.99, 1.0, 1.0});
     solver.initialize_gaussian();
@@ -452,6 +577,253 @@ int run_fdtd() {
     std::cout << "dt=" << solver.dt() << " energy_initial=" << e0
               << " energy_final=" << solver.energy() << '\n';
     return 0;
+}
+
+
+int run_scalar_transport() {
+    auto mesh = cfd::fvm::make_cartesian_hexa_mesh(80, 1, 1, 1.0, 1.0, 1.0);
+    cfd::fvm::ScalarTransport solver(std::move(mesh), {0.02, 0.05, 300, 20, 1.0e-11});
+    solver.set_boundary("left", cfd::fvm::ScalarBoundaryType::fixedValue, 1.0);
+    solver.set_boundary("right", cfd::fvm::ScalarBoundaryType::fixedValue, 0.0);
+    solver.initialize(0.5);
+    solver.run(120);
+    double error2 = 0.0;
+    double exact2 = 0.0;
+    for (std::size_t c = 0; c < solver.mesh().cell_count(); ++c) {
+        const double exact = 1.0 - solver.mesh().cells()[c].center.x;
+        const double error = solver.values()[c] - exact;
+        error2 += error * error;
+        exact2 += exact * exact;
+    }
+    std::cout << "case=fvm-scalar-transport"
+              << " time=" << solver.time()
+              << " relative_L2=" << std::sqrt(error2 / exact2)
+              << " min=" << solver.minimum()
+              << " max=" << solver.maximum()
+              << " linear_iterations=" << solver.linear_result().iterations
+              << " converged=" << solver.linear_result().converged << '\n';
+    return solver.linear_result().converged ? 0 : 1;
+}
+
+int run_fdtd_mur1d() {
+    cfd::fdtd::Maxwell1D solver({800,1.0e-3,0.95,1.0,1.0,cfd::fdtd::Boundary1D::mur1});
+    solver.set_material(460,620,4.0,0.01);
+    solver.initialize_gaussian(0.22,0.025);
+    const double e0=solver.energy();
+    solver.step(1200);
+    std::cout << "case=fdtd-mur1d energy_ratio=" << solver.energy()/e0
+              << " time_s=" << solver.time()
+              << " dielectric_wave_speed=" << solver.local_wave_speed(500U) << '\n';
+    return std::isfinite(solver.energy())?0:2;
+}
+
+
+int run_fdtd_dispersive1d() {
+    constexpr std::size_t cells = 320U;
+    cfd::fdtd::Maxwell1D solver({cells, 1.0e-4, 0.45, 1.0, 1.0, cfd::fdtd::Boundary1D::mur1});
+    const double inv_dt = 1.0 / solver.dt();
+    solver.set_debye_material(90U, 150U, 2.0, 3.0, 30.0 * solver.dt());
+    solver.set_drude_material(150U, 210U, 1.0, 0.06 * inv_dt, 0.03 * inv_dt);
+    solver.set_lorentz_material(210U, 270U, 1.5, 1.5, 0.055 * inv_dt, 0.025 * inv_dt);
+    solver.initialize_gaussian(0.18, 0.025);
+    const double initial = solver.energy();
+    solver.step(220U);
+    double pmax = 0.0;
+    for (double p : solver.polarization()) pmax = std::max(pmax, std::abs(p));
+    std::cout << "case=fdtd-dispersive1d"
+              << " energy_ratio=" << solver.energy() / initial
+              << " polarization_max=" << pmax
+              << " finite=" << (std::isfinite(solver.energy()) ? 1 : 0) << '\n';
+    return std::isfinite(solver.energy()) && pmax > 0.0 ? 0 : 2;
+}
+
+int run_fdtd_port_vtk() {
+    constexpr double frequency = 25.0;
+    constexpr double impedance = 50.0;
+    constexpr double reflection = 0.2;
+    constexpr double transmission = 0.75;
+    constexpr double sample_dt = 5.0e-4;
+    cfd::fdtd::WavePort1D reference(frequency, impedance, +1);
+    cfd::fdtd::WavePort1D transmitted(frequency, impedance, +1);
+    for (std::size_t n = 0; n <= 1600U; ++n) {
+        const double t = sample_dt * static_cast<double>(n);
+        const double incident = std::sin(2.0 * std::numbers::pi * frequency * t);
+        const double reflected = reflection * incident;
+        reference.sample(t, incident + reflected, (-incident + reflected) / impedance);
+        const double through = transmission * incident;
+        transmitted.sample(t, through, -through / impedance);
+    }
+    const auto sp = cfd::fdtd::s_parameters(reference, transmitted);
+
+    cfd::fdtd::Maxwell3D solver({10, 9, 8, 1.0e-3, 1.0e-3, 1.0e-3, 0.7, 1.0, 1.0,
+                                 cfd::fdtd::Boundary3D::pmc});
+    solver.initialize_gaussian_ez(0.1, 0.15);
+    solver.step(12U);
+    const auto path = std::filesystem::temp_directory_path() / "cfd_solvers_fdtd_port_vtk_cli.vtk";
+    cfd::fdtd::write_maxwell3d_vtk_ascii(solver, path);
+    const auto bytes = std::filesystem::file_size(path);
+    std::filesystem::remove(path);
+    std::cout << "case=fdtd-port-vtk"
+              << " S11_abs=" << std::abs(sp.s11)
+              << " S21_abs=" << std::abs(sp.s21)
+              << " vtk_bytes=" << bytes
+              << " energy=" << solver.energy() << '\n';
+    return (std::abs(std::abs(sp.s11) - reflection) < 3.0e-3
+            && std::abs(std::abs(sp.s21) - transmission) < 3.0e-3 && bytes > 0U) ? 0 : 2;
+}
+
+int run_multiphysics_coupling() {
+    cfd::multiphysics::FieldRegistry registry;
+    cfd::multiphysics::FieldMetadata temperature;
+    temperature.name = "temperature";
+    temperature.entities = 4U;
+    temperature.units = cfd::multiphysics::kelvin_units();
+    temperature.producer = "thermal";
+    registry.add(temperature, 300.0);
+
+    const cfd::multiphysics::CellGrid1D source{{0.0, 0.25, 0.5, 1.0}};
+    const cfd::multiphysics::CellGrid1D target{{0.0, 0.5, 0.75, 1.0}};
+    const std::vector<double> value{1.0, 2.0, 4.0};
+    const auto mapped = cfd::multiphysics::conservative_cell_average_transfer(source, value, target);
+
+    std::vector<double> state{1.0};
+    const auto result = cfd::multiphysics::solve_partitioned_fixed_point(
+        state,
+        [](std::span<const double> x, std::span<double> y) { y[0] = std::cos(x[0]); });
+    std::cout << "case=multiphysics-coupling"
+              << " fields=" << registry.names().size()
+              << " mapped0=" << mapped.front()
+              << " fixed_point=" << state.front()
+              << " iterations=" << result.iterations
+              << " relaxation=" << result.relaxation
+              << " converged=" << (result.converged ? 1 : 0) << '\n';
+    return result.converged && std::abs(mapped.front() - 1.5) < 1.0e-14 ? 0 : 2;
+}
+
+int run_multiphysics_joule_heat() {
+    using Type=cfd::fem::ScalarBoundaryType;
+    cfd::fem::Heat2DConfig thermal;
+    thermal.conductivity=1.0;
+    thermal.volumetric_heat_capacity=2.0;
+    thermal.dt=2.0e-3;
+    cfd::multiphysics::JouleHeatingCoupler2D coupled(
+        cfd::fem::make_rectangle_tri_mesh(24,12,2.0,1.0),thermal);
+    coupled.set_electrical_boundary(0,{Type::dirichlet,[](cfd::fem::Node2){return 0.0;},{}});
+    coupled.set_electrical_boundary(1,{Type::dirichlet,[](cfd::fem::Node2){return 4.0;},{}});
+    coupled.initialize_temperature([](cfd::fem::Node2){return 300.0;});
+    coupled.set_thermal_dirichlet([](cfd::fem::Node2,double){return 300.0;});
+    coupled.solve_electrical([](cfd::fem::Node2){return 5.0;});
+    coupled.thermal_run(10U);
+    double mean_q=0.0,max_t=0.0;
+    for(double q:coupled.joule_heating_density())mean_q+=q;
+    mean_q/=static_cast<double>(coupled.joule_heating_density().size());
+    for(double t:coupled.thermal().temperature())max_t=std::max(max_t,t);
+    std::cout << "case=multiphysics-joule-heat"
+              << " mean_joule_W_m3=" << mean_q
+              << " max_temperature_K=" << max_t
+              << " time_s=" << coupled.thermal().time()
+              << " electric_converged=" << (coupled.electrical().linear_result().converged?1:0)
+              << " thermal_converged=" << (coupled.thermal().linear_result().converged?1:0) << '\n';
+    return coupled.electrical().linear_result().converged&&coupled.thermal().linear_result().converged
+        &&std::abs(mean_q-20.0)<1.0e-6&&max_t>300.0?0:2;
+}
+
+int run_corrosion1d() {
+    cfd::electrochemistry::CorrosionCell1DConfig config;
+    config.metal_potential = 0.050;
+    config.bulk_electrolyte_potential = 0.0;
+    config.equilibrium_potential = 0.0;
+    config.exchange_current_density = 1.0;
+    config.electrolyte_conductivity = 5.0;
+    config.electrolyte_length = 1.0e-3;
+    config.electrons = 2.0;
+    const auto result = cfd::electrochemistry::solve_corrosion_cell_1d(config);
+    constexpr double seconds_per_year = 365.25 * 24.0 * 3600.0;
+    std::cout << "case=electrochem-corrosion1d"
+              << " current_A_per_m2=" << result.current_density
+              << " surface_phi_V=" << result.surface_electrolyte_potential
+              << " overpotential_V=" << result.overpotential
+              << " dissolution_mol_per_m2_s=" << result.molar_dissolution_flux
+              << " penetration_mm_per_year=" << result.penetration_rate * 1000.0 * seconds_per_year
+              << " iterations=" << result.iterations
+              << " converged=" << (result.converged ? 1 : 0) << '\n';
+    return result.converged ? 0 : 2;
+}
+
+int run_nernst_planck1d() {
+    constexpr double pi = 3.1415926535897932384626433832795;
+    cfd::electrochemistry::NernstPlanck1D solver({256, 1.0, 298.15, 1.0e-4, 0.0,
+                                                  cfd::electrochemistry::TransportBoundary1D::periodic});
+    solver.set_potential([](double x) { return 2.0e-3 * std::sin(2.0 * pi * x); });
+    const auto cation = solver.add_species("cation", 1, 1.0e-3, 1.0);
+    const double amount0 = solver.total_amount(cation);
+    solver.step(1000);
+    std::cout << "case=electrochem-pnp1d"
+              << " time=" << solver.time()
+              << " amount_error=" << std::abs(solver.total_amount(cation) - amount0)
+              << " min_concentration=" << solver.minimum_concentration(cation)
+              << '\n';
+    return 0;
+}
+
+int run_nernst_planck_poly() {
+    constexpr double eps0 = 8.8541878128e-12;
+    constexpr double eps_r = 78.5;
+    constexpr double concentration = 1.0e-15;
+    auto mesh = cfd::fvm::make_cartesian_hexa_mesh(128, 1, 1, 1.0, 1.0, 1.0);
+    cfd::electrochemistry::NernstPlanckPolyMesh solver(
+        std::move(mesh),
+        {298.15, 1.0e-6, eps_r, cfd::electrochemistry::ElectromigrationFluxScheme::scharfetterGummel});
+    solver.add_species("space-charge", +1, 0.0, concentration);
+    solver.set_potential_boundary("left", cfd::electrochemistry::PotentialBoundaryType::fixedPotential, 0.0);
+    solver.set_potential_boundary("right", cfd::electrochemistry::PotentialBoundaryType::fixedPotential, 0.0);
+    const auto result = solver.solve_poisson_potential(2000, 1.0e-12);
+    const std::size_t mid = solver.potential().size() / 2U;
+    const double x = solver.mesh().cells()[mid].center.x;
+    const double rho = cfd::electrochemistry::faraday_constant * concentration;
+    const double exact = rho * x * (1.0 - x) / (2.0 * eps0 * eps_r);
+    std::cout << "case=electrochem-pnp-poly"
+              << " potential_mid_V=" << solver.potential()[mid]
+              << " exact_mid_V=" << exact
+              << " relative_error=" << std::abs(solver.potential()[mid] - exact) / exact
+              << " charge_C=" << solver.total_charge()
+              << " iterations=" << result.iterations
+              << " converged=" << (result.converged ? 1 : 0) << '\n';
+    return result.converged ? 0 : 2;
+}
+
+int run_galvanic() {
+    std::vector<cfd::electrochemistry::ElectrodeReaction> reactions{
+        {"metal-A", 0.0, 2.0, 1.0, 1.0, 0.5, 0.5},
+        {"metal-B", 0.2, 2.0, 1.0, 1.0, 0.5, 0.5},
+    };
+    const auto result = cfd::electrochemistry::solve_mixed_potential(reactions, 298.15);
+    std::cout << "case=electrochem-galvanic"
+              << " mixed_potential_V=" << result.potential
+              << " net_current_A=" << result.total_current
+              << " anodic_current_A=" << result.reaction_current[0]
+              << " cathodic_current_A=" << result.reaction_current[1]
+              << " iterations=" << result.iterations
+              << " converged=" << (result.converged ? 1 : 0) << '\n';
+    return result.converged ? 0 : 2;
+}
+
+int run_optics_lens() {
+    cfd::optics::MaterialCatalog materials;
+    const double n=materials.at("N-BK7").refractive_index_nm(587.5618);
+    cfd::optics::SequentialOpticalSystem lens;
+    lens.add_surface({cfd::optics::SurfaceType::sphere,0.0,50.0,12.0,n});
+    lens.add_surface({cfd::optics::SurfaceType::sphere,5.0,-50.0,12.0,1.0});
+    const double bfd=cfd::optics::paraxial_back_focal_distance(lens);
+    std::vector<cfd::optics::Ray> rays;
+    for(int i=-8;i<=8;++i) rays.push_back({{0.2*static_cast<double>(i),0.0,-10.0},{0.0,0.0,1.0},587.5618});
+    const auto traced=lens.trace_many(rays);
+    const double rms=cfd::optics::rms_spot_radius_at_plane(traced,5.0+bfd);
+    const double qn=std::sqrt(n);
+    const double ar=cfd::optics::thin_film_reflectance_normal(1.0,n,587.5618,{{qn,587.5618/(4.0*qn)}});
+    std::cout << "case=optics-lens n_d=" << n << " back_focal_distance_mm=" << bfd
+              << " rms_spot_mm=" << rms << " quarter_wave_R=" << ar << '\n';
+    return (std::isfinite(bfd)&&std::isfinite(rms))?0:2;
 }
 
 int run_optics() {
@@ -470,6 +842,8 @@ int main(int argc, char** argv) {
         return 0;
     }
     const std::string_view solver = argv[1];
+    const int continuation=run_continuation_case(solver);
+    if(continuation>=0)return continuation;
     if (solver == "lbm-d2q9-cpu") return run_lbm_cpu_legacy();
     if (solver == "lbm-d2q9-inplace-cpu") {
         return run_lbm_inplace_cpu<cfd::lbm::D2Q9InPlaceDescriptor>({256, 256, 1, 0.60F}, 200);
@@ -502,9 +876,25 @@ int main(int argc, char** argv) {
     if (solver == "fvm-collocated-channel") return run_fvm_collocated_channel();
     if (solver == "fvm-collocated-cavity") return run_fvm_collocated_cavity();
     if (solver == "fvm-collocated-skew") return run_fvm_collocated_skew();
+    if (solver == "fvm-scalar-transport") return run_scalar_transport();
     if (solver == "fem-poisson1d") return run_fem();
+    if (solver == "fem-poisson3d") return run_fem_poisson3d();
+    if (solver == "fem-nonlinear-poisson") return run_fem_nonlinear_poisson();
+    if (solver == "fem-darcy") return run_fem_darcy();
+    if (solver == "fem-magnetostatic") return run_fem_magnetostatic();
+    if (solver == "fem-modal-bar") return run_fem_modal_bar();
     if (solver == "fdtd-maxwell1d") return run_fdtd();
+    if (solver == "fdtd-mur1d") return run_fdtd_mur1d();
+    if (solver == "fdtd-dispersive1d") return run_fdtd_dispersive1d();
+    if (solver == "fdtd-port-vtk") return run_fdtd_port_vtk();
+    if (solver == "multiphysics-coupling") return run_multiphysics_coupling();
+    if (solver == "multiphysics-joule-heat") return run_multiphysics_joule_heat();
     if (solver == "optics-snell") return run_optics();
+    if (solver == "optics-lens") return run_optics_lens();
+    if (solver == "electrochem-corrosion1d") return run_corrosion1d();
+    if (solver == "electrochem-pnp1d") return run_nernst_planck1d();
+    if (solver == "electrochem-pnp-poly") return run_nernst_planck_poly();
+    if (solver == "electrochem-galvanic") return run_galvanic();
     std::cerr << "Unknown solver: " << solver << "\n";
     print_list();
     return 1;

@@ -47,3 +47,42 @@ For the electromagnetic capability map this repository uses the established FDTD
 ## Contribution rule
 
 Every implementation derived from a restrictive/copyleft reference must be based on mathematical descriptions, standards, publications, public API behaviour, or independently written test cases. Do not use line-by-line translation or close paraphrase of source code.
+
+## Electrochemistry and reactive chemistry references
+
+### EchemFEM
+
+- Repository: https://github.com/LLNL/echemfem
+- License: MIT.
+- Used as a capability/validation reference for Nernst-Planck transport, electromigration, electroneutral/Poisson potential formulations, porous electrodes and finite-size electrochemical models.
+
+### echemAMR
+
+- Repository: https://github.com/NatLabRockies/echemAMR
+- License: BSD 3-Clause.
+- Used as a capability/validation reference for microstructure-resolved electrochemistry, immersed electrode interfaces, Butler-Volmer fluxes, AMR and heterogeneous HPC execution.
+
+### Cantera
+
+- Repository: https://github.com/Cantera/cantera
+- License: permissive BSD-style license.
+- Used as a capability reference for thermodynamic phases, chemical kinetics, transport properties, mechanism handling and reacting-flow coupling.
+
+### Reaktoro
+
+- Repository: https://github.com/reaktoro/reaktoro
+- License: LGPL 2.1 or later.
+- Used as a capability/reference map for multiphase equilibrium, kinetics, thermochemical databases and automatic-differentiation-based chemistry. Any future adapter must preserve a clean library boundary.
+
+### PHREEQC / PhreeqcRM
+
+- Project: USGS PHREEQC Version 3 and PhreeqcRM.
+- Distribution: U.S. Government public-domain software.
+- Used as an aqueous-geochemistry/speciation/reactive-transport reference and potential optional external reaction-module integration.
+
+### Corrosion-specific scientific references
+
+- `mrshariati/FEMCorrosionSimulation` is used only as a published Poisson-Nernst-Planck corrosion/FCT validation reference because no clear permissive repository license was identified during the research pass.
+- MOOSE phase-field corrosion concepts and OpenPNM porous reactive-transport concepts are tracked as later capability references rather than source donors.
+
+Exact research pins are recorded in `docs/upstreams.json`.

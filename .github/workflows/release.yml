@@ -1,0 +1,40 @@
+name: release-artifacts
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME:-manual}"
+          mkdir -p dist
+          git archive --format=tar.gz --prefix="cfd_solvers-${tag}/" -o "dist/cfd_solvers-${tag}.tar.gz" HEAD
+          git archive --format=zip --prefix="cfd_solvers-${tag}/" -o "dist/cfd_solvers-${tag}.zip" HEAD
+          git bundle create "dist/cfd_solvers-${tag}.bundle" --all
+          previous="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)"
+          if [[ -n "$previous" ]]; then
+            git diff --binary "$previous" HEAD > "dist/${previous}_to_${tag}.patch"
+          else
+            git diff --binary --root HEAD > "dist/root_to_${tag}.patch" || true
+          fi
+          (cd dist && sha256sum * > SHA256SUMS)
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-release-${{ github.ref_name }}
+          path: dist/
+          if-no-files-found: error

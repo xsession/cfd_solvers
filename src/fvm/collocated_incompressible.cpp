@@ -1,6 +1,8 @@
 #include "cfd/solvers/fvm/collocated_incompressible.hpp"
 
 #include "cfd/core/parallel.hpp"
+#include "cfd/core/csr_matrix.hpp"
+#include "cfd/core/iterative_solvers.hpp"
 #include "cfd/fvm/operators.hpp"
 
 #include <algorithm>
@@ -65,7 +67,8 @@ CollocatedIncompressible::CollocatedIncompressible(PolyMesh mesh,
       pressure_rhs_(mesh_.cell_count(), 0.0),
       pressure_face_coefficient_(mesh_.face_count(), 0.0) {
     if (!(config_.density > 0.0) || !(config_.kinematic_viscosity >= 0.0) || !(config_.dt > 0.0) ||
-        config_.momentum_sweeps == 0U || config_.pressure_iterations == 0U ||
+        config_.momentum_sweeps == 0U || config_.momentum_iterations == 0U ||
+        !(config_.momentum_tolerance > 0.0) || config_.pressure_iterations == 0U ||
         !(config_.pressure_tolerance > 0.0) || config_.pressure_correctors == 0U ||
         config_.outer_correctors == 0U || !(config_.velocity_relaxation > 0.0 && config_.velocity_relaxation <= 1.0) ||
         !(config_.pressure_relaxation > 0.0 && config_.pressure_relaxation <= 1.0)) {
@@ -126,59 +129,132 @@ void CollocatedIncompressible::momentum_predictor(std::span<const Vec3> time_sou
     if (time_source.size() != mesh_.cell_count()) throw std::invalid_argument("time source size mismatch");
     const auto p_boundary = boundary_pressure_values(mesh_, pressure_, pressure_boundary_);
     const auto grad_p = gauss_gradient_scalar(mesh_, pressure_, p_boundary);
-    std::vector<Vec3> working = velocity_;
-    std::vector<Vec3> next(mesh_.cell_count());
-    std::vector<double> diagonal(mesh_.cell_count(), 0.0);
-    std::vector<Vec3> h(mesh_.cell_count());
 
-    for (std::size_t sweep = 0; sweep < config_.momentum_sweeps; ++sweep) {
-        cfd::core::parallel_for(mesh_.cell_count(), [&](std::size_t cell) {
-            const double volume = mesh_.cells()[cell].volume;
-            double ap = volume / config_.dt;
-            Vec3 rhs = time_source[cell] * (volume / config_.dt);
-
-            for (const std::size_t fi : mesh_.cell_faces()[cell]) {
-                const auto& face = mesh_.faces()[fi];
-                const double phi_out = outward_flux(face, cell, face_flux_[fi]);
-                const auto geometry = decompose_face_area(mesh_, fi);
-                const double diffusion = config_.kinematic_viscosity * geometry.orthogonal_metric;
-
-                if (!face.boundary()) {
-                    const std::size_t other = face.owner == cell ? face.neighbour : face.owner;
-                    const double entering = config_.include_convection ? std::max(-phi_out, 0.0) : 0.0;
-                    const double leaving = config_.include_convection ? std::max(phi_out, 0.0) : 0.0;
-                    ap += diffusion + leaving;
-                    rhs += working[other] * (diffusion + entering);
-                } else {
-                    const auto& bc = velocity_boundary_[face.patch];
-                    if (bc.type == VelocityBoundaryType::fixedValue) {
-                        const Vec3 ub = boundary_velocity_for_momentum(face, working[cell], bc);
+    if (!config_.use_krylov_momentum) {
+        std::vector<Vec3> working = velocity_;
+        std::vector<Vec3> next(mesh_.cell_count());
+        std::vector<double> diagonal(mesh_.cell_count(), 0.0);
+        std::vector<Vec3> h(mesh_.cell_count());
+        for (std::size_t sweep = 0; sweep < config_.momentum_sweeps; ++sweep) {
+            cfd::core::parallel_for(mesh_.cell_count(), [&](std::size_t cell) {
+                const double volume = mesh_.cells()[cell].volume;
+                double ap = volume / config_.dt;
+                Vec3 rhs = time_source[cell] * (volume / config_.dt);
+                for (const std::size_t fi : mesh_.cell_faces()[cell]) {
+                    const auto& face = mesh_.faces()[fi];
+                    const double phi_out = outward_flux(face, cell, face_flux_[fi]);
+                    const auto geometry = decompose_face_area(mesh_, fi);
+                    const double diffusion = config_.kinematic_viscosity * geometry.orthogonal_metric;
+                    if (!face.boundary()) {
+                        const std::size_t other = face.owner == cell ? face.neighbour : face.owner;
                         const double entering = config_.include_convection ? std::max(-phi_out, 0.0) : 0.0;
                         const double leaving = config_.include_convection ? std::max(phi_out, 0.0) : 0.0;
                         ap += diffusion + leaving;
-                        rhs += ub * (diffusion + entering);
-                    } else if (config_.include_convection) {
-                        // zero-gradient/slip boundaries use the owner value for tangential convection.
-                        ap += phi_out;
+                        rhs += working[other] * (diffusion + entering);
+                    } else {
+                        const auto& bc = velocity_boundary_[face.patch];
+                        if (bc.type == VelocityBoundaryType::fixedValue) {
+                            const Vec3 ub = boundary_velocity_for_momentum(face, working[cell], bc);
+                            const double entering = config_.include_convection ? std::max(-phi_out, 0.0) : 0.0;
+                            const double leaving = config_.include_convection ? std::max(phi_out, 0.0) : 0.0;
+                            ap += diffusion + leaving;
+                            rhs += ub * (diffusion + entering);
+                        } else if (config_.include_convection) {
+                            ap += phi_out;
+                        }
                     }
                 }
-            }
-
-            if (!(ap > 0.0) || !std::isfinite(ap)) throw std::runtime_error("non-positive momentum diagonal");
-            diagonal[cell] = ap;
-            h[cell] = rhs;
-            const Vec3 hba = rhs / ap;
-            const double mobility = mesh_.cells()[cell].volume / ap;
-            const Vec3 candidate = hba - grad_p[cell] * mobility;
-            next[cell] = candidate;
+                if (!(ap > 0.0) || !std::isfinite(ap)) throw std::runtime_error("non-positive momentum diagonal");
+                diagonal[cell] = ap;
+                h[cell] = rhs;
+                const Vec3 hba = rhs / ap;
+                const double mobility = mesh_.cells()[cell].volume / ap;
+                next[cell] = hba - grad_p[cell] * mobility;
+            });
+            working.swap(next);
+        }
+        cfd::core::parallel_for(mesh_.cell_count(), [&](std::size_t cell) {
+            h_by_a_[cell] = h[cell] / diagonal[cell];
+            pressure_mobility_[cell] = mesh_.cells()[cell].volume / diagonal[cell];
+            velocity_[cell] = h_by_a_[cell] - grad_p[cell] * pressure_mobility_[cell];
         });
-        working.swap(next);
+        momentum_results_ = {};
+        return;
     }
 
-    cfd::core::parallel_for(mesh_.cell_count(), [&](std::size_t cell) {
-        h_by_a_[cell] = h[cell] / diagonal[cell];
+    const std::size_t n = mesh_.cell_count();
+    cfd::core::CsrBuilder builder(n, n);
+    std::vector<Vec3> rhs(n);
+    std::vector<double> diagonal(n, 0.0);
+
+    // Assemble the linearized pressure-free momentum operator with the face
+    // flux frozen from the previous pressure/velocity coupling state. This is
+    // the same Picard linearization that the legacy sweeps converge toward,
+    // but solved through the shared nonsymmetric Krylov stack.
+    for (std::size_t cell = 0; cell < n; ++cell) {
+        const double volume = mesh_.cells()[cell].volume;
+        double ap = volume / config_.dt;
+        Vec3 row_rhs = time_source[cell] * (volume / config_.dt);
+        for (const std::size_t fi : mesh_.cell_faces()[cell]) {
+            const auto& face = mesh_.faces()[fi];
+            const double phi_out = outward_flux(face, cell, face_flux_[fi]);
+            const auto geometry = decompose_face_area(mesh_, fi);
+            const double diffusion = config_.kinematic_viscosity * geometry.orthogonal_metric;
+            if (!face.boundary()) {
+                const std::size_t other = face.owner == cell ? face.neighbour : face.owner;
+                const double entering = config_.include_convection ? std::max(-phi_out, 0.0) : 0.0;
+                const double leaving = config_.include_convection ? std::max(phi_out, 0.0) : 0.0;
+                const double coupling = diffusion + entering;
+                ap += diffusion + leaving;
+                if (coupling != 0.0) builder.add(cell, other, -coupling);
+            } else {
+                const auto& bc = velocity_boundary_[face.patch];
+                if (bc.type == VelocityBoundaryType::fixedValue) {
+                    const Vec3 ub = boundary_velocity_for_momentum(face, velocity_[cell], bc);
+                    const double entering = config_.include_convection ? std::max(-phi_out, 0.0) : 0.0;
+                    const double leaving = config_.include_convection ? std::max(phi_out, 0.0) : 0.0;
+                    ap += diffusion + leaving;
+                    row_rhs += ub * (diffusion + entering);
+                } else if (config_.include_convection) {
+                    ap += phi_out;
+                }
+            }
+        }
+        if (!(ap > 0.0) || !std::isfinite(ap)) throw std::runtime_error("non-positive momentum diagonal");
+        builder.add(cell, cell, ap);
+        diagonal[cell] = ap;
+        rhs[cell] = row_rhs;
+    }
+
+    const auto matrix = builder.build();
+    const cfd::core::Ilu0Preconditioner preconditioner(matrix);
+    std::array<std::vector<double>, 3> component_rhs{std::vector<double>(n), std::vector<double>(n), std::vector<double>(n)};
+    std::array<std::vector<double>, 3> component_x{std::vector<double>(n), std::vector<double>(n), std::vector<double>(n)};
+    for (std::size_t cell = 0; cell < n; ++cell) {
+        const double volume = mesh_.cells()[cell].volume;
+        const Vec3 full_rhs = rhs[cell] - grad_p[cell] * volume;
+        component_rhs[0][cell] = full_rhs.x;
+        component_rhs[1][cell] = full_rhs.y;
+        component_rhs[2][cell] = full_rhs.z;
+        component_x[0][cell] = velocity_[cell].x;
+        component_x[1][cell] = velocity_[cell].y;
+        component_x[2][cell] = velocity_[cell].z;
+    }
+    for (std::size_t component = 0; component < 3U; ++component) {
+        momentum_results_[component] = cfd::core::restarted_gmres(
+            component_rhs[component], component_x[component],
+            [&](std::span<const double> in, std::span<double> out) { matrix.multiply(in, out); },
+            [&](std::span<const double> in, std::span<double> out) { preconditioner(in, out); },
+            config_.momentum_iterations, 30U, config_.momentum_tolerance);
+        if (!momentum_results_[component].converged) {
+            throw std::runtime_error("collocated momentum Krylov solve did not converge");
+        }
+    }
+
+    cfd::core::parallel_for(n, [&](std::size_t cell) {
+        velocity_[cell] = {component_x[0][cell], component_x[1][cell], component_x[2][cell]};
         pressure_mobility_[cell] = mesh_.cells()[cell].volume / diagonal[cell];
-        velocity_[cell] = h_by_a_[cell] - grad_p[cell] * pressure_mobility_[cell];
+        h_by_a_[cell] = velocity_[cell] + grad_p[cell] * pressure_mobility_[cell];
     });
 }
 

@@ -29,6 +29,7 @@ struct Options {
     unsigned threads{0};
     float tau{0.6F};
     bool csv{false};
+    bool json{false};
 };
 
 std::size_t parse_size(const char* text, std::string_view option) {
@@ -62,6 +63,7 @@ Options parse_options(int argc, char** argv) {
         else if (arg == "--threads") options.threads = static_cast<unsigned>(parse_size(require_value(arg), arg));
         else if (arg == "--tau") options.tau = parse_float(require_value(arg), arg);
         else if (arg == "--csv") options.csv = true;
+        else if (arg == "--json") options.json = true;
         else if (arg == "--help" || arg == "-h") {
             std::cout
                 << "Usage: cfd-bench [options]\n"
@@ -71,13 +73,28 @@ Options parse_options(int argc, char** argv) {
                 << "  --nx N --ny N --nz N\n"
                 << "  --warmup N --steps N --tau T\n"
                 << "  --threads N      OpenMP thread count (CPU)\n"
-                << "  --csv            CSV output\n";
+                << "  --csv            CSV output\n"
+                << "  --json           newline-delimited JSON output\n";
             std::exit(0);
         } else {
             throw std::invalid_argument("unknown option: " + std::string(arg));
         }
     }
+    if (options.csv && options.json) throw std::invalid_argument("--csv and --json are mutually exclusive");
     return options;
+}
+
+std::string json_escape(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    for (char c : text) {
+        if (c == '\\' || c == '"') { out.push_back('\\'); out.push_back(c); }
+        else if (c == '\n') out += "\\n";
+        else if (c == '\r') out += "\\r";
+        else if (c == '\t') out += "\\t";
+        else out.push_back(c);
+    }
+    return out;
 }
 
 template<class Descriptor>
@@ -114,6 +131,28 @@ void print_result(const Options& options,
                   << allocated_mib << ',' << single_grid_mib << ',' << mass_error_abs << ',' << mass_error_rel << '\n';
         return;
     }
+    if (options.json) {
+        std::cout << std::setprecision(12)
+                  << "{\"schema\":\"cfd_solvers.benchmark.v1\","
+                  << "\"lattice\":\"" << json_escape(options.lattice) << "\","
+                  << "\"backend\":\"" << json_escape(backend) << "\","
+                  << "\"streaming\":\"" << json_escape(streaming) << "\","
+                  << "\"device\":\"" << json_escape(device) << "\","
+                  << "\"nx\":" << options.nx << ','
+                  << "\"ny\":" << options.ny << ','
+                  << "\"nz\":" << options.nz << ','
+                  << "\"q\":" << Descriptor::q << ','
+                  << "\"steps\":" << options.steps << ','
+                  << "\"seconds\":" << seconds << ','
+                  << "\"mlups\":" << mlups << ','
+                  << "\"estimated_ddf_gbps\":" << estimated_gbps << ','
+                  << "\"allocated_ddf_mib\":" << allocated_mib << ','
+                  << "\"single_grid_ddf_mib\":" << single_grid_mib << ','
+                  << "\"mass_error_abs\":" << mass_error_abs << ','
+                  << "\"mass_error_rel\":" << mass_error_rel << "}\n";
+        return;
+    }
+
 
     std::cout << "lattice=" << options.lattice
               << " backend=" << backend

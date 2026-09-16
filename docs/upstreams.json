@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-09-16",
+  "policy": "Capability/reference manifest. No upstream source is vendored. Restrictive or copyleft projects are clean-room references unless an explicit adapter is added.",
+  "upstreams": [
+    {
+      "name": "OpenFOAM 14",
+      "repository": "https://github.com/OpenFOAM/OpenFOAM-14",
+      "branch": "master",
+      "commit": "a4a8a1eff092ff9452a95aa85f8250319776bfa2",
+      "license": "GPL-3.0-or-later",
+      "license_source": "repository license notice",
+      "tracker_phase": 3,
+      "integration": "clean-room capability and validation reference"
+    },
+    {
+      "name": "FluidX3D",
+      "repository": "https://github.com/ProjectPhysX/FluidX3D",
+      "branch": "master",
+      "commit": "9f3a995599740082690ace8cdc7a82b0396adddd",
+      "license": "LicenseRef-FluidX3D-NonCommercial-NonMilitary",
+      "license_source": "LICENSE.md",
+      "license_blob_sha": "26284d5bbd742adad7e75b59add8a7ea55ac9421",
+      "tracker_phase": 2,
+      "integration": "published algorithms and public behavior only; no source translation"
+    },
+    {
+      "name": "Elmer FEM",
+      "repository": "https://github.com/ElmerCSC/elmerfem",
+      "branch": "devel",
+      "commit": "4bc328d56588b37c3e002acab087728755b804c8",
+      "license": "GPL-2.0/LGPL-2.1 policy",
+      "license_source": "LICENSE.md and license policy",
+      "license_blob_sha": "1a9c58a708619ca2566ea7df1240d55e8f94af78",
+      "tracker_phase": 4,
+      "integration": "clean-room FEM/multiphysics capability reference"
+    },
+    {
+      "name": "openEMS FDTD",
+      "repository": "https://github.com/thliebig/openEMS",
+      "branch": "master",
+      "commit": "bbb876041b89abc26c0168f89af9ac2fc1e72627",
+      "license": "GPL-3.0",
+      "license_source": "COPYING",
+      "license_blob_sha": "94a9ed024d3859793618152ea559a168bbcbb5e2",
+      "tracker_phase": 5,
+      "integration": "clean-room EM capability and validation reference"
+    },
+    {
+      "name": "Optiland",
+      "repository": "https://github.com/optiland/optiland",
+      "branch": "master",
+      "commit": "8bd86cf4c31878f6ad7cabed9f290b9a7ecfe1c7",
+      "license": "MIT",
+      "license_source": "LICENSE",
+      "license_blob_sha": "7260ce44f4ee24655c984223c638ee3508c8a20f",
+      "tracker_phase": 6,
+      "integration": "permissive capability reference; independent C++ implementation preferred"
+    },
+    {
+      "name": "EchemFEM",
+      "repository": "https://github.com/LLNL/echemfem",
+      "branch": "main",
+      "commit": "2ea3d3869c7e575ca4d5c2397633865d16f0dba0",
+      "license": "MIT",
+      "license_source": "LICENSE",
+      "tracker_phase": 7,
+      "integration": "electrochemical transport/PNP capability reference"
+    },
+    {
+      "name": "echemAMR",
+      "repository": "https://github.com/NatLabRockies/echemAMR",
+      "branch": "main",
+      "commit": "29fb99f450481c8e5f2e3f132b44ab14ee054871",
+      "license": "BSD-3-Clause",
+      "license_source": "LICENSE",
+      "tracker_phase": 7,
+      "integration": "HPC electrochemistry, immersed-interface, Butler-Volmer and AMR reference"
+    },
+    {
+      "name": "Cantera",
+      "repository": "https://github.com/Cantera/cantera",
+      "branch": "main",
+      "commit": "61433163abe81711a09cabebefff4a7002bd6d37",
+      "license": "BSD-3-Clause-like",
+      "license_source": "License.txt",
+      "tracker_phase": 7,
+      "integration": "thermochemistry/kinetics capability reference and optional future adapter"
+    },
+    {
+      "name": "Reaktoro",
+      "repository": "https://github.com/reaktoro/reaktoro",
+      "branch": "main",
+      "commit": "f587235e692b7168faa272c8892a4c079a1f7dd9",
+      "license": "LGPL-2.1-or-later",
+      "license_source": "LICENSE",
+      "tracker_phase": 7,
+      "integration": "equilibrium/kinetics/database capability reference and optional dynamic adapter"
+    },
+    {
+      "name": "PHREEQC/PhreeqcRM",
+      "repository": "https://www.usgs.gov/software/phreeqc-version-3",
+      "branch": null,
+      "commit": null,
+      "release": "3.8.6",
+      "license": "Public-Domain-USGov",
+      "license_source": "USGS distribution",
+      "tracker_phase": 7,
+      "integration": "aqueous equilibrium/speciation and reactive-transport validation/reference"
+    }
+  ]
+}
