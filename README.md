@@ -6,9 +6,17 @@ The long-term goal is a readable solver collection covering CFD, FEM multiphysic
 
 The project is inspired by the capabilities and engineering lessons of OpenFOAM, FluidX3D, Elmer FEM, openEMS FDTD and Optiland. It is **not** a source-code merge or mechanical translation. The source projects have different licenses, and FluidX3D has additional restrictions, so performance techniques are independently implemented from publications and public descriptions.
 
-## v0.6.1 status - nonlinear/adaptive FEM and additional Elmer-class physics
+## Current development status - CPU continuation after v0.6.1
 
-The machine-checkable integration program now reports **137/398 capabilities (34.4%)** complete. The tracker remains conservative: a capability is checked only when implementation and validation are both present. Phase 0 traceability/release infrastructure is complete; the Elmer-class FEM family is now 27/46 (58.7%), openEMS-class FDTD is 8/26, and Optiland-class optics is 12/43.
+The tracker now reports **165/402 capabilities (41.0%)**. The unreleased continuation adds CPU TRT,
+reusable scalar FVM workspaces and operator caching, reversible/stiff chemistry and acid/base pH,
+conic/aspheric and Gaussian optics, and thermal expansion coupling. It also adds analytical validation
+and correctness fixes for the existing FDTD/electro-thermal work. Local four-rank MPICH execution passes.
+See [`docs/CONTINUATION_CPU.md`](docs/CONTINUATION_CPU.md) for APIs, benchmarks, validation and limits.
+
+## v0.6.1 checkpoint - nonlinear/adaptive FEM and additional Elmer-class physics
+
+At that checkpoint the integration program reported **137/398 capabilities (34.4%)** complete. The tracker remains conservative: a capability is checked only when implementation and validation are both present. Phase 0 traceability/release infrastructure was complete; the Elmer-class FEM family was 27/46 (58.7%), openEMS-class FDTD was 8/26, and Optiland-class optics was 12/43.
 
 This checkpoint builds on v0.6.0 and adds:
 

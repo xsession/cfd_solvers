@@ -45,6 +45,7 @@ It advances LBM, FVM, FEM/coupling, FDTD, optics and chemistry together; the unc
 - [x] Poiseuille/channel manufactured regression
 - [x] Taylor-Green convergence/decay study
 - [x] FP32 versus FP64 reference comparison
+- [x] periodic CPU two-grid TRT collision and split Guo forcing for D2Q9/D3Q19/D3Q27
 - [ ] optional compressed population storage with explicit error gates (moved to the next performance pass)
 
 ## Phase 3A - distributed CPU/hybrid runtime [implemented baseline]

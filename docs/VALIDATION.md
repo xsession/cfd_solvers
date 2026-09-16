@@ -1,5 +1,17 @@
 # Validation
 
+## Unreleased CPU continuation (2026-09-16)
+
+Current local environment: Ubuntu 22.04 under WSL, Intel Core i7-8750H, GCC 11.4, MPICH 4.0.
+GCC Release/OpenMP and Release/serial each pass 34 CTest targets. The MPI configuration passes
+37 targets, including actual four-rank D3Q19/D3Q27 and halo/restart regression execution.
+The focused `cfd-extension-tests` and existing `cfd-sanitize-smoke` pass GCC ASan+UBSan with leak detection.
+Clang is unavailable locally and package download failed on WSL DNS; GCC/Clang CI remains configured.
+AdaptiveCpp/GPU execution remains unvalidated.
+
+`CONTINUATION_CPU.md` records the new APIs, analytical gates and performance samples.
+The development-container results below are historical checkpoints, not results from this WSL run.
+
 The regression suite preserves the Phase-2/3 LBM and distributed gates and now also validates the Phase-4A finite-volume foundation.
 
 ## Numerical regression
