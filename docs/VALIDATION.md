@@ -176,3 +176,19 @@ Validated on 2026-09-16 in the development container:
 - OSDI regression loads a synthetic shared library, validates ABI version/count metadata and move semantics; descriptor evaluation is intentionally still open.
 - Focused ASan+UBSan with leak detection passes SPICE file/hierarchy parsing, OSDI loading and a PEEC + thin-wire-MoM + nonlinear circuit smoke.
 - The broad sanitizer build is intentionally not used as the RF/SPICE gate because the monolithic project build produces excessive debug/instrumentation compile cost; focused instrumentation covers the newly changed paths directly.
+
+## v0.8.1 adaptive-circuit and coupled-wire gates
+
+Validated on 2026-09-17 in the development container. The release CPU configuration passes **47/47 CTest targets**, including the three new CLI smoke cases and the focused `cfd-next-analysis-tests` target.
+
+- Adaptive RC transient regression begins from a deliberately coarse step, exercises at least one LTE rejection, accepts a genuinely nonuniform step sequence, lands exactly on the requested stop time and agrees with the analytical first-order step response.
+- Periodic steady-state RC regression converges by phase-aligned cycle residual and its extracted fundamental amplitude agrees with the small-signal RC transfer magnitude.
+- Low-pass RC pole fitting recovers the analytical pole at `s=-1/(RC)` with no finite zero; high-pass RC fitting additionally recovers the zero at the origin.
+- Two identical separated parallel wires produce nonzero induced current and the full current solution is reciprocal under swapping the driven wire.
+- A 1 Mohm center-segment series load reduces the driven-wire feed current in the coupled-wire regression.
+- Adaptive BDF2 is validated with a uniform-step refinement gate: halving the accepted step reduces RC endpoint error by more than the second-order regression threshold, while the implementation uses unequal-step coefficients in variable-step operation.
+- The arbitrary-orientation MoM kernel is validated by rigidly rotating the reciprocal two-wire geometry onto a non-axis-aligned 3-D direction; the entire current vector remains invariant to numerical precision.
+- Crossing/touching oriented wires are rejected explicitly until connected-junction basis functions are available.
+- The ideal transformer regression verifies a 2:1 voltage ratio and the expected 4x impedance reflection using a 100 ohm secondary load; the tolerance includes the configured MNA `gmin`.
+- A matched 50 ohm sampled TEM line with `alpha=0.1 Np/m` and `L=1 m` reproduces `|S21|=exp(-0.1)` with negligible `S11`.
+- The focused target is `cfd-next-analysis-tests`; these checks intentionally do not claim connected-wire junction basis functions, NEC-grade canonical convergence, harmonic balance, exact descriptor pole-zero extraction or BDF3+ automatic order selection.

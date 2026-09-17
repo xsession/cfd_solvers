@@ -38,6 +38,25 @@ struct SensitivityResult {
                                                                double perturbation,
                                                                const NewtonConfig& config = {});
 
+struct SmallSignalDistortion {
+    double bias_output_v{};
+    double first_derivative{};
+    double second_derivative{};
+    double third_derivative{};
+    double fundamental_v{};
+    double second_harmonic_v{};
+    double third_harmonic_v{};
+    double hd2{};
+    double hd3{};
+};
+// Quasi-static small-signal distortion baseline. A five-point DC transfer
+// stencil estimates first/second/third derivatives around the source bias and
+// predicts the first three harmonics for a sinusoidal source perturbation.
+[[nodiscard]] SmallSignalDistortion small_signal_distortion(
+    Circuit circuit,std::string_view source,std::string_view output_node,
+    double input_peak_amplitude,double derivative_step,
+    const NewtonConfig& config = {});
+
 struct FourierMeasurement {
     double frequency_hz{};
     Complex phasor{}; // peak-amplitude convention for a real signal
@@ -90,6 +109,51 @@ struct DominantPoleEstimate {
 [[nodiscard]] DominantPoleEstimate estimate_dominant_pole(const Circuit& circuit,
     std::string_view output_node,double start_hz,double stop_hz,std::size_t points,
     const NewtonConfig& config = {});
+
+struct PoleZeroConfig {
+    double start_hz{1.0};
+    double stop_hz{1.0e9};
+    std::size_t samples{64U};
+    std::size_t denominator_order{2U};
+    std::size_t numerator_order{2U};
+};
+
+struct PoleZeroResult {
+    // Continuous-time s-plane roots in rad/s.
+    std::vector<Complex> poles_rad_per_s;
+    std::vector<Complex> zeros_rad_per_s;
+    double relative_rms_fit_error{};
+};
+
+// Small-signal pole/zero baseline obtained by a complex rational least-squares
+// fit to the circuit AC transfer function. AC sources already present in the
+// circuit define the excitation; output_node defines the SISO response.
+[[nodiscard]] PoleZeroResult pole_zero_analysis(const Circuit& circuit,
+                                                 std::string_view output_node,
+                                                 const PoleZeroConfig& controls = {},
+                                                 const NewtonConfig& config = {});
+
+struct PeriodicSteadyStateConfig {
+    double period_s{};
+    std::size_t samples_per_period{128U};
+    std::size_t max_periods{64U};
+    double relative_tolerance{1.0e-4};
+    double absolute_tolerance{1.0e-7};
+    TransientMethod method{TransientMethod::trapezoidal};
+};
+
+struct PeriodicSteadyStateResult {
+    std::vector<TransientPoint> period; // time is shifted to [0, period_s]
+    std::size_t periods{};
+    double normalized_residual{};
+    bool converged{};
+};
+
+// Shooting-by-settling PSS baseline. Consecutive full periods are compared at
+// identical phase samples until all node voltages satisfy the requested norm.
+[[nodiscard]] PeriodicSteadyStateResult periodic_steady_state(const Circuit& circuit,
+                                                               const PeriodicSteadyStateConfig& controls,
+                                                               const NewtonConfig& config = {});
 
 struct NoiseSpectrum {
     std::vector<NoiseResult> points;

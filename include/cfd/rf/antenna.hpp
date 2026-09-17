@@ -1,6 +1,7 @@
 #pragma once
 
 #include <complex>
+#include <functional>
 #include <cstddef>
 #include <span>
 #include <vector>
@@ -38,6 +39,40 @@ struct PatternSample {
     double theta_rad{};
     double normalized_power{};
 };
+
+struct AntennaMatchMetrics {
+    std::complex<double> impedance_ohm{};
+    std::complex<double> reflection_coefficient{};
+    double return_loss_db{};
+    double vswr{};
+};
+[[nodiscard]] AntennaMatchMetrics antenna_match_metrics(std::complex<double> feed_impedance_ohm,
+                                                        double reference_impedance_ohm = 50.0);
+
+struct AntennaOptimizationVariable {
+    double initial_value{};
+    double minimum{};
+    double maximum{};
+    double initial_step{};
+};
+struct AntennaOptimizationConfig {
+    std::size_t max_iterations{128U};
+    double parameter_tolerance{1.0e-6};
+    double step_reduction{0.5};
+};
+struct AntennaOptimizationResult {
+    std::vector<double> parameters;
+    double objective{};
+    std::size_t iterations{};
+    std::size_t evaluations{};
+    bool converged{};
+};
+using AntennaObjective = std::function<double(std::span<const double>)>;
+// Bounded derivative-free coordinate/pattern search intended for wrapping MoM,
+// array-factor or full-wave antenna objectives. Lower objective is better.
+[[nodiscard]] AntennaOptimizationResult optimize_antenna(
+    std::span<const AntennaOptimizationVariable> variables, AntennaObjective objective,
+    const AntennaOptimizationConfig& config = {});
 
 class SinusoidalDipoleSolver {
 public:

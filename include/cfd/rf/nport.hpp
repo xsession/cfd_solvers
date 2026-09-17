@@ -5,6 +5,7 @@
 #include <complex>
 #include <cstddef>
 #include <iosfwd>
+#include <functional>
 #include <span>
 #include <vector>
 
@@ -36,6 +37,18 @@ private:
 [[nodiscard]] ComplexMatrix renormalize_s(const ComplexMatrix& s,
                                           std::span<const double> old_reference_impedance,
                                           std::span<const double> new_reference_impedance);
+
+// Kurokawa power-wave conversion for complex per-port reference impedances.
+// Each reference must have a strictly positive real part. These overloads are
+// useful for waveguide, active-device and de-embedding workflows where the
+// reference impedance is not purely real.
+[[nodiscard]] ComplexMatrix z_to_s_power_wave(const ComplexMatrix& z,
+                                              std::span<const Complex> reference_impedance);
+[[nodiscard]] ComplexMatrix s_to_z_power_wave(const ComplexMatrix& s,
+                                              std::span<const Complex> reference_impedance);
+[[nodiscard]] ComplexMatrix renormalize_s_power_wave(const ComplexMatrix& s,
+                                                     std::span<const Complex> old_reference_impedance,
+                                                     std::span<const Complex> new_reference_impedance);
 
 struct NPortPoint {
     double frequency_hz{};
@@ -75,6 +88,21 @@ struct StabilityCircle {
 [[nodiscard]] double transducer_gain(const Matrix2C& s,Complex source_reflection = {},
                                      Complex load_reflection = {});
 
+struct NoiseParameters {
+    double minimum_noise_factor{1.0};
+    Complex optimum_source_reflection{};
+    double equivalent_noise_resistance_ohm{};
+    double reference_impedance_ohm{50.0};
+};
+struct NoiseCircle {
+    Complex center{};
+    double radius{};
+    double noise_factor{};
+    bool valid{};
+};
+[[nodiscard]] double noise_factor(const NoiseParameters& parameters,Complex source_reflection);
+[[nodiscard]] NoiseCircle noise_circle(const NoiseParameters& parameters,double target_noise_factor);
+
 struct LoadPullSample {
     Complex load_reflection{};
     double transducer_gain{};
@@ -95,6 +123,44 @@ struct NetworkQuality {
 [[nodiscard]] NetworkQuality network_quality(const ComplexMatrix& s,
                                              double passivity_tolerance = 1.0e-10,
                                              double reciprocity_tolerance = 1.0e-10);
+
+// Conservative passivity projection baseline. If sigma_max(S) exceeds the
+// requested bound the full matrix is scaled uniformly, preserving reciprocity
+// and phase while guaranteeing the singular-value power bound.
+[[nodiscard]] ComplexMatrix enforce_passivity(const ComplexMatrix& s,
+                                              double maximum_singular_value = 1.0);
+
+struct BroadbandCausality {
+    double negative_time_energy_ratio{};
+    bool causal{};
+    std::size_t impulse_samples{};
+};
+// Discrete broadband causality gate for a uniformly sampled DC-to-Nyquist
+// network sweep. A Hermitian extension is inverse-transformed and energy in
+// wrapped negative-time samples is reported.
+[[nodiscard]] BroadbandCausality check_broadband_causality(
+    std::span<const NPortPoint> points, double negative_time_energy_tolerance = 1.0e-6,
+    double frequency_uniformity_tolerance = 1.0e-8);
+
+struct AdaptiveNetworkSweepConfig {
+    std::size_t initial_points{5U};
+    std::size_t maximum_points{257U};
+    std::size_t maximum_refinements{12U};
+    double relative_tolerance{1.0e-3};
+    double absolute_tolerance{1.0e-6};
+};
+struct AdaptiveNetworkSweepResult {
+    std::vector<NPortPoint> points;
+    std::size_t evaluations{};
+    std::size_t refinements{};
+    bool converged{};
+};
+using NetworkSampler = std::function<ComplexMatrix(double frequency_hz)>;
+// Log-frequency adaptive sweep using midpoint interpolation error as the
+// refinement indicator. This is the sampling foundation for later rational MOR.
+[[nodiscard]] AdaptiveNetworkSweepResult adaptive_network_sweep(
+    double start_hz,double stop_hz,std::span<const double> reference_impedance,
+    NetworkSampler sampler,const AdaptiveNetworkSweepConfig& config = {});
 
 // 4-port single-ended -> [differential pair 1, differential pair 2,
 // common pair 1, common pair 2] mixed-mode transform for port pairs (1,2),(3,4).

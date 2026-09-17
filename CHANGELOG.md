@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.8.2 - unequal-step Gear/BDF2 and arbitrary-orientation wire MoM
+
+- Extended adaptive circuit transient integration with variable-step BDF2/Gear coefficients after a backward-Euler bootstrap interval.
+- Added second-order Richardson LTE scaling/controller behavior and an analytical RC refinement regression.
+- Added arbitrary-orientation disjoint straight-wire MoM using the projected dyadic free-space Green kernel.
+- Added an ideal lossless transformer convenience model from a power-conserving VCVS/CCCS pair.
+- Added focused validation for lossy sampled TEM-line attenuation and reconciled already-tested microstrip/stripline/CPW/TE10 AC circuit elements in the tracker.
+- Kept the parallel-wire API source-compatible by delegating it to the new orientation-independent solver.
+- Added rotational-invariance validation for a rigidly rotated coupled two-wire problem and explicit rejection of touching/crossing wires until junction basis functions are implemented.
+- Preserved the full existing v0.8.1 CPU test matrix while advancing the RF/SPICE tracker.
+
+## 0.8.1 - adaptive circuit analysis and coupled-wire RF
+
+- Added adaptive backward-Euler transient integration with Richardson step-doubling local-truncation-error control, accepted/rejected-step accounting and bounded variable timesteps.
+- Added periodic steady-state shooting-by-settling with phase-aligned cycle convergence and a low-order complex rational-fit pole/zero baseline.
+- Generalized the thin-wire MoM core from a single center-fed straight wire to coupled parallel z-directed wires with independent segment counts, multiple delta-gap feeds and lumped series loads, while retaining the original dipole API.
+- Added dedicated analytical/reciprocity regressions and `spice-adaptive`, `spice-pss-pz` and `rf-multiwire` CLI smoke cases.
+- Full GCC/OpenMP CPU validation passes 47/47 CTest targets.
+- Integration tracker advances to 433/577 validated capabilities (75.0%): Phase 10 is 31/63 and Phase 11 is 64/96.
+- Deliberately still open: higher-order variable-step Gear/BDF, exact descriptor generalized-eigenvalue pole/zero, harmonic balance/Newton shooting, NEC-grade arbitrary connected-wire geometry and canonical antenna benchmark convergence.
+
 ## 0.8.0 - RF/antenna and SPICE-class solver expansion
 
 - Integrated the latest remote CPU continuation with the locally validated advanced FDTD/multiphysics work without dropping either feature set.

@@ -9,6 +9,56 @@
 #include <stdexcept>
 
 namespace cfd::circuit {
+namespace {
+
+template<class T>
+std::vector<T> solve_dense_ls(std::vector<T> matrix,std::vector<T> rhs,std::size_t n) {
+    for(std::size_t column=0;column<n;++column){
+        std::size_t pivot=column;double best=std::abs(matrix[column*n+column]);
+        for(std::size_t row=column+1U;row<n;++row){const double candidate=std::abs(matrix[row*n+column]);if(candidate>best){best=candidate;pivot=row;}}
+        if(best<1.0e-24)throw std::runtime_error("singular rational-fit normal matrix");
+        if(pivot!=column){for(std::size_t j=column;j<n;++j)std::swap(matrix[pivot*n+j],matrix[column*n+j]);std::swap(rhs[pivot],rhs[column]);}
+        const T diagonal=matrix[column*n+column];
+        for(std::size_t j=column;j<n;++j)matrix[column*n+j]/=diagonal;
+        rhs[column]/=diagonal;
+        for(std::size_t row=0;row<n;++row){if(row==column)continue;const T factor=matrix[row*n+column];if(std::abs(factor)==0.0)continue;for(std::size_t j=column;j<n;++j)matrix[row*n+j]-=factor*matrix[column*n+j];rhs[row]-=factor*rhs[column];}
+    }
+    return rhs;
+}
+
+Complex evaluate_polynomial(std::span<const Complex> coefficients,Complex x) {
+    Complex value{};
+    for(auto it=coefficients.rbegin();it!=coefficients.rend();++it)value=value*x+*it;
+    return value;
+}
+
+std::vector<Complex> polynomial_roots(std::vector<Complex> coefficients) {
+    double maximum=0.0;for(const auto c:coefficients)maximum=std::max(maximum,std::abs(c));
+    if(maximum==0.0)return {};
+    while(coefficients.size()>1U&&std::abs(coefficients.back())<maximum*1.0e-10)coefficients.pop_back();
+    const std::size_t degree=coefficients.size()-1U;
+    if(degree==0U)return {};
+    if(degree==1U)return {-coefficients[0]/coefficients[1]};
+    const Complex lead=coefficients.back();for(auto& c:coefficients)c/=lead;
+    double radius=1.0;for(std::size_t i=0;i<degree;++i)radius=std::max(radius,1.0+std::abs(coefficients[i]));
+    std::vector<Complex> roots(degree);
+    for(std::size_t i=0;i<degree;++i){const double angle=2.0*std::numbers::pi*(static_cast<double>(i)+0.37)/static_cast<double>(degree);roots[i]=std::polar(radius,angle);}
+    for(std::size_t iteration=0;iteration<300U;++iteration){
+        double change=0.0;
+        const auto old=roots;
+        for(std::size_t i=0;i<degree;++i){
+            Complex denominator{1.0,0.0};
+            for(std::size_t j=0;j<degree;++j)if(j!=i)denominator*=old[i]-old[j];
+            if(std::abs(denominator)<1.0e-24)denominator=Complex{1.0e-24,0.0};
+            roots[i]=old[i]-evaluate_polynomial(coefficients,old[i])/denominator;
+            change=std::max(change,std::abs(roots[i]-old[i]));
+        }
+        if(change<1.0e-12)break;
+    }
+    return roots;
+}
+
+} // namespace
 
 cfd::rf::Matrix2C two_port_s_parameters(const Circuit& circuit,const AcPort& first,const AcPort& second,
                                          double frequency,double reference_impedance) {
@@ -41,6 +91,30 @@ SensitivityResult voltage_source_dc_sensitivity(Circuit circuit,std::string_view
     circuit.set_voltage_source_dc(source,nominal-perturbation);const auto minus=circuit.dc_operating_point_homotopy(config);
     if(!plus.converged||!minus.converged)throw std::runtime_error("sensitivity perturbed operating point failed");
     return {circuit.voltage(base,output),(circuit.voltage(plus,output)-circuit.voltage(minus,output))/(2.0*perturbation)};
+}
+
+SmallSignalDistortion small_signal_distortion(Circuit circuit,std::string_view source,
+                                                     std::string_view output,double amplitude,
+                                                     double h,const NewtonConfig& config) {
+    if(!(amplitude>0.0)||!(h>0.0)||!std::isfinite(amplitude)||!std::isfinite(h))
+        throw std::invalid_argument("invalid small-signal distortion controls");
+    const double bias=circuit.voltage_source_dc(source);
+    const auto evaluate=[&](double offset){
+        circuit.set_voltage_source_dc(source,bias+offset);
+        const auto op=circuit.dc_operating_point_homotopy(config);
+        if(!op.converged)throw std::runtime_error("distortion operating point failed");
+        return circuit.voltage(op,output);
+    };
+    const double fm2=evaluate(-2.0*h),fm1=evaluate(-h),f0=evaluate(0.0),fp1=evaluate(h),fp2=evaluate(2.0*h);
+    const double d1=(fm2-8.0*fm1+8.0*fp1-fp2)/(12.0*h);
+    const double d2=(-fp2+16.0*fp1-30.0*f0+16.0*fm1-fm2)/(12.0*h*h);
+    const double d3=(fp2-2.0*fp1+2.0*fm1-fm2)/(2.0*h*h*h);
+    const double fundamental=std::abs(d1*amplitude+d3*amplitude*amplitude*amplitude/8.0);
+    const double second=std::abs(d2*amplitude*amplitude/4.0);
+    const double third=std::abs(d3*amplitude*amplitude*amplitude/24.0);
+    const double hd2=fundamental>0.0?second/fundamental:std::numeric_limits<double>::infinity();
+    const double hd3=fundamental>0.0?third/fundamental:std::numeric_limits<double>::infinity();
+    return {f0,d1,d2,d3,fundamental,second,third,hd2,hd3};
 }
 
 FourierMeasurement fourier_measurement(std::span<const TransientPoint> samples,std::size_t node,double frequency) {
@@ -187,6 +261,101 @@ DominantPoleEstimate estimate_dominant_pole(const Circuit& circuit,std::string_v
         }
     }
     return {low,0.0,false};
+}
+
+PoleZeroResult pole_zero_analysis(const Circuit& circuit,std::string_view output_node,
+                                  const PoleZeroConfig& controls,const NewtonConfig& config) {
+    if(!(controls.start_hz>0.0)||!(controls.stop_hz>controls.start_hz)
+       ||controls.denominator_order==0U||controls.samples<3U
+       ||controls.denominator_order>8U||controls.numerator_order>8U)
+        throw std::invalid_argument("invalid pole-zero controls");
+    const std::size_t unknowns=controls.denominator_order+controls.numerator_order+1U;
+    if(controls.samples<unknowns+1U)throw std::invalid_argument("pole-zero fit needs more samples than coefficients");
+    const auto sweep=circuit.ac_log_sweep(controls.start_hz,controls.stop_hz,controls.samples,config);
+    const double scale=2.0*std::numbers::pi*std::sqrt(controls.start_hz*controls.stop_hz);
+    std::vector<std::vector<Complex>> rows;rows.reserve(sweep.size());
+    std::vector<Complex> targets;targets.reserve(sweep.size());
+    for(const auto& sample:sweep){
+        const Complex h=circuit.voltage(sample,output_node);
+        const Complex x{0.0,2.0*std::numbers::pi*sample.frequency_hz/scale};
+        std::vector<Complex> row(unknowns);Complex power=x;
+        for(std::size_t j=0;j<controls.denominator_order;++j){row[j]=h*power;power*=x;}
+        power={1.0,0.0};
+        for(std::size_t j=0;j<=controls.numerator_order;++j){row[controls.denominator_order+j]=-power;power*=x;}
+        rows.push_back(std::move(row));targets.push_back(-h);
+    }
+    std::vector<Complex> normal(unknowns*unknowns),rhs(unknowns);
+    for(std::size_t r=0;r<rows.size();++r){
+        for(std::size_t i=0;i<unknowns;++i){
+            rhs[i]+=std::conj(rows[r][i])*targets[r];
+            for(std::size_t j=0;j<unknowns;++j)normal[i*unknowns+j]+=std::conj(rows[r][i])*rows[r][j];
+        }
+    }
+    double largest_diagonal=0.0;for(std::size_t i=0;i<unknowns;++i)largest_diagonal=std::max(largest_diagonal,std::abs(normal[i*unknowns+i]));
+    const double ridge=std::max(1.0,largest_diagonal)*1.0e-14;
+    for(std::size_t i=0;i<unknowns;++i)normal[i*unknowns+i]+=ridge;
+    const auto coefficients=solve_dense_ls(std::move(normal),std::move(rhs),unknowns);
+    std::vector<Complex> denominator(controls.denominator_order+1U,Complex{}),numerator(controls.numerator_order+1U,Complex{});
+    denominator[0]={1.0,0.0};
+    for(std::size_t j=0;j<controls.denominator_order;++j)denominator[j+1U]=coefficients[j];
+    for(std::size_t j=0;j<=controls.numerator_order;++j)numerator[j]=coefficients[controls.denominator_order+j];
+    double error2=0.0,signal2=0.0;
+    for(std::size_t i=0;i<sweep.size();++i){
+        const Complex x{0.0,2.0*std::numbers::pi*sweep[i].frequency_hz/scale};
+        const Complex fit=evaluate_polynomial(numerator,x)/evaluate_polynomial(denominator,x);
+        const Complex actual=circuit.voltage(sweep[i],output_node);
+        error2+=std::norm(fit-actual);signal2+=std::norm(actual);
+    }
+    PoleZeroResult result;
+    result.poles_rad_per_s=polynomial_roots(denominator);
+    result.zeros_rad_per_s=polynomial_roots(numerator);
+    for(auto& root:result.poles_rad_per_s)root*=scale;
+    for(auto& root:result.zeros_rad_per_s)root*=scale;
+    const auto order_roots=[](const Complex& a,const Complex& b){return a.real()==b.real()?a.imag()<b.imag():a.real()<b.real();};
+    std::sort(result.poles_rad_per_s.begin(),result.poles_rad_per_s.end(),order_roots);
+    std::sort(result.zeros_rad_per_s.begin(),result.zeros_rad_per_s.end(),order_roots);
+    result.relative_rms_fit_error=std::sqrt(error2/std::max(signal2,std::numeric_limits<double>::min()));
+    return result;
+}
+
+PeriodicSteadyStateResult periodic_steady_state(const Circuit& circuit,
+                                                const PeriodicSteadyStateConfig& controls,
+                                                const NewtonConfig& config) {
+    if(!(controls.period_s>0.0)||!std::isfinite(controls.period_s)
+       ||controls.samples_per_period<4U||controls.max_periods<2U
+       ||!(controls.relative_tolerance>0.0)||!(controls.absolute_tolerance>0.0))
+        throw std::invalid_argument("invalid periodic steady-state controls");
+    if(controls.max_periods>std::numeric_limits<std::size_t>::max()/controls.samples_per_period)
+        throw std::overflow_error("periodic steady-state step count overflow");
+    const double dt=controls.period_s/static_cast<double>(controls.samples_per_period);
+    const std::size_t total_steps=controls.max_periods*controls.samples_per_period;
+    const auto transient=circuit.transient(dt,total_steps,controls.method,config);
+    PeriodicSteadyStateResult result;
+    std::size_t selected_period=controls.max_periods-1U;
+    result.normalized_residual=std::numeric_limits<double>::infinity();
+    for(std::size_t period=1U;period<controls.max_periods;++period){
+        const std::size_t base=period*controls.samples_per_period;
+        double residual=0.0;
+        for(std::size_t phase=0;phase<=controls.samples_per_period;++phase){
+            const auto& current=transient[base+phase];
+            const auto& previous=transient[base-controls.samples_per_period+phase];
+            if(current.node_voltage.size()!=previous.node_voltage.size())throw std::runtime_error("PSS node-vector size changed");
+            for(std::size_t node=1U;node<current.node_voltage.size();++node){
+                const double scale=controls.absolute_tolerance+controls.relative_tolerance*std::max(std::abs(current.node_voltage[node]),std::abs(previous.node_voltage[node]));
+                residual=std::max(residual,std::abs(current.node_voltage[node]-previous.node_voltage[node])/scale);
+            }
+        }
+        result.normalized_residual=residual;
+        if(residual<=1.0){result.converged=true;result.periods=period+1U;selected_period=period;break;}
+    }
+    if(!result.converged)result.periods=controls.max_periods;
+    const std::size_t base=selected_period*controls.samples_per_period;
+    result.period.reserve(controls.samples_per_period+1U);
+    const double origin=transient[base].time;
+    for(std::size_t phase=0;phase<=controls.samples_per_period;++phase){
+        auto point=transient[base+phase];point.time-=origin;result.period.push_back(std::move(point));
+    }
+    return result;
 }
 
 } // namespace cfd::circuit

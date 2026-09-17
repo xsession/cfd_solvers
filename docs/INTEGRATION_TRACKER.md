@@ -566,6 +566,8 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] numerical radiated power and radiation resistance integration.
 - [x] directivity and normalized pattern extraction.
 - [x] thin-wire EFIE Method-of-Moments current/input-impedance reference baseline with symmetry/passivity gates.
+- [x] coupled parallel-wire MoM baseline with independent segmentation, delta-gap feeds and lumped series loads.
+- [x] arbitrary-orientation disjoint straight-wire MoM with dyadic free-space Green kernel and rotational-invariance validation.
 - [ ] NEC-grade thin-wire MoM accuracy/convergence across canonical antenna benchmarks.
 - [ ] arbitrary connected wire geometry/junctions.
 - [ ] wire loads and transmission-line sections.
@@ -624,10 +626,10 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] PN-junction voltage limiting primitive.
 - [x] source stepping.
 - [x] gmin stepping/homotopy schedule.
-- [ ] adaptive transient timestep with local truncation error control.
+- [x] adaptive transient timestep with local truncation error control.
 - [x] trapezoidal integration.
 - [x] BDF2 transient integration baseline.
-- [ ] higher-order adaptive Gear/BDF integration.
+- [x] adaptive variable-step BDF2/Gear integration with exact unequal-step coefficients and Richardson LTE control.
 - [x] DC voltage-source sweep.
 - [x] general parameter sweep.
 - [x] temperature sweep.
@@ -635,11 +637,11 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] logarithmic AC sweep framework.
 - [ ] multi-source noise sweep/integration framework.
 - [x] resistor thermal-noise output-referred baseline.
-- [ ] pole-zero analysis.
+- [x] pole-zero analysis.
 - [x] numerical DC sensitivity baseline.
 - [ ] small-signal distortion analysis.
 - [x] Fourier/THD measurements.
-- [ ] periodic steady state / harmonic balance.
+- [x] periodic steady state baseline / harmonic balance remains open.
 - [x] Monte-Carlo resistor tolerancing baseline.
 
 ### Devices and compact models
@@ -653,8 +655,9 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] voltage-controlled switch baseline.
 - [x] VCVS/VCCS/CCVS/CCCS controlled sources.
 - [x] mutual-inductor coupling baseline.
-- [ ] ideal transformer convenience model and nonlinear core.
-- [ ] lossless/lossy transmission-line circuit elements.
+- [x] ideal lossless transformer convenience model using power-conserving controlled-source MNA stamps.
+- [ ] nonlinear magnetic core/hysteresis transformer model.
+- [x] lossless/lossy sampled TEM transmission-line circuit elements for AC MNA.
 - [x] programmatic nonlinear static-device callback.
 - [ ] SPICE B-source/equation-defined source syntax.
 - [ ] device thermal/self-heating terminal framework.
@@ -684,8 +687,9 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] two-port S/Z/ABCD mathematics shared with Phase 10.
 - [x] Touchstone S2P parser shared with Phase 10.
 - [x] generic sampled N-port Touchstone device in AC MNA.
-- [ ] microstrip/stripline/coplanar circuit elements.
-- [ ] waveguide/equivalent discontinuity elements.
+- [x] microstrip/stripline/coplanar sampled circuit elements.
+- [x] rectangular-waveguide TE10 sampled circuit element baseline.
+- [ ] equivalent discontinuity/modal circuit elements.
 - [x] S-parameter N-port to admittance stamping for AC circuit analysis.
 - [x] direct circuit port S-parameter extraction.
 - [x] shared two-port K/mu stability metrics.

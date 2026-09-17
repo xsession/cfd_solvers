@@ -42,6 +42,30 @@ void validate_reference(std::span<const double> reference, std::size_t n) {
     }
 }
 
+void validate_power_reference(std::span<const Complex> reference, std::size_t n) {
+    if (reference.size() != n) throw std::invalid_argument("N-port complex reference-impedance size mismatch");
+    for (Complex z0 : reference) {
+        if (!(z0.real() > 0.0) || !std::isfinite(z0.real()) || !std::isfinite(z0.imag()))
+            throw std::invalid_argument("power-wave reference impedance must be finite with positive real part");
+    }
+}
+
+ComplexMatrix diagonal_real_sqrt(std::span<const Complex> reference, bool reciprocal) {
+    ComplexMatrix result(reference.size());
+    for (std::size_t i = 0; i < reference.size(); ++i) {
+        const double root = std::sqrt(reference[i].real());
+        result(i, i) = reciprocal ? 1.0 / root : root;
+    }
+    return result;
+}
+
+ComplexMatrix diagonal_complex(std::span<const Complex> reference, bool conjugate) {
+    ComplexMatrix result(reference.size());
+    for (std::size_t i = 0; i < reference.size(); ++i)
+        result(i, i) = conjugate ? std::conj(reference[i]) : reference[i];
+    return result;
+}
+
 ComplexMatrix diagonal_sqrt(std::span<const double> reference, bool reciprocal) {
     ComplexMatrix result(reference.size());
     for (std::size_t i = 0; i < reference.size(); ++i) {
@@ -167,6 +191,46 @@ ComplexMatrix s_to_z(const ComplexMatrix& s, std::span<const double> reference) 
 ComplexMatrix renormalize_s(const ComplexMatrix& s, std::span<const double> old_reference,
                             std::span<const double> new_reference) {
     return z_to_s(s_to_z(s, old_reference), new_reference);
+}
+
+ComplexMatrix z_to_s_power_wave(const ComplexMatrix& z, std::span<const Complex> reference) {
+    const std::size_t n = z.size();
+    validate_power_reference(reference, n);
+    const ComplexMatrix r_root = diagonal_real_sqrt(reference, false);
+    const ComplexMatrix r_inverse_root = diagonal_real_sqrt(reference, true);
+    const ComplexMatrix z0 = diagonal_complex(reference, false);
+    const ComplexMatrix z0_conjugate = diagonal_complex(reference, true);
+    ComplexMatrix numerator = z;
+    ComplexMatrix denominator = z;
+    for (std::size_t i = 0; i < n; ++i) {
+        numerator(i, i) -= z0_conjugate(i, i);
+        denominator(i, i) += z0(i, i);
+    }
+    // b = R^-1/2 (Z-Z0*) (Z+Z0)^-1 R^1/2 a
+    return multiply(multiply(multiply(r_inverse_root, numerator), inverse(denominator)), r_root);
+}
+
+ComplexMatrix s_to_z_power_wave(const ComplexMatrix& s, std::span<const Complex> reference) {
+    const std::size_t n = s.size();
+    validate_power_reference(reference, n);
+    const ComplexMatrix r_root = diagonal_real_sqrt(reference, false);
+    const ComplexMatrix r_inverse_root = diagonal_real_sqrt(reference, true);
+    const ComplexMatrix z0 = diagonal_complex(reference, false);
+    const ComplexMatrix z0_conjugate = diagonal_complex(reference, true);
+    // T = R^1/2 S R^-1/2 and (I-T) Z = T Z0 + Z0*.
+    const ComplexMatrix t = multiply(multiply(r_root, s), r_inverse_root);
+    ComplexMatrix lhs = ComplexMatrix::identity(n);
+    for (std::size_t row = 0; row < n; ++row)
+        for (std::size_t column = 0; column < n; ++column)
+            lhs(row, column) -= t(row, column);
+    ComplexMatrix rhs = multiply(t, z0);
+    for (std::size_t i = 0; i < n; ++i) rhs(i, i) += z0_conjugate(i, i);
+    return multiply(inverse(lhs), rhs);
+}
+
+ComplexMatrix renormalize_s_power_wave(const ComplexMatrix& s, std::span<const Complex> old_reference,
+                                       std::span<const Complex> new_reference) {
+    return z_to_s_power_wave(s_to_z_power_wave(s, old_reference), new_reference);
 }
 
 std::vector<NPortPoint> read_touchstone(std::istream& input, std::size_t port_hint) {
@@ -348,6 +412,32 @@ double transducer_gain(const Matrix2C& s,Complex gamma_s,Complex gamma_l) {
     return (1.0-std::norm(gamma_s))*std::norm(s.a21)*(1.0-std::norm(gamma_l))/d2;
 }
 
+double noise_factor(const NoiseParameters& parameters,Complex gamma_s) {
+    if(!(parameters.minimum_noise_factor>=1.0)||!(parameters.equivalent_noise_resistance_ohm>=0.0)
+       ||!(parameters.reference_impedance_ohm>0.0)||!std::isfinite(parameters.minimum_noise_factor)
+       ||!std::isfinite(parameters.equivalent_noise_resistance_ohm)||!std::isfinite(parameters.reference_impedance_ohm)
+       ||std::abs(parameters.optimum_source_reflection)>=1.0||std::abs(gamma_s)>=1.0)
+        throw std::invalid_argument("invalid RF noise parameters/reflection coefficient");
+    const double denominator=(1.0-std::norm(gamma_s))*std::norm(Complex{1.0,0.0}+parameters.optimum_source_reflection);
+    const double coefficient=4.0*parameters.equivalent_noise_resistance_ohm/parameters.reference_impedance_ohm;
+    return parameters.minimum_noise_factor+coefficient*std::norm(gamma_s-parameters.optimum_source_reflection)/denominator;
+}
+
+NoiseCircle noise_circle(const NoiseParameters& parameters,double target) {
+    if(!(target>=parameters.minimum_noise_factor)||!std::isfinite(target)
+       ||!(parameters.equivalent_noise_resistance_ohm>0.0)||!(parameters.reference_impedance_ohm>0.0)
+       ||std::abs(parameters.optimum_source_reflection)>=1.0)
+        throw std::invalid_argument("invalid RF noise-circle controls");
+    const double coefficient=4.0*parameters.equivalent_noise_resistance_ohm/parameters.reference_impedance_ohm;
+    const double n=(target-parameters.minimum_noise_factor)
+        *std::norm(Complex{1.0,0.0}+parameters.optimum_source_reflection)/coefficient;
+    const double denominator=1.0+n;
+    const Complex center=parameters.optimum_source_reflection/denominator;
+    const double radius_squared=n*(denominator-std::norm(parameters.optimum_source_reflection))/(denominator*denominator);
+    const double radius=std::sqrt(std::max(0.0,radius_squared));
+    return {center,radius,target,std::isfinite(radius)&&std::abs(center)+radius<1.0+1.0e-12};
+}
+
 std::vector<LoadPullSample> sample_load_pull(const Matrix2C& s,Complex gamma_s,std::size_t radial_steps,
                                               std::size_t angular_steps,double maximum_radius) {
     if(radial_steps==0U||angular_steps==0U||!(maximum_radius>=0.0&&maximum_radius<1.0))
@@ -392,6 +482,106 @@ NetworkQuality network_quality(const ComplexMatrix& s,double passivity_tolerance
     }
     const double reciprocity=std::sqrt(diff2)/std::max(std::sqrt(scale2),1.0e-30);
     return {sigma,reciprocity,sigma<=1.0+passivity_tolerance,reciprocity<=reciprocity_tolerance};
+}
+
+ComplexMatrix enforce_passivity(const ComplexMatrix& s,double maximum_singular_value) {
+    if(s.size()==0U||!(maximum_singular_value>0.0)||!std::isfinite(maximum_singular_value))
+        throw std::invalid_argument("invalid passivity-enforcement controls");
+    const double sigma=network_quality(s).maximum_singular_value;
+    if(!std::isfinite(sigma))throw std::runtime_error("non-finite network singular value");
+    if(sigma<=maximum_singular_value)return s;
+    ComplexMatrix projected=s;
+    const double scale=maximum_singular_value/sigma;
+    for(std::size_t row=0;row<s.size();++row)for(std::size_t column=0;column<s.size();++column)
+        projected(row,column)*=scale;
+    return projected;
+}
+
+BroadbandCausality check_broadband_causality(std::span<const NPortPoint> points,
+                                              double tolerance,double frequency_tolerance) {
+    if(points.size()<3U||!(tolerance>=0.0)||!std::isfinite(tolerance)
+       ||!(frequency_tolerance>=0.0)||!std::isfinite(frequency_tolerance))
+        throw std::invalid_argument("invalid broadband causality controls");
+    const std::size_t ports=points.front().s.size();
+    if(ports==0U)throw std::invalid_argument("causality check requires non-empty networks");
+    if(std::abs(points.front().frequency_hz)>frequency_tolerance)
+        throw std::invalid_argument("causality check requires a DC first sample");
+    const double df=points[1].frequency_hz-points[0].frequency_hz;
+    if(!(df>0.0)||!std::isfinite(df))throw std::invalid_argument("causality check requires increasing frequencies");
+    for(std::size_t k=0;k<points.size();++k){
+        if(points[k].s.size()!=ports)throw std::invalid_argument("causality sweep port-count mismatch");
+        const double expected=df*static_cast<double>(k);
+        const double scale=std::max({1.0,std::abs(expected),std::abs(points[k].frequency_hz)});
+        if(std::abs(points[k].frequency_hz-expected)>frequency_tolerance*scale)
+            throw std::invalid_argument("causality check requires uniformly spaced frequencies");
+    }
+    const std::size_t spectrum_size=2U*(points.size()-1U);
+    const std::size_t first_negative=points.size();
+    double negative_energy=0.0,total_energy=0.0;
+    std::vector<Complex> spectrum(spectrum_size),impulse(spectrum_size);
+    for(std::size_t row=0;row<ports;++row)for(std::size_t column=0;column<ports;++column){
+        std::fill(spectrum.begin(),spectrum.end(),Complex{});
+        for(std::size_t k=0;k<points.size();++k)spectrum[k]=points[k].s(row,column);
+        // A real-valued impulse response requires real DC/Nyquist bins. Small
+        // numerical imaginary residue is discarded at those self-conjugate bins.
+        spectrum[0]=Complex{spectrum[0].real(),0.0};
+        spectrum[points.size()-1U]=Complex{spectrum[points.size()-1U].real(),0.0};
+        for(std::size_t k=1U;k+1U<points.size();++k)spectrum[spectrum_size-k]=std::conj(spectrum[k]);
+        for(std::size_t n=0;n<spectrum_size;++n){
+            Complex value{};
+            for(std::size_t k=0;k<spectrum_size;++k){
+                const double phase=2.0*std::numbers::pi*static_cast<double>(k*n)/static_cast<double>(spectrum_size);
+                value+=spectrum[k]*std::exp(Complex{0.0,phase});
+            }
+            impulse[n]=value/static_cast<double>(spectrum_size);
+            const double energy=std::norm(impulse[n]);total_energy+=energy;
+            if(n>=first_negative)negative_energy+=energy;
+        }
+    }
+    const double ratio=total_energy>0.0?negative_energy/total_energy:0.0;
+    return {ratio,ratio<=tolerance,spectrum_size};
+}
+
+AdaptiveNetworkSweepResult adaptive_network_sweep(double start,double stop,
+                                                         std::span<const double> references,
+                                                         NetworkSampler sampler,
+                                                         const AdaptiveNetworkSweepConfig& config) {
+    if(!(start>0.0)||!(stop>start)||references.empty()||!sampler||config.initial_points<2U
+       ||config.maximum_points<config.initial_points||config.maximum_refinements==0U
+       ||!(config.relative_tolerance>0.0)||!(config.absolute_tolerance>0.0))
+        throw std::invalid_argument("invalid adaptive network sweep controls");
+    for(double z0:references)if(!(z0>0.0)||!std::isfinite(z0))throw std::invalid_argument("invalid network reference impedance");
+    AdaptiveNetworkSweepResult result;
+    const auto sample=[&](double frequency){
+        NPortPoint point;point.frequency_hz=frequency;point.s=sampler(frequency);++result.evaluations;
+        if(point.s.size()!=references.size())throw std::runtime_error("adaptive network sampler port-count mismatch");
+        point.reference_impedance.assign(references.begin(),references.end());return point;
+    };
+    result.points.reserve(config.maximum_points);
+    const double ratio=std::pow(stop/start,1.0/static_cast<double>(config.initial_points-1U));
+    for(std::size_t i=0;i<config.initial_points;++i)
+        result.points.push_back(sample(i+1U==config.initial_points?stop:start*std::pow(ratio,static_cast<double>(i))));
+    for(std::size_t refinement=0;refinement<config.maximum_refinements;++refinement){
+        std::vector<NPortPoint> additions;
+        for(std::size_t i=0;i+1U<result.points.size();++i){
+            if(result.points.size()+additions.size()>=config.maximum_points)break;
+            const auto& left=result.points[i];const auto& right=result.points[i+1U];
+            const double midpoint=std::sqrt(left.frequency_hz*right.frequency_hz);
+            auto actual=sample(midpoint);double normalized_error=0.0;
+            for(std::size_t r=0;r<actual.s.size();++r)for(std::size_t c=0;c<actual.s.size();++c){
+                const Complex predicted=0.5*(left.s(r,c)+right.s(r,c));
+                const double scale=config.absolute_tolerance+config.relative_tolerance*std::max({std::abs(actual.s(r,c)),std::abs(left.s(r,c)),std::abs(right.s(r,c))});
+                normalized_error=std::max(normalized_error,std::abs(actual.s(r,c)-predicted)/scale);
+            }
+            if(normalized_error>1.0)additions.push_back(std::move(actual));
+        }
+        if(additions.empty()){result.converged=true;break;}
+        ++result.refinements;
+        result.points.insert(result.points.end(),std::make_move_iterator(additions.begin()),std::make_move_iterator(additions.end()));
+        std::sort(result.points.begin(),result.points.end(),[](const auto& a,const auto& b){return a.frequency_hz<b.frequency_hz;});
+        if(result.points.size()>=config.maximum_points)break;
+    }
+    return result;
 }
 
 ComplexMatrix single_ended_to_mixed_mode(const ComplexMatrix& s) {

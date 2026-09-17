@@ -101,8 +101,11 @@ void print_list() {
         << "  electrochem-galvanic   multi-reaction galvanic mixed-potential demo\n"
         << "  rf-dipole              sinusoidal half-wave dipole radiation baseline\n"
         << "  rf-microstrip          quasi-static microstrip impedance baseline\n"
+        << "  rf-multiwire           coupled parallel thin-wire MoM + series-load baseline\n"
         << "  spice-rc               MNA small-signal RC low-pass baseline\n"
-        << "  spice-diode            nonlinear diode DC operating-point baseline\n";
+        << "  spice-diode            nonlinear diode DC operating-point baseline\n"
+        << "  spice-adaptive         adaptive LTE-controlled RC transient baseline\n"
+        << "  spice-pss-pz           periodic steady-state + pole/zero RC baseline\n";
 }
 
 int run_lbm_cpu_legacy() {

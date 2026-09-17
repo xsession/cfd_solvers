@@ -57,11 +57,20 @@ struct NewtonConfig {
     double voltage_tolerance{1.0e-10};
     double residual_tolerance{1.0e-10};
     double gmin{1.0e-12};
+
+    // Real DC/transient systems at or above this dimension are stamped directly
+    // into a sparse structure and solved through the shared CSR + ILU(0)-GMRES
+    // backend. Set to 0 to force the legacy dense direct path.
+    std::size_t sparse_mna_threshold{64U};
+    std::size_t sparse_max_iterations{600U};
+    std::size_t sparse_gmres_restart{40U};
+    double sparse_relative_tolerance{1.0e-11};
+    bool sparse_dense_fallback{true};
 };
 
 struct OperatingPoint {
     std::vector<double> node_voltage;   // includes node 0 = ground
-    // Branch order: independent V, VCVS, CCVS, then inductors.
+    // Branch order: independent V, behavioral V, VCVS, CCVS, then inductors.
     std::vector<double> branch_current;
     std::size_t iterations{};
     bool converged{};
@@ -83,6 +92,29 @@ enum class TransientMethod {
     backward_euler,
     trapezoidal,
     bdf2
+};
+
+struct AdaptiveTransientConfig {
+    double initial_step{1.0e-6};
+    double minimum_step{1.0e-12};
+    double maximum_step{1.0};
+    double relative_tolerance{1.0e-4};
+    double absolute_tolerance{1.0e-7};
+    double safety_factor{0.9};
+    double minimum_scale{0.2};
+    double maximum_scale{5.0};
+    std::size_t max_step_attempts{100000U};
+    // backward_euler is first-order and is also used to bootstrap BDF2.
+    // trapezoidal adaptive control is deliberately not implemented yet.
+    TransientMethod method{TransientMethod::backward_euler};
+};
+
+struct AdaptiveTransientResult {
+    std::vector<TransientPoint> points;
+    std::size_t accepted_steps{};
+    std::size_t rejected_steps{};
+    double minimum_accepted_step{};
+    double maximum_accepted_step{};
 };
 
 using SourceWaveform = std::function<double(double)>;
@@ -123,10 +155,16 @@ struct TemperatureSweepPoint {
     OperatingPoint operating_point;
 };
 
+struct NoiseContribution {
+    std::string source;
+    double output_noise_density_v2_per_hz{};
+};
+
 struct NoiseResult {
     double frequency_hz{};
     double output_noise_v_per_sqrt_hz{};
     double output_noise_density_v2_per_hz{};
+    std::vector<NoiseContribution> contributions;
 };
 
 struct StaticDeviceEvaluation {
@@ -136,6 +174,34 @@ struct StaticDeviceEvaluation {
     std::vector<double> jacobian;
 };
 using StaticDeviceEvaluator = std::function<StaticDeviceEvaluation(std::span<const double>)>;
+
+struct DynamicDeviceEvaluation {
+    // DAE form per terminal: I(V) + dQ(V)/dt = 0. Currents and charges
+    // are positive flowing out of each listed terminal.
+    std::vector<double> terminal_current;
+    std::vector<double> current_jacobian; // row-major dI/dV
+    std::vector<double> terminal_charge;
+    std::vector<double> charge_jacobian;  // row-major dQ/dV
+};
+using DynamicDeviceEvaluator = std::function<DynamicDeviceEvaluation(std::span<const double>)>;
+
+struct ElectroThermalDeviceEvaluation {
+    std::vector<double> electrical_current;
+    std::vector<double> electrical_jacobian; // dI(row)/dV(column)
+    std::vector<double> electrical_temperature_derivative; // dI/dT
+    double dissipated_power_w{};
+    std::vector<double> power_voltage_derivative; // dP/dV(column)
+    double power_temperature_derivative_w_per_k{};
+};
+using ElectroThermalDeviceEvaluator = std::function<ElectroThermalDeviceEvaluation(std::span<const double>,double)>;
+
+struct ElectroThermalDeviceConfig {
+    double ambient_temperature_k{300.0};
+    double thermal_resistance_k_per_w{1.0};
+    double thermal_capacitance_j_per_k{};
+};
+
+using BehavioralEvaluator = std::function<double(std::span<const double> node_voltage,double time_s)>;
 
 class Circuit {
 public:
@@ -163,6 +229,12 @@ public:
                   std::string control_voltage_source,double current_gain);
     void add_ccvs(std::string name,std::size_t positive,std::size_t negative,
                   std::string control_voltage_source,double transresistance);
+    // Ideal lossless transformer with turns_ratio = Vprimary/Vsecondary.
+    // Implemented from one VCVS plus a power-conserving CCCS.
+    void add_ideal_transformer(std::string name,
+                               std::size_t primary_positive,std::size_t primary_negative,
+                               std::size_t secondary_positive,std::size_t secondary_negative,
+                               double turns_ratio);
 
     void add_diode_model(std::string name,DiodeModel model);
     void add_diode(std::string name,std::size_t anode,std::size_t cathode,std::string model);
@@ -215,6 +287,21 @@ public:
     // The evaluator returns terminal currents and their Jacobian. This is the
     // clean internal target for future Verilog-A/OSDI adapters.
     void add_static_device(std::string name,std::vector<std::size_t> terminals,StaticDeviceEvaluator evaluator);
+    // Generic charge-based DAE compact-device seam: I(V)+dQ(V)/dt=0.
+    // DC uses I/dI-dV, AC uses G+jw*C, and BE/BDF2 transient uses
+    // the exact charge-history residual. Trapezoidal is intentionally rejected
+    // for these devices until a stored derivative-history formulation is added.
+    void add_dynamic_device(std::string name,std::vector<std::size_t> terminals,DynamicDeviceEvaluator evaluator);
+    // Coupled electrothermal wrapper. The thermal node voltage represents
+    // temperature rise above ambient; Rth and Cth are stamped as the thermal
+    // conductance/charge terms while dissipated electrical power drives it.
+    void add_electrothermal_device(std::string name,std::vector<std::size_t> electrical_terminals,
+                                   std::size_t thermal_node,ElectroThermalDeviceConfig config,
+                                   ElectroThermalDeviceEvaluator evaluator);
+    // SPICE B-source foundation. Evaluators may depend on any node voltage and time.
+    // Newton/AC Jacobians are computed numerically by the circuit kernel.
+    void add_behavioral_current_source(std::string name,std::size_t positive,std::size_t negative,BehavioralEvaluator evaluator);
+    void add_behavioral_voltage_source(std::string name,std::size_t positive,std::size_t negative,BehavioralEvaluator evaluator);
 
     void set_voltage_source_dc(std::string_view name,double voltage);
     [[nodiscard]] double voltage_source_dc(std::string_view name) const;
@@ -222,6 +309,10 @@ public:
     [[nodiscard]] double resistance(std::string_view name) const;
     // Update temperature-dependent compact models (diode/BJT in the current baseline).
     void set_device_temperature(double temperature_k);
+    void set_initial_voltage(std::size_t node,double voltage);
+    void set_nodeset_voltage(std::size_t node,double voltage);
+    [[nodiscard]] const std::unordered_map<std::size_t,double>& initial_voltages() const noexcept { return initial_voltage_; }
+    [[nodiscard]] const std::unordered_map<std::size_t,double>& nodeset_voltages() const noexcept { return nodeset_voltage_; }
 
     [[nodiscard]] OperatingPoint dc_operating_point(const NewtonConfig& config = {}) const;
     [[nodiscard]] OperatingPoint dc_operating_point_homotopy(const NewtonConfig& config = {},
@@ -242,6 +333,13 @@ public:
     [[nodiscard]] std::vector<TransientPoint> transient(double time_step,std::size_t steps,
                                                          TransientMethod method,
                                                          const NewtonConfig& config = {}) const;
+    // Variable-step backward-Euler or BDF2 integration with step-doubling LTE
+    // control. BDF2 uses the exact unequal-step coefficients and bootstraps with
+    // one accepted backward-Euler interval. The accepted endpoint uses two half
+    // steps and the full/refined difference supplies the Richardson LTE estimate.
+    [[nodiscard]] AdaptiveTransientResult transient_adaptive(double stop_time,
+                                                              const AdaptiveTransientConfig& controls = {},
+                                                              const NewtonConfig& config = {}) const;
     [[nodiscard]] NoiseResult output_noise(double frequency_hz,std::string_view output_node,
                                            double temperature_k = 300.0,
                                            const NewtonConfig& config = {}) const;
@@ -274,6 +372,8 @@ private:
     struct Switch { std::string name; std::size_t p{},n{},cp{},cn{}; std::string model; };
     struct NPortDevice { std::string name; std::vector<std::pair<std::size_t,std::size_t>> ports; std::vector<cfd::rf::NPortPoint> samples; };
     struct StaticDevice { std::string name; std::vector<std::size_t> terminals; StaticDeviceEvaluator evaluator; };
+    struct DynamicDevice { std::string name; std::vector<std::size_t> terminals; DynamicDeviceEvaluator evaluator; };
+    struct BehavioralSource { std::string name; std::size_t p{},n{}; BehavioralEvaluator evaluator; };
 
     std::vector<std::string> node_names_;
     std::unordered_map<std::string,std::size_t> node_lookup_;
@@ -294,11 +394,16 @@ private:
     std::vector<Switch> switches_;
     std::vector<NPortDevice> nports_;
     std::vector<StaticDevice> static_devices_;
+    std::vector<DynamicDevice> dynamic_devices_;
+    std::vector<BehavioralSource> behavioral_current_sources_;
+    std::vector<BehavioralSource> behavioral_voltage_sources_;
     std::unordered_map<std::string,DiodeModel> diode_models_;
     std::unordered_map<std::string,MosLevel1Model> mos_models_;
     std::unordered_map<std::string,BjtModel> bjt_models_;
     std::unordered_map<std::string,JfetModel> jfet_models_;
     std::unordered_map<std::string,SwitchModel> switch_models_;
+    std::unordered_map<std::size_t,double> initial_voltage_;
+    std::unordered_map<std::size_t,double> nodeset_voltage_;
 
     [[nodiscard]] std::size_t branch_count() const noexcept;
     [[nodiscard]] std::size_t branch_index(std::string_view name) const;

@@ -11,6 +11,7 @@
 namespace cfd::rf {
 namespace {
 constexpr double mu0 = 4.0e-7 * std::numbers::pi;
+constexpr double eps0 = 8.8541878128e-12;
 
 Point3 sub(Point3 a, Point3 b) { return {a.x-b.x, a.y-b.y, a.z-b.z}; }
 Point3 add(Point3 a, Point3 b) { return {a.x+b.x, a.y+b.y, a.z+b.z}; }
@@ -63,6 +64,55 @@ std::vector<T> solve_dense(std::vector<T> matrix, std::vector<T> rhs, std::size_
         }
     }
     return rhs;
+}
+
+std::vector<double> inverse_dense_real(std::vector<double> matrix, std::size_t n) {
+    std::vector<double> inverse(n*n,0.0);
+    for(std::size_t i=0;i<n;++i) inverse[i*n+i]=1.0;
+    for(std::size_t column=0;column<n;++column){
+        std::size_t pivot=column;double best=std::abs(matrix[column*n+column]);
+        for(std::size_t row=column+1U;row<n;++row){
+            const double candidate=std::abs(matrix[row*n+column]);
+            if(candidate>best){best=candidate;pivot=row;}
+        }
+        if(best<1.0e-30)throw std::runtime_error("singular PEEC potential matrix");
+        if(pivot!=column){
+            for(std::size_t j=0;j<n;++j){
+                std::swap(matrix[column*n+j],matrix[pivot*n+j]);
+                std::swap(inverse[column*n+j],inverse[pivot*n+j]);
+            }
+        }
+        const double diagonal=matrix[column*n+column];
+        for(std::size_t j=0;j<n;++j){matrix[column*n+j]/=diagonal;inverse[column*n+j]/=diagonal;}
+        for(std::size_t row=0;row<n;++row){
+            if(row==column)continue;
+            const double factor=matrix[row*n+column];
+            if(factor==0.0)continue;
+            for(std::size_t j=0;j<n;++j){
+                matrix[row*n+j]-=factor*matrix[column*n+j];
+                inverse[row*n+j]-=factor*inverse[column*n+j];
+            }
+        }
+    }
+    return inverse;
+}
+
+double potential_coefficient(const FilamentSegment& first,const FilamentSegment& second,
+                             double relative_permittivity,std::size_t order,bool self) {
+    const Point3 d1=sub(first.end,first.start),d2=sub(second.end,second.start);
+    const auto rule=gauss_rule(order);double average_kernel=0.0;
+    for(std::size_t i=0;i<rule.x.size();++i){
+        const double u=0.5*(rule.x[i]+1.0);const Point3 p1=add(first.start,scale(d1,u));
+        for(std::size_t j=0;j<rule.x.size();++j){
+            const double v=0.5*(rule.x[j]+1.0);const Point3 p2=add(second.start,scale(d2,v));
+            const Point3 delta=sub(p1,p2);
+            const double smoothing=self?first.radius_m*first.radius_m:0.0;
+            const double distance=std::sqrt(dot(delta,delta)+smoothing);
+            if(!(distance>0.0))throw std::runtime_error("singular PEEC coefficient-of-potential integral");
+            average_kernel+=0.25*rule.w[i]*rule.w[j]/distance;
+        }
+    }
+    return average_kernel/(4.0*std::numbers::pi*eps0*relative_permittivity);
 }
 
 void validate(const FilamentSegment& segment) {
@@ -154,6 +204,24 @@ PeecMatrices PeecFilamentSystem::extract(std::size_t order) const {
             out.partial_inductance_h[i*n+j]=out.partial_inductance_h[j*n+i]=mutual;
         }
     }
+    return out;
+}
+
+
+PeecCapacitanceMatrices PeecFilamentSystem::extract_capacitance(double relative_permittivity,std::size_t order) const {
+    if(segments_.empty())throw std::runtime_error("PEEC capacitance extraction requires at least one segment");
+    if(!(relative_permittivity>0.0)||!std::isfinite(relative_permittivity))
+        throw std::invalid_argument("PEEC relative permittivity must be finite and positive");
+    const std::size_t n=segments_.size();
+    PeecCapacitanceMatrices out;out.size=n;out.coefficient_of_potential_v_per_c.assign(n*n,0.0);
+    for(std::size_t i=0;i<n;++i){
+        out.coefficient_of_potential_v_per_c[i*n+i]=potential_coefficient(segments_[i],segments_[i],relative_permittivity,order,true);
+        for(std::size_t j=0;j<i;++j){
+            const double value=potential_coefficient(segments_[i],segments_[j],relative_permittivity,order,false);
+            out.coefficient_of_potential_v_per_c[i*n+j]=out.coefficient_of_potential_v_per_c[j*n+i]=value;
+        }
+    }
+    out.capacitance_f=inverse_dense_real(out.coefficient_of_potential_v_per_c,n);
     return out;
 }
 

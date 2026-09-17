@@ -1,5 +1,7 @@
 #include "cfd/circuit/spice.hpp"
 #include "cfd/circuit/analysis.hpp"
+#include "cfd/core/csr_matrix.hpp"
+#include "cfd/core/iterative_solvers.hpp"
 
 #include <algorithm>
 #include <array>
@@ -12,6 +14,7 @@
 #include <numbers>
 #include <sstream>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <unordered_set>
 
@@ -80,9 +83,83 @@ std::vector<T> solve_dense(std::vector<T> matrix, std::vector<T> rhs, std::size_
     return rhs;
 }
 
-template<class T>
-void stamp_admittance(std::vector<T>& matrix, std::size_t dimension,
-                      std::size_t positive, std::size_t negative, T admittance) {
+class RealMnaMatrix {
+public:
+    using value_type = double;
+
+    RealMnaMatrix(std::size_t dimension, bool sparse)
+        : dimension_(dimension), sparse_(sparse) {
+        if (dimension_ == 0U) throw std::invalid_argument("MNA matrix dimension must be positive");
+        if (!sparse_) dense_.assign(dimension_ * dimension_, 0.0);
+    }
+
+    [[nodiscard]] bool sparse() const noexcept { return sparse_; }
+    [[nodiscard]] std::size_t dimension() const noexcept { return dimension_; }
+
+    double& operator[](std::size_t index) {
+        if (index >= dimension_ * dimension_) throw std::out_of_range("MNA matrix index out of range");
+        if (!sparse_) return dense_[index];
+        return sparse_entries_[index];
+    }
+
+    [[nodiscard]] std::vector<double> dense_copy() const {
+        if (!sparse_) return dense_;
+        std::vector<double> result(dimension_ * dimension_, 0.0);
+        for (const auto& [index, value] : sparse_entries_) result[index] = value;
+        return result;
+    }
+
+    [[nodiscard]] cfd::core::CsrMatrix csr() const {
+        if (!sparse_) throw std::logic_error("dense MNA matrix has no sparse stamp storage");
+        cfd::core::CsrBuilder builder(dimension_, dimension_);
+        // Preserve the structural diagonal even for ideal voltage-source branch
+        // equations. CsrBuilder intentionally drops exact zeros, while ILU(0)
+        // requires a diagonal slot that it can safely floor during factorization.
+        const double structural_zero = std::numeric_limits<double>::denorm_min();
+        for (std::size_t row = 0; row < dimension_; ++row) builder.add(row, row, structural_zero);
+        for (const auto& [index, value] : sparse_entries_) {
+            builder.add(index / dimension_, index % dimension_, value);
+        }
+        return builder.build();
+    }
+
+private:
+    std::size_t dimension_{};
+    bool sparse_{};
+    std::vector<double> dense_;
+    std::unordered_map<std::size_t, double> sparse_entries_;
+};
+
+std::vector<double> solve_real_mna(const RealMnaMatrix& matrix, const std::vector<double>& rhs,
+                                   const NewtonConfig& config) {
+    const std::size_t n = matrix.dimension();
+    if (rhs.size() != n) throw std::invalid_argument("MNA right-hand-side size mismatch");
+    if (!matrix.sparse()) return solve_dense(matrix.dense_copy(), rhs, n);
+    if (config.sparse_max_iterations == 0U || config.sparse_gmres_restart == 0U
+        || !(config.sparse_relative_tolerance > 0.0))
+        throw std::invalid_argument("invalid sparse MNA controls");
+
+    try {
+        const auto csr = matrix.csr();
+        cfd::core::Ilu0Preconditioner ilu(csr);
+        std::vector<double> solution(n, 0.0);
+        const auto result = cfd::core::restarted_gmres(
+            rhs, solution,
+            [&](std::span<const double> input, std::span<double> output) { csr.multiply(input, output); },
+            [&](std::span<const double> input, std::span<double> output) { ilu(input, output); },
+            config.sparse_max_iterations, std::min(config.sparse_gmres_restart, n),
+            config.sparse_relative_tolerance);
+        if (result.converged) return solution;
+        if (!config.sparse_dense_fallback) throw std::runtime_error("sparse MNA GMRES did not converge");
+    } catch (const std::exception&) {
+        if (!config.sparse_dense_fallback) throw;
+    }
+    return solve_dense(matrix.dense_copy(), rhs, n);
+}
+
+template<class Matrix>
+void stamp_admittance(Matrix& matrix, std::size_t dimension,
+                      std::size_t positive, std::size_t negative, typename Matrix::value_type admittance) {
     if (positive) matrix[(positive - 1U) * dimension + (positive - 1U)] += admittance;
     if (negative) matrix[(negative - 1U) * dimension + (negative - 1U)] += admittance;
     if (positive && negative) {
@@ -97,11 +174,13 @@ void stamp_current(std::vector<T>& rhs, std::size_t positive, std::size_t negati
     if (negative) rhs[negative - 1U] += current;
 }
 
-template<class T>
-void stamp_voltage_branch(std::vector<T>& matrix, std::vector<T>& rhs,
+template<class Matrix>
+void stamp_voltage_branch(Matrix& matrix, std::vector<typename Matrix::value_type>& rhs,
                           std::size_t dimension, std::size_t node_count,
                           std::size_t branch, std::size_t positive, std::size_t negative,
-                          T voltage, T branch_diagonal = T{}) {
+                          typename Matrix::value_type voltage,
+                          typename Matrix::value_type branch_diagonal = typename Matrix::value_type{}) {
+    using T = typename Matrix::value_type;
     const std::size_t equation = (node_count - 1U) + branch;
     if (positive) {
         const std::size_t row = positive - 1U;
@@ -117,9 +196,11 @@ void stamp_voltage_branch(std::vector<T>& matrix, std::vector<T>& rhs,
     rhs[equation] += voltage;
 }
 
-template<class T>
-void stamp_vccs(std::vector<T>& matrix, std::size_t dimension,
-                std::size_t p, std::size_t n, std::size_t cp, std::size_t cn, T gain) {
+template<class Matrix>
+void stamp_vccs(Matrix& matrix, std::size_t dimension,
+                std::size_t p, std::size_t n, std::size_t cp, std::size_t cn,
+                typename Matrix::value_type gain) {
+    using T = typename Matrix::value_type;
     const auto add = [&](std::size_t row, std::size_t column, T value) {
         if (row && column) matrix[(row - 1U) * dimension + (column - 1U)] += value;
     };
@@ -127,25 +208,28 @@ void stamp_vccs(std::vector<T>& matrix, std::size_t dimension,
     add(n, cp, -gain); add(n, cn, gain);
 }
 
-template<class T>
-void stamp_cccs(std::vector<T>& matrix, std::size_t dimension, std::size_t node_count,
-                std::size_t p, std::size_t n, std::size_t control_branch, T gain) {
+template<class Matrix>
+void stamp_cccs(Matrix& matrix, std::size_t dimension, std::size_t node_count,
+                std::size_t p, std::size_t n, std::size_t control_branch,
+                typename Matrix::value_type gain) {
     const std::size_t column = (node_count - 1U) + control_branch;
     if (p) matrix[(p - 1U) * dimension + column] += gain;
     if (n) matrix[(n - 1U) * dimension + column] -= gain;
 }
 
-template<class T>
-void stamp_vcvs_control(std::vector<T>& matrix, std::size_t dimension, std::size_t node_count,
-                        std::size_t branch, std::size_t cp, std::size_t cn, T gain) {
+template<class Matrix>
+void stamp_vcvs_control(Matrix& matrix, std::size_t dimension, std::size_t node_count,
+                        std::size_t branch, std::size_t cp, std::size_t cn,
+                        typename Matrix::value_type gain) {
     const std::size_t row = (node_count - 1U) + branch;
     if (cp) matrix[row * dimension + (cp - 1U)] -= gain;
     if (cn) matrix[row * dimension + (cn - 1U)] += gain;
 }
 
-template<class T>
-void stamp_ccvs_control(std::vector<T>& matrix, std::size_t dimension, std::size_t node_count,
-                        std::size_t branch, std::size_t control_branch, T transresistance) {
+template<class Matrix>
+void stamp_ccvs_control(Matrix& matrix, std::size_t dimension, std::size_t node_count,
+                        std::size_t branch, std::size_t control_branch,
+                        typename Matrix::value_type transresistance) {
     const std::size_t row = (node_count - 1U) + branch;
     const std::size_t column = (node_count - 1U) + control_branch;
     matrix[row * dimension + column] -= transresistance;
@@ -155,10 +239,11 @@ double node_voltage(const std::vector<double>& state, std::size_t node) {
     return node ? state[node - 1U] : 0.0;
 }
 
-template<class T>
-void stamp_static_device(std::vector<T>& matrix,std::vector<T>* rhs,std::size_t dimension,
+template<class Matrix>
+void stamp_static_device(Matrix& matrix,std::vector<typename Matrix::value_type>* rhs,std::size_t dimension,
                          std::span<const std::size_t> terminals,const StaticDeviceEvaluator& evaluator,
                          std::span<const double> node_voltages) {
+    using T = typename Matrix::value_type;
     std::vector<double> local(terminals.size());
     for(std::size_t i=0;i<terminals.size();++i){
         if(terminals[i]>=node_voltages.size())throw std::out_of_range("static-device terminal node out of range");
@@ -180,6 +265,157 @@ void stamp_static_device(std::vector<T>& matrix,std::vector<T>* rhs,std::size_t 
         if(!std::isfinite(ieq))throw std::runtime_error("static-device equivalent current is non-finite");
         if(rhs)(*rhs)[row_node-1U]-=T{ieq};
     }
+}
+
+
+DynamicDeviceEvaluation evaluate_dynamic_device(std::span<const std::size_t> terminals,
+                                                const DynamicDeviceEvaluator& evaluator,
+                                                std::span<const double> node_voltages) {
+    if(!evaluator)throw std::invalid_argument("empty dynamic-device evaluator");
+    std::vector<double> local(terminals.size());
+    for(std::size_t i=0;i<terminals.size();++i){
+        if(terminals[i]>=node_voltages.size())throw std::out_of_range("dynamic-device terminal node out of range");
+        local[i]=node_voltages[terminals[i]];
+    }
+    auto evaluation=evaluator(local);
+    const std::size_t n=terminals.size(),matrix_size=n*n;
+    if(evaluation.terminal_current.size()!=n||evaluation.terminal_charge.size()!=n
+       ||evaluation.current_jacobian.size()!=matrix_size||evaluation.charge_jacobian.size()!=matrix_size)
+        throw std::runtime_error("dynamic-device evaluator returned invalid dimensions");
+    const auto finite=[](const std::vector<double>& values){return std::all_of(values.begin(),values.end(),[](double v){return std::isfinite(v);});};
+    if(!finite(evaluation.terminal_current)||!finite(evaluation.terminal_charge)
+       ||!finite(evaluation.current_jacobian)||!finite(evaluation.charge_jacobian))
+        throw std::runtime_error("dynamic-device evaluator returned non-finite values");
+    return evaluation;
+}
+
+template<class Matrix>
+void stamp_dynamic_dc(Matrix& matrix,std::vector<double>& rhs,std::size_t dimension,
+                      std::span<const std::size_t> terminals,const DynamicDeviceEvaluator& evaluator,
+                      std::span<const double> node_voltages) {
+    using T=typename Matrix::value_type;
+    const auto evaluation=evaluate_dynamic_device(terminals,evaluator,node_voltages);
+    std::vector<double> local(terminals.size());
+    for(std::size_t i=0;i<terminals.size();++i)local[i]=node_voltages[terminals[i]];
+    for(std::size_t r=0;r<terminals.size();++r){
+        const auto row_node=terminals[r];if(!row_node)continue;
+        double ieq=evaluation.terminal_current[r];
+        for(std::size_t c=0;c<terminals.size();++c){
+            const double g=evaluation.current_jacobian[r*terminals.size()+c];
+            ieq-=g*local[c];
+            if(terminals[c])matrix[(row_node-1U)*dimension+(terminals[c]-1U)]+=T{g};
+        }
+        rhs[row_node-1U]-=ieq;
+    }
+}
+
+template<class Matrix>
+void stamp_dynamic_ac(Matrix& matrix,std::size_t dimension,
+                      std::span<const std::size_t> terminals,const DynamicDeviceEvaluator& evaluator,
+                      std::span<const double> node_voltages,double omega) {
+    using T=typename Matrix::value_type;
+    static_assert(std::is_same_v<T,Complex>,"dynamic AC stamping requires complex matrix");
+    const auto evaluation=evaluate_dynamic_device(terminals,evaluator,node_voltages);
+    const Complex jw{0.0,omega};
+    for(std::size_t r=0;r<terminals.size();++r){
+        if(!terminals[r])continue;
+        for(std::size_t c=0;c<terminals.size();++c){
+            if(!terminals[c])continue;
+            const std::size_t k=r*terminals.size()+c;
+            matrix[(terminals[r]-1U)*dimension+(terminals[c]-1U)]
+                +=Complex{evaluation.current_jacobian[k],0.0}+jw*evaluation.charge_jacobian[k];
+        }
+    }
+}
+
+template<class Matrix>
+void stamp_dynamic_transient(Matrix& matrix,std::vector<double>& rhs,std::size_t dimension,
+                             std::span<const std::size_t> terminals,const DynamicDeviceEvaluator& evaluator,
+                             std::span<const double> current_nodes,std::span<const double> old_nodes,
+                             const std::vector<double>* older_nodes,double a0,double a1,double a2) {
+    using T=typename Matrix::value_type;
+    const auto current=evaluate_dynamic_device(terminals,evaluator,current_nodes);
+    const auto old=evaluate_dynamic_device(terminals,evaluator,old_nodes);
+    DynamicDeviceEvaluation older;
+    if(older_nodes)older=evaluate_dynamic_device(terminals,evaluator,*older_nodes);
+    std::vector<double> local(terminals.size());
+    for(std::size_t i=0;i<terminals.size();++i)local[i]=current_nodes[terminals[i]];
+    for(std::size_t r=0;r<terminals.size();++r){
+        const auto row_node=terminals[r];if(!row_node)continue;
+        double residual=current.terminal_current[r]+a0*current.terminal_charge[r]+a1*old.terminal_charge[r];
+        if(older_nodes)residual+=a2*older.terminal_charge[r];
+        double ieq=residual;
+        for(std::size_t c=0;c<terminals.size();++c){
+            const std::size_t k=r*terminals.size()+c;
+            const double jac=current.current_jacobian[k]+a0*current.charge_jacobian[k];
+            ieq-=jac*local[c];
+            if(terminals[c])matrix[(row_node-1U)*dimension+(terminals[c]-1U)]+=T{jac};
+        }
+        rhs[row_node-1U]-=ieq;
+    }
+}
+
+struct BehavioralLinearization {
+    double value{};
+    std::vector<double> derivative;
+};
+
+BehavioralLinearization behavioral_linearize(const BehavioralEvaluator& evaluator,
+                                             std::span<const double> node_values,double time) {
+    if(!evaluator)throw std::invalid_argument("empty behavioral-source evaluator");
+    BehavioralLinearization result;result.value=evaluator(node_values,time);
+    if(!std::isfinite(result.value))throw std::runtime_error("behavioral source returned non-finite value");
+    result.derivative.assign(node_values.size(),0.0);
+    std::vector<double> perturbed(node_values.begin(),node_values.end());
+    for(std::size_t node=1U;node<node_values.size();++node){
+        const double h=1.0e-7*std::max(1.0,std::abs(node_values[node]));
+        perturbed[node]=node_values[node]+h;const double plus=evaluator(perturbed,time);
+        perturbed[node]=node_values[node]-h;const double minus=evaluator(perturbed,time);
+        perturbed[node]=node_values[node];
+        if(!std::isfinite(plus)||!std::isfinite(minus))throw std::runtime_error("behavioral-source Jacobian is non-finite");
+        result.derivative[node]=(plus-minus)/(2.0*h);
+    }
+    return result;
+}
+
+template<class Matrix>
+void stamp_behavioral_current(Matrix& matrix,std::vector<typename Matrix::value_type>* rhs,std::size_t dimension,
+                              std::size_t p,std::size_t n,const BehavioralLinearization& linear,
+                              std::span<const double> node_values,double scale=1.0) {
+    using T = typename Matrix::value_type;
+    double ieq=scale*linear.value;
+    for(std::size_t node=1U;node<linear.derivative.size();++node){
+        const double g=scale*linear.derivative[node];
+        ieq-=g*node_values[node];
+        if(p)matrix[(p-1U)*dimension+(node-1U)]+=T{g};
+        if(n)matrix[(n-1U)*dimension+(node-1U)]-=T{g};
+    }
+    if(rhs)stamp_current(*rhs,p,n,T{ieq});
+}
+
+template<class Matrix>
+void stamp_behavioral_voltage(Matrix& matrix,std::vector<typename Matrix::value_type>* rhs,std::size_t dimension,
+                              std::size_t node_count,std::size_t branch,
+                              std::size_t p,std::size_t n,const BehavioralLinearization& linear,
+                              std::span<const double> node_values,double scale=1.0) {
+    using T = typename Matrix::value_type;
+    std::vector<T> dummy(dimension,T{});
+    auto& target_rhs=rhs?*rhs:dummy;
+    stamp_voltage_branch(matrix,target_rhs,dimension,node_count,branch,p,n,T{});
+    const std::size_t row=(node_count-1U)+branch;
+    double ieq=scale*linear.value;
+    for(std::size_t node=1U;node<linear.derivative.size();++node){
+        const double g=scale*linear.derivative[node];
+        ieq-=g*node_values[node];
+        matrix[row*dimension+(node-1U)]-=T{g};
+    }
+    if(rhs)(*rhs)[row]+=T{ieq};
+}
+
+std::vector<double> node_values_from_state(const std::vector<double>& state,std::size_t node_count) {
+    std::vector<double> values(node_count,0.0);
+    for(std::size_t node=1U;node<node_count;++node)values[node]=state[node-1U];
+    return values;
 }
 
 struct MosLinearization { double id{}, gm{}, gds{}, ieq{}; };
@@ -236,10 +472,11 @@ MosLinearization jfet_linearize(const JfetModel& model, double vd, double vg, do
     return {id, gm, gds, id - gm * (vg - vs) - gds * (vd - vs)};
 }
 
-template<class T>
-void stamp_transistor_linearization(std::vector<T>& matrix, std::size_t dimension,
+template<class Matrix>
+void stamp_transistor_linearization(Matrix& matrix, std::size_t dimension,
                                     const MosLinearization& model,
                                     std::size_t drain, std::size_t gate, std::size_t source) {
+    using T = typename Matrix::value_type;
     const auto add = [&](std::size_t row, std::size_t column, T value) {
         if (row && column) matrix[(row - 1U) * dimension + (column - 1U)] += value;
     };
@@ -288,9 +525,10 @@ BjtLinearization bjt_linearize(const BjtModel& model, double vc, double vb, doub
     return result;
 }
 
-template<class T>
-void stamp_bjt_jacobian(std::vector<T>& matrix,std::size_t dimension,const BjtLinearization& model,
+template<class Matrix>
+void stamp_bjt_jacobian(Matrix& matrix,std::size_t dimension,const BjtLinearization& model,
                         std::size_t collector,std::size_t base,std::size_t emitter) {
+    using T = typename Matrix::value_type;
     const std::array<std::size_t,3> nodes{collector,base,emitter};
     for (std::size_t row=0; row<3U; ++row) {
         if (!nodes[row]) continue;
@@ -301,7 +539,8 @@ void stamp_bjt_jacobian(std::vector<T>& matrix,std::size_t dimension,const BjtLi
     }
 }
 
-void stamp_bjt_dc(std::vector<double>& matrix,std::vector<double>& rhs,std::size_t dimension,
+template<class Matrix>
+void stamp_bjt_dc(Matrix& matrix,std::vector<double>& rhs,std::size_t dimension,
                   const BjtLinearization& model,std::size_t collector,std::size_t base,std::size_t emitter) {
     stamp_bjt_jacobian(matrix,dimension,model,collector,base,emitter);
     const std::array<std::size_t,3> nodes{collector,base,emitter};
@@ -456,6 +695,13 @@ void Circuit::add_ccvs(std::string name,std::size_t p,std::size_t n,std::string 
     if (!std::isfinite(gain)) throw std::invalid_argument("invalid CCVS transresistance");
     ccvs_.push_back({std::move(name),p,n,upper(std::move(control)),gain});
 }
+void Circuit::add_ideal_transformer(std::string name,std::size_t pp,std::size_t pn,
+                                    std::size_t sp,std::size_t sn,double turns_ratio) {
+    if(!(turns_ratio>0.0)||!std::isfinite(turns_ratio))throw std::invalid_argument("invalid ideal-transformer turns ratio");
+    const std::string voltage_branch=name+"$V";
+    add_vcvs(voltage_branch,pp,pn,sp,sn,turns_ratio);
+    add_cccs(name+"$I",sp,sn,voltage_branch,-turns_ratio);
+}
 void Circuit::add_diode_model(std::string name,DiodeModel model) {
     if (!(model.saturation_current>0.0) || !(model.emission_coefficient>0.0) || !(model.temperature_k>0.0)) throw std::invalid_argument("invalid diode model");
     diode_models_[upper(std::move(name))]=model;
@@ -572,6 +818,79 @@ void Circuit::add_static_device(std::string name,std::vector<std::size_t> termin
     static_devices_.push_back({std::move(name),std::move(terminals),std::move(evaluator)});
 }
 
+void Circuit::add_dynamic_device(std::string name,std::vector<std::size_t> terminals,DynamicDeviceEvaluator evaluator) {
+    if(terminals.empty()||!evaluator)throw std::invalid_argument("dynamic device requires terminals and evaluator");
+    for(const auto node_id:terminals)if(node_id>=node_count())throw std::out_of_range("dynamic-device terminal node out of range");
+    dynamic_devices_.push_back({std::move(name),std::move(terminals),std::move(evaluator)});
+}
+
+void Circuit::add_electrothermal_device(std::string name,std::vector<std::size_t> electrical_terminals,
+                                        std::size_t thermal_node,ElectroThermalDeviceConfig config,
+                                        ElectroThermalDeviceEvaluator evaluator) {
+    if(name.empty()||electrical_terminals.empty()||!evaluator||thermal_node==0U||thermal_node>=node_count()
+       ||!(config.ambient_temperature_k>0.0)||!std::isfinite(config.ambient_temperature_k)
+       ||!(config.thermal_resistance_k_per_w>0.0)||!std::isfinite(config.thermal_resistance_k_per_w)
+       ||config.thermal_capacitance_j_per_k<0.0||!std::isfinite(config.thermal_capacitance_j_per_k))
+        throw std::invalid_argument("invalid electrothermal device configuration");
+    for(const auto node_id:electrical_terminals)if(node_id>=node_count())throw std::out_of_range("electrothermal terminal node out of range");
+    std::vector<std::size_t> dae_terminals=electrical_terminals;dae_terminals.push_back(thermal_node);
+    const std::size_t electrical_count=electrical_terminals.size();
+    add_dynamic_device(std::move(name),std::move(dae_terminals),
+        [electrical_count,config,evaluator=std::move(evaluator)](std::span<const double> local){
+            if(local.size()!=electrical_count+1U)throw std::runtime_error("electrothermal local state size mismatch");
+            const double theta=local[electrical_count];
+            const double temperature=config.ambient_temperature_k+theta;
+            if(!(temperature>0.0)||!std::isfinite(temperature))throw std::runtime_error("electrothermal device reached non-physical temperature");
+            const auto electrical=evaluator(local.first(electrical_count),temperature);
+            if(electrical.electrical_current.size()!=electrical_count
+               ||electrical.electrical_jacobian.size()!=electrical_count*electrical_count
+               ||electrical.electrical_temperature_derivative.size()!=electrical_count
+               ||electrical.power_voltage_derivative.size()!=electrical_count
+               ||!std::isfinite(electrical.dissipated_power_w)
+               ||!std::isfinite(electrical.power_temperature_derivative_w_per_k))
+                throw std::runtime_error("electrothermal evaluator returned invalid dimensions/values");
+            DynamicDeviceEvaluation result;
+            const std::size_t total=electrical_count+1U;
+            result.terminal_current.assign(total,0.0);result.current_jacobian.assign(total*total,0.0);
+            result.terminal_charge.assign(total,0.0);result.charge_jacobian.assign(total*total,0.0);
+            for(std::size_t r=0;r<electrical_count;++r){
+                if(!std::isfinite(electrical.electrical_current[r])||!std::isfinite(electrical.electrical_temperature_derivative[r]))
+                    throw std::runtime_error("electrothermal electrical current is non-finite");
+                result.terminal_current[r]=electrical.electrical_current[r];
+                for(std::size_t c=0;c<electrical_count;++c){
+                    const double g=electrical.electrical_jacobian[r*electrical_count+c];
+                    if(!std::isfinite(g))throw std::runtime_error("electrothermal electrical Jacobian is non-finite");
+                    result.current_jacobian[r*total+c]=g;
+                }
+                result.current_jacobian[r*total+electrical_count]=electrical.electrical_temperature_derivative[r];
+            }
+            const std::size_t thermal=electrical_count;
+            result.terminal_current[thermal]=theta/config.thermal_resistance_k_per_w-electrical.dissipated_power_w;
+            for(std::size_t c=0;c<electrical_count;++c){
+                const double derivative=electrical.power_voltage_derivative[c];
+                if(!std::isfinite(derivative))throw std::runtime_error("electrothermal power Jacobian is non-finite");
+                result.current_jacobian[thermal*total+c]=-derivative;
+            }
+            result.current_jacobian[thermal*total+thermal]
+                =1.0/config.thermal_resistance_k_per_w-electrical.power_temperature_derivative_w_per_k;
+            result.terminal_charge[thermal]=config.thermal_capacitance_j_per_k*theta;
+            result.charge_jacobian[thermal*total+thermal]=config.thermal_capacitance_j_per_k;
+            return result;
+        });
+}
+
+void Circuit::add_behavioral_current_source(std::string name,std::size_t positive,std::size_t negative,BehavioralEvaluator evaluator) {
+    if(name.empty()||!evaluator||positive>=node_count()||negative>=node_count())
+        throw std::invalid_argument("invalid behavioral current source");
+    behavioral_current_sources_.push_back({std::move(name),positive,negative,std::move(evaluator)});
+}
+
+void Circuit::add_behavioral_voltage_source(std::string name,std::size_t positive,std::size_t negative,BehavioralEvaluator evaluator) {
+    if(name.empty()||!evaluator||positive>=node_count()||negative>=node_count())
+        throw std::invalid_argument("invalid behavioral voltage source");
+    behavioral_voltage_sources_.push_back({std::move(name),positive,negative,std::move(evaluator)});
+}
+
 void Circuit::set_voltage_source_dc(std::string_view name,double voltage) {
     if (!std::isfinite(voltage)) throw std::invalid_argument("invalid voltage-source DC value");
     const std::string target=upper(std::string(name));
@@ -599,14 +918,27 @@ void Circuit::set_device_temperature(double temperature) {
     for (auto& [name, model] : bjt_models_) { (void)name; model.temperature_k = temperature; }
 }
 
+void Circuit::set_initial_voltage(std::size_t node_id,double voltage) {
+    if(node_id>=node_count()||!std::isfinite(voltage))throw std::invalid_argument("invalid circuit initial condition");
+    if(node_id==0U){if(voltage!=0.0)throw std::invalid_argument("ground initial condition must be zero");return;}
+    initial_voltage_[node_id]=voltage;
+}
 
-std::size_t Circuit::branch_count() const noexcept { return voltage_sources_.size()+vcvs_.size()+ccvs_.size()+inductors_.size(); }
-std::size_t Circuit::inductor_branch(std::size_t index) const noexcept { return voltage_sources_.size()+vcvs_.size()+ccvs_.size()+index; }
+void Circuit::set_nodeset_voltage(std::size_t node_id,double voltage) {
+    if(node_id>=node_count()||!std::isfinite(voltage))throw std::invalid_argument("invalid circuit nodeset");
+    if(node_id==0U){if(voltage!=0.0)throw std::invalid_argument("ground nodeset must be zero");return;}
+    nodeset_voltage_[node_id]=voltage;
+}
+
+
+std::size_t Circuit::branch_count() const noexcept { return voltage_sources_.size()+behavioral_voltage_sources_.size()+vcvs_.size()+ccvs_.size()+inductors_.size(); }
+std::size_t Circuit::inductor_branch(std::size_t index) const noexcept { return voltage_sources_.size()+behavioral_voltage_sources_.size()+vcvs_.size()+ccvs_.size()+index; }
 
 std::size_t Circuit::branch_index(std::string_view name) const {
     const std::string target=upper(std::string(name));
     std::size_t branch=0U;
     for (const auto& source:voltage_sources_) { if (upper(source.name)==target) return branch; ++branch; }
+    for (const auto& source:behavioral_voltage_sources_) { if (upper(source.name)==target) return branch; ++branch; }
     for (const auto& source:vcvs_) { if (upper(source.name)==target) return branch; ++branch; }
     for (const auto& source:ccvs_) { if (upper(source.name)==target) return branch; ++branch; }
     for (const auto& inductor:inductors_) { if (upper(inductor.name)==target) return branch; ++branch; }
@@ -622,18 +954,33 @@ OperatingPoint Circuit::dc_operating_point_scaled(const NewtonConfig& cfg,double
         for (std::size_t node_id=1; node_id<node_count(); ++node_id) state[node_id-1U]=initial->node_voltage[node_id];
         std::copy(initial->branch_current.begin(),initial->branch_current.end(),state.begin()+static_cast<std::ptrdiff_t>(node_unknowns));
     }
+    else {
+        for(const auto& [node_id,voltage]:nodeset_voltage_)
+            if(node_id>0U&&node_id<node_count())state[node_id-1U]=voltage;
+    }
     std::vector<double> previous=state;
 
     for (std::size_t iteration=0; iteration<cfg.max_iterations; ++iteration) {
-        std::vector<double> matrix(dimension*dimension,0.0),rhs(dimension,0.0);
+        const bool use_sparse=cfg.sparse_mna_threshold>0U&&dimension>=cfg.sparse_mna_threshold;
+        RealMnaMatrix matrix(dimension,use_sparse);std::vector<double> rhs(dimension,0.0);
         for (const auto& resistor:resistors_) stamp_admittance(matrix,dimension,resistor.p,resistor.n,1.0/resistor.value);
         for (std::size_t node_id=1; node_id<node_count(); ++node_id) matrix[(node_id-1U)*dimension+(node_id-1U)]+=cfg.gmin;
         for (const auto& source:current_sources_) stamp_current(rhs,source.p,source.n,source_scale*source.dc);
         for (const auto& source:vccs_) stamp_vccs(matrix,dimension,source.p,source.n,source.cp,source.cn,source.gain);
+        const auto behavioral_nodes=node_values_from_state(previous,node_count());
+        for(const auto& source:behavioral_current_sources_){
+            const auto linear=behavioral_linearize(source.evaluator,behavioral_nodes,0.0);
+            stamp_behavioral_current(matrix,&rhs,dimension,source.p,source.n,linear,behavioral_nodes,source_scale);
+        }
 
         std::size_t branch=0U;
         for (const auto& source:voltage_sources_) {
             stamp_voltage_branch(matrix,rhs,dimension,node_count(),branch,source.p,source.n,source_scale*source.dc);
+            ++branch;
+        }
+        for(const auto& source:behavioral_voltage_sources_){
+            const auto linear=behavioral_linearize(source.evaluator,behavioral_nodes,0.0);
+            stamp_behavioral_voltage(matrix,&rhs,dimension,node_count(),branch,source.p,source.n,linear,behavioral_nodes,source_scale);
             ++branch;
         }
         for (const auto& source:vcvs_) {
@@ -690,8 +1037,12 @@ OperatingPoint Circuit::dc_operating_point_scaled(const NewtonConfig& cfg,double
             for(std::size_t node_id=1;node_id<node_count();++node_id)node_values[node_id]=previous[node_id-1U];
             for(const auto& device:static_devices_)stamp_static_device(matrix,&rhs,dimension,device.terminals,device.evaluator,node_values);
         }
+        if(!dynamic_devices_.empty()){
+            const auto node_values=node_values_from_state(previous,node_count());
+            for(const auto& device:dynamic_devices_)stamp_dynamic_dc(matrix,rhs,dimension,device.terminals,device.evaluator,node_values);
+        }
 
-        auto candidate=solve_dense(matrix,rhs,dimension);
+        auto candidate=solve_real_mna(matrix,rhs,cfg);
         // Limit PN-junction Newton voltage jumps before the global damping step.
         for(const auto& diode:diodes_){
             const auto& model=diode_models_.at(diode.model);
@@ -711,7 +1062,8 @@ OperatingPoint Circuit::dc_operating_point_scaled(const NewtonConfig& cfg,double
         for (std::size_t i=0;i<node_unknowns;++i)
             maximum_voltage_delta=std::max(maximum_voltage_delta,std::abs(candidate[i]-previous[i]));
         const bool nonlinear = !diodes_.empty() || !mosfets_.empty() || !jfets_.empty() ||
-            !bjts_.empty() || !switches_.empty() || !static_devices_.empty();
+            !bjts_.empty() || !switches_.empty() || !static_devices_.empty() || !dynamic_devices_.empty() ||
+            !behavioral_current_sources_.empty() || !behavioral_voltage_sources_.empty();
         const double damping = nonlinear && maximum_voltage_delta > 0.5
             ? 0.5 / maximum_voltage_delta : 1.0;
         for (std::size_t i=0;i<dimension;++i) state[i]=previous[i]+damping*(candidate[i]-previous[i]);
@@ -760,7 +1112,7 @@ AcSolution Circuit::ac(double frequency,const OperatingPoint* supplied,const New
     OperatingPoint owned;
     const OperatingPoint* operating=supplied;
     if (!operating) {
-        const bool nonlinear = !diodes_.empty() || !mosfets_.empty() || !bjts_.empty() || !jfets_.empty() || !switches_.empty() || !static_devices_.empty();
+        const bool nonlinear = !diodes_.empty() || !mosfets_.empty() || !bjts_.empty() || !jfets_.empty() || !switches_.empty() || !static_devices_.empty() || !dynamic_devices_.empty() || !behavioral_current_sources_.empty() || !behavioral_voltage_sources_.empty();
         if (nonlinear) {
             owned=dc_operating_point_homotopy(cfg);
             if(!owned.converged) throw std::runtime_error("AC operating point did not converge");
@@ -778,8 +1130,17 @@ AcSolution Circuit::ac(double frequency,const OperatingPoint* supplied,const New
     for (const auto& capacitor:capacitors_) stamp_admittance(matrix,dimension,capacitor.p,capacitor.n,jw*capacitor.value);
     for (const auto& source:current_sources_) stamp_current(rhs,source.p,source.n,source.ac);
     for (const auto& source:vccs_) stamp_vccs(matrix,dimension,source.p,source.n,source.cp,source.cn,Complex{source.gain,0.0});
+    for(const auto& source:behavioral_current_sources_){
+        const auto linear=behavioral_linearize(source.evaluator,operating->node_voltage,0.0);
+        stamp_behavioral_current(matrix,static_cast<std::vector<Complex>*>(nullptr),dimension,source.p,source.n,linear,operating->node_voltage);
+    }
     std::size_t branch=0U;
     for (const auto& source:voltage_sources_) { stamp_voltage_branch(matrix,rhs,dimension,node_count(),branch,source.p,source.n,source.ac); ++branch; }
+    for(const auto& source:behavioral_voltage_sources_){
+        const auto linear=behavioral_linearize(source.evaluator,operating->node_voltage,0.0);
+        stamp_behavioral_voltage(matrix,static_cast<std::vector<Complex>*>(nullptr),dimension,node_count(),branch,source.p,source.n,linear,operating->node_voltage);
+        ++branch;
+    }
     for (const auto& source:vcvs_) { stamp_voltage_branch(matrix,rhs,dimension,node_count(),branch,source.p,source.n,Complex{}); stamp_vcvs_control(matrix,dimension,node_count(),branch,source.cp,source.cn,Complex{source.gain,0.0}); ++branch; }
     for (const auto& source:ccvs_) { stamp_voltage_branch(matrix,rhs,dimension,node_count(),branch,source.p,source.n,Complex{}); stamp_ccvs_control(matrix,dimension,node_count(),branch,branch_index(source.control),Complex{source.gain,0.0}); ++branch; }
     for (const auto& inductor:inductors_) { stamp_voltage_branch(matrix,rhs,dimension,node_count(),branch,inductor.p,inductor.n,Complex{},-jw*inductor.value); ++branch; }
@@ -803,6 +1164,7 @@ AcSolution Circuit::ac(double frequency,const OperatingPoint* supplied,const New
     for (const auto& device:bjts_) {const auto linear=bjt_linearize(bjt_models_.at(device.model),operating->node_voltage[device.c],operating->node_voltage[device.b],operating->node_voltage[device.e]);stamp_bjt_jacobian(matrix,dimension,linear,device.c,device.b,device.e);}
     for (const auto& device:switches_) {const double control=operating->node_voltage[device.cp]-operating->node_voltage[device.cn];stamp_admittance(matrix,dimension,device.p,device.n,Complex{switch_conductance(switch_models_.at(device.model),control),0.0});}
     for(const auto& device:static_devices_)stamp_static_device(matrix,static_cast<std::vector<Complex>*>(nullptr),dimension,device.terminals,device.evaluator,operating->node_voltage);
+    for(const auto& device:dynamic_devices_)stamp_dynamic_ac(matrix,dimension,device.terminals,device.evaluator,operating->node_voltage,2.0*std::numbers::pi*frequency);
     for (const auto& device:nports_) stamp_nport(matrix,dimension,device,frequency);
     const auto solution=solve_dense(matrix,rhs,dimension);
     AcSolution result;result.frequency_hz=frequency;result.node_voltage.assign(node_count(),{});
@@ -857,8 +1219,12 @@ std::vector<TransientPoint> Circuit::transient(double dt,std::size_t steps,const
 std::vector<TransientPoint> Circuit::transient(double dt,std::size_t steps,TransientMethod method,
                                                 const NewtonConfig& cfg) const {
     if (!(dt>0.0) || !std::isfinite(dt)) throw std::invalid_argument("transient time step must be positive");
+    if(method==TransientMethod::trapezoidal&&!dynamic_devices_.empty())
+        throw std::invalid_argument("charge-based dynamic devices currently support backward Euler or BDF2 transient integration");
     const std::size_t node_unknowns=node_count()-1U,dimension=node_unknowns+branch_count();
-    std::vector<double> state(dimension,0.0),older=state,previous=state;
+    std::vector<double> state(dimension,0.0);
+    for(const auto& [node_id,voltage]:initial_voltage_)if(node_id>0U&&node_id<node_count())state[node_id-1U]=voltage;
+    std::vector<double> older=state,previous=state;
     std::vector<double> capacitor_current(capacitors_.size(),0.0);
     std::vector<double> inductor_voltage(inductors_.size(),0.0);
     std::vector<TransientPoint> result;result.reserve(steps+1U);
@@ -877,7 +1243,8 @@ std::vector<TransientPoint> Circuit::transient(double dt,std::size_t steps,Trans
             ?TransientMethod::backward_euler:method;
         bool converged=false;
         for(std::size_t iteration=0;iteration<cfg.max_iterations;++iteration){
-            std::vector<double>matrix(dimension*dimension,0.0),rhs(dimension,0.0);
+            const bool use_sparse=cfg.sparse_mna_threshold>0U&&dimension>=cfg.sparse_mna_threshold;
+            RealMnaMatrix matrix(dimension,use_sparse);std::vector<double> rhs(dimension,0.0);
             for(const auto&r:resistors_)stamp_admittance(matrix,dimension,r.p,r.n,1.0/r.value);
             for(std::size_t node_id=1;node_id<node_count();++node_id)
                 matrix[(node_id-1U)*dimension+(node_id-1U)]+=cfg.gmin;
@@ -886,6 +1253,11 @@ std::vector<TransientPoint> Circuit::transient(double dt,std::size_t steps,Trans
                 stamp_current(rhs,source.p,source.n,value);
             }
             for(const auto&s:vccs_)stamp_vccs(matrix,dimension,s.p,s.n,s.cp,s.cn,s.gain);
+            const auto behavioral_nodes=node_values_from_state(previous,node_count());
+            for(const auto& source:behavioral_current_sources_){
+                const auto linear=behavioral_linearize(source.evaluator,behavioral_nodes,next_time);
+                stamp_behavioral_current(matrix,&rhs,dimension,source.p,source.n,linear,behavioral_nodes);
+            }
 
             for(std::size_t k=0;k<capacitors_.size();++k){
                 const auto& c=capacitors_[k];
@@ -907,6 +1279,11 @@ std::vector<TransientPoint> Circuit::transient(double dt,std::size_t steps,Trans
             for(const auto& source:voltage_sources_){
                 const double value = source.transient ? source.transient(next_time) : source.dc;
                 stamp_voltage_branch(matrix,rhs,dimension,node_count(),branch,source.p,source.n,value);
+                ++branch;
+            }
+            for(const auto& source:behavioral_voltage_sources_){
+                const auto linear=behavioral_linearize(source.evaluator,behavioral_nodes,next_time);
+                stamp_behavioral_voltage(matrix,&rhs,dimension,node_count(),branch,source.p,source.n,linear,behavioral_nodes);
                 ++branch;
             }
             for(const auto&e:vcvs_){
@@ -965,7 +1342,17 @@ std::vector<TransientPoint> Circuit::transient(double dt,std::size_t steps,Trans
             for(const auto&q:bjts_){const auto linear=bjt_linearize(bjt_models_.at(q.model),node_voltage(previous,q.c),node_voltage(previous,q.b),node_voltage(previous,q.e));stamp_bjt_dc(matrix,rhs,dimension,linear,q.c,q.b,q.e);}
             for(const auto&s:switches_){const double control=node_voltage(previous,s.cp)-node_voltage(previous,s.cn);stamp_admittance(matrix,dimension,s.p,s.n,switch_conductance(switch_models_.at(s.model),control));}
             if(!static_devices_.empty()){std::vector<double> node_values(node_count(),0.0);for(std::size_t node_id=1;node_id<node_count();++node_id)node_values[node_id]=previous[node_id-1U];for(const auto& device:static_devices_)stamp_static_device(matrix,&rhs,dimension,device.terminals,device.evaluator,node_values);}
-            auto candidate=solve_dense(matrix,rhs,dimension);double delta=0.0;
+            if(!dynamic_devices_.empty()){
+                const auto current_nodes=node_values_from_state(previous,node_count());
+                const auto old_nodes=node_values_from_state(old,node_count());
+                const auto older_nodes=node_values_from_state(older,node_count());
+                double a0=1.0/dt,a1=-1.0/dt,a2=0.0;
+                if(active==TransientMethod::bdf2){a0=1.5/dt;a1=-2.0/dt;a2=0.5/dt;}
+                for(const auto& device:dynamic_devices_)
+                    stamp_dynamic_transient(matrix,rhs,dimension,device.terminals,device.evaluator,current_nodes,old_nodes,
+                                            active==TransientMethod::bdf2?&older_nodes:nullptr,a0,a1,a2);
+            }
+            auto candidate=solve_real_mna(matrix,rhs,cfg);double delta=0.0;
             for(std::size_t i=0;i<dimension;++i)delta=std::max(delta,std::abs(candidate[i]-previous[i]));
             const double damping=delta>0.5?0.5/delta:1.0;
             for(std::size_t i=0;i<dimension;++i)state[i]=previous[i]+damping*(candidate[i]-previous[i]);
@@ -982,6 +1369,207 @@ std::vector<TransientPoint> Circuit::transient(double dt,std::size_t steps,Trans
     return result;
 }
 
+AdaptiveTransientResult Circuit::transient_adaptive(double stop_time,
+                                                      const AdaptiveTransientConfig& controls,
+                                                      const NewtonConfig& cfg) const {
+    if (!(stop_time>0.0) || !std::isfinite(stop_time)
+        || !(controls.initial_step>0.0) || !(controls.minimum_step>0.0)
+        || !(controls.maximum_step>=controls.minimum_step)
+        || !(controls.relative_tolerance>0.0) || !(controls.absolute_tolerance>0.0)
+        || !(controls.safety_factor>0.0) || !(controls.minimum_scale>0.0)
+        || !(controls.maximum_scale>=controls.minimum_scale) || controls.max_step_attempts==0U)
+        throw std::invalid_argument("invalid adaptive transient controls");
+    if(controls.method==TransientMethod::trapezoidal)
+        throw std::invalid_argument("adaptive transient currently supports backward Euler or BDF2");
+
+    const std::size_t node_unknowns=node_count()-1U,dimension=node_unknowns+branch_count();
+    std::vector<double> state(dimension,0.0);
+    for(const auto& [node_id,voltage]:initial_voltage_)if(node_id>0U&&node_id<node_count())state[node_id-1U]=voltage;
+    std::vector<double> older_state=state;
+
+    const auto advance = [&](const std::vector<double>& old,
+                             const std::vector<double>* older,
+                             double previous_dt,double next_time,double dt,
+                             TransientMethod active) {
+        double a0=1.0/dt,a1=-1.0/dt,a2=0.0;
+        if(active==TransientMethod::bdf2){
+            if(older==nullptr || !(previous_dt>0.0) || !std::isfinite(previous_dt))
+                throw std::invalid_argument("BDF2 adaptive step requires valid history");
+            const double sum=dt+previous_dt;
+            a0=(2.0*dt+previous_dt)/(dt*sum);
+            a1=-sum/(dt*previous_dt);
+            a2=dt/(previous_dt*sum);
+        }
+        std::vector<double> current=old,previous=old;
+        bool converged=false;
+        for(std::size_t iteration=0;iteration<cfg.max_iterations;++iteration){
+            const bool use_sparse=cfg.sparse_mna_threshold>0U&&dimension>=cfg.sparse_mna_threshold;
+            RealMnaMatrix matrix(dimension,use_sparse);std::vector<double> rhs(dimension,0.0);
+            for(const auto&r:resistors_)stamp_admittance(matrix,dimension,r.p,r.n,1.0/r.value);
+            for(std::size_t node_id=1;node_id<node_count();++node_id)
+                matrix[(node_id-1U)*dimension+(node_id-1U)]+=cfg.gmin;
+            for(const auto& source:current_sources_){
+                const double value=source.transient?source.transient(next_time):source.dc;
+                stamp_current(rhs,source.p,source.n,value);
+            }
+            for(const auto&s:vccs_)stamp_vccs(matrix,dimension,s.p,s.n,s.cp,s.cn,s.gain);
+            const auto behavioral_nodes=node_values_from_state(previous,node_count());
+            for(const auto& source:behavioral_current_sources_){
+                const auto linear=behavioral_linearize(source.evaluator,behavioral_nodes,next_time);
+                stamp_behavioral_current(matrix,&rhs,dimension,source.p,source.n,linear,behavioral_nodes);
+            }
+            for(const auto& c:capacitors_){
+                const double v1=node_voltage(old,c.p)-node_voltage(old,c.n);
+                const double v2=older?(node_voltage(*older,c.p)-node_voltage(*older,c.n)):0.0;
+                const double g=c.value*a0;
+                const double history=c.value*(a1*v1+a2*v2);
+                stamp_admittance(matrix,dimension,c.p,c.n,g);
+                stamp_current(rhs,c.p,c.n,history);
+            }
+
+            std::size_t branch=0U;
+            for(const auto& source:voltage_sources_){
+                const double value=source.transient?source.transient(next_time):source.dc;
+                stamp_voltage_branch(matrix,rhs,dimension,node_count(),branch,source.p,source.n,value);++branch;
+            }
+            for(const auto& source:behavioral_voltage_sources_){
+                const auto linear=behavioral_linearize(source.evaluator,behavioral_nodes,next_time);
+                stamp_behavioral_voltage(matrix,&rhs,dimension,node_count(),branch,source.p,source.n,linear,behavioral_nodes);
+                ++branch;
+            }
+            for(const auto&e:vcvs_){
+                stamp_voltage_branch(matrix,rhs,dimension,node_count(),branch,e.p,e.n,0.0);
+                stamp_vcvs_control(matrix,dimension,node_count(),branch,e.cp,e.cn,e.gain);++branch;
+            }
+            for(const auto&h:ccvs_){
+                stamp_voltage_branch(matrix,rhs,dimension,node_count(),branch,h.p,h.n,0.0);
+                stamp_ccvs_control(matrix,dimension,node_count(),branch,branch_index(h.control),h.gain);++branch;
+            }
+            for(std::size_t k=0;k<inductors_.size();++k){
+                const auto& l=inductors_[k];const std::size_t ib=inductor_branch(k);
+                const double i1=old[node_unknowns+ib];
+                const double i2=older?(*older)[node_unknowns+ib]:0.0;
+                const double coefficient=l.value*a0;
+                const double history=l.value*(a1*i1+a2*i2);
+                stamp_voltage_branch(matrix,rhs,dimension,node_count(),ib,l.p,l.n,history,-coefficient);
+            }
+            for(const auto&coupling:mutual_inductances_){
+                std::size_t first=inductors_.size(),second=inductors_.size();
+                for(std::size_t i=0;i<inductors_.size();++i){
+                    const auto name=upper(inductors_[i].name);
+                    if(name==coupling.first)first=i;
+                    if(name==coupling.second)second=i;
+                }
+                if(first==inductors_.size()||second==inductors_.size())
+                    throw std::runtime_error("mutual inductance references unknown inductor");
+                const double mutual=coupling.coupling*std::sqrt(inductors_[first].value*inductors_[second].value);
+                const std::size_t b1=inductor_branch(first),b2=inductor_branch(second);
+                const std::size_t r1=node_unknowns+b1,r2=node_unknowns+b2;
+                const double coefficient=mutual*a0;
+                const double old_second=old[node_unknowns+b2],old_first=old[node_unknowns+b1];
+                const double older_second=older?(*older)[node_unknowns+b2]:0.0;
+                const double older_first=older?(*older)[node_unknowns+b1]:0.0;
+                matrix[r1*dimension+r2]-=coefficient;matrix[r2*dimension+r1]-=coefficient;
+                rhs[r1]+=mutual*(a1*old_second+a2*older_second);
+                rhs[r2]+=mutual*(a1*old_first+a2*older_first);
+            }
+            for(const auto&f:cccs_)stamp_cccs(matrix,dimension,node_count(),f.p,f.n,branch_index(f.control),f.gain);
+            for(const auto&d:diodes_){
+                const auto&m=diode_models_.at(d.model);
+                const double vt=m.emission_coefficient*boltzmann*m.temperature_k/electron_charge;
+                const double raw=node_voltage(previous,d.a)-node_voltage(previous,d.k);
+                const double vd=limit_pn_junction_voltage(raw,node_voltage(old,d.a)-node_voltage(old,d.k),vt,m.saturation_current);
+                const double ex=std::exp(std::clamp(vd/vt,-40.0,40.0));
+                const double diode_current=m.saturation_current*(ex-1.0),g=m.saturation_current*ex/vt;
+                stamp_admittance(matrix,dimension,d.a,d.k,g);stamp_current(rhs,d.a,d.k,diode_current-g*vd);
+            }
+            for(const auto&m:mosfets_){const auto linear=mos_linearize(mos_models_.at(m.model),node_voltage(previous,m.d),node_voltage(previous,m.g),node_voltage(previous,m.s));stamp_transistor_linearization(matrix,dimension,linear,m.d,m.g,m.s);stamp_current(rhs,m.d,m.s,linear.ieq);}
+            for(const auto&j:jfets_){const auto linear=jfet_linearize(jfet_models_.at(j.model),node_voltage(previous,j.d),node_voltage(previous,j.g),node_voltage(previous,j.s));stamp_transistor_linearization(matrix,dimension,linear,j.d,j.g,j.s);stamp_current(rhs,j.d,j.s,linear.ieq);}
+            for(const auto&q:bjts_){const auto linear=bjt_linearize(bjt_models_.at(q.model),node_voltage(previous,q.c),node_voltage(previous,q.b),node_voltage(previous,q.e));stamp_bjt_dc(matrix,rhs,dimension,linear,q.c,q.b,q.e);}
+            for(const auto&s:switches_){const double control=node_voltage(previous,s.cp)-node_voltage(previous,s.cn);stamp_admittance(matrix,dimension,s.p,s.n,switch_conductance(switch_models_.at(s.model),control));}
+            if(!static_devices_.empty()){
+                std::vector<double> node_values(node_count(),0.0);
+                for(std::size_t node_id=1;node_id<node_count();++node_id)node_values[node_id]=previous[node_id-1U];
+                for(const auto& device:static_devices_)stamp_static_device(matrix,&rhs,dimension,device.terminals,device.evaluator,node_values);
+            }
+            if(!dynamic_devices_.empty()){
+                const auto current_nodes=node_values_from_state(previous,node_count());
+                const auto old_nodes=node_values_from_state(old,node_count());
+                std::vector<double> older_nodes;
+                if(older)older_nodes=node_values_from_state(*older,node_count());
+                for(const auto& device:dynamic_devices_)
+                    stamp_dynamic_transient(matrix,rhs,dimension,device.terminals,device.evaluator,current_nodes,old_nodes,
+                                            older?&older_nodes:nullptr,a0,a1,a2);
+            }
+            auto candidate=solve_real_mna(matrix,rhs,cfg);
+            double maximum_voltage_delta=0.0;
+            for(std::size_t i=0;i<node_unknowns;++i)
+                maximum_voltage_delta=std::max(maximum_voltage_delta,std::abs(candidate[i]-previous[i]));
+            const bool nonlinear=!diodes_.empty()||!mosfets_.empty()||!jfets_.empty()||!bjts_.empty()||!switches_.empty()||!static_devices_.empty()||!dynamic_devices_.empty()
+                ||!behavioral_current_sources_.empty()||!behavioral_voltage_sources_.empty();
+            const double damping=nonlinear&&maximum_voltage_delta>0.5?0.5/maximum_voltage_delta:1.0;
+            for(std::size_t i=0;i<dimension;++i)current[i]=previous[i]+damping*(candidate[i]-previous[i]);
+            previous=current;
+            if(maximum_voltage_delta*damping<cfg.voltage_tolerance){converged=true;break;}
+        }
+        if(!converged)throw std::runtime_error("adaptive transient Newton solve did not converge");
+        return current;
+    };
+
+    AdaptiveTransientResult result;
+    result.minimum_accepted_step=std::numeric_limits<double>::infinity();
+    const auto save=[&](double sample_time,const std::vector<double>& accepted){
+        TransientPoint point;point.time=sample_time;point.node_voltage.assign(node_count(),0.0);
+        for(std::size_t node_id=1;node_id<node_count();++node_id)point.node_voltage[node_id]=accepted[node_id-1U];
+        point.branch_current.assign(accepted.begin()+static_cast<std::ptrdiff_t>(node_unknowns),accepted.end());
+        result.points.push_back(std::move(point));
+    };
+    save(0.0,state);
+    double time=0.0,previous_dt=0.0;
+    bool has_history=false;
+    double dt=std::clamp(controls.initial_step,controls.minimum_step,controls.maximum_step);
+    std::size_t attempts=0U;
+    while(time<stop_time){
+        if(++attempts>controls.max_step_attempts)throw std::runtime_error("adaptive transient step-attempt budget exhausted");
+        const double remaining=stop_time-time;
+        dt=std::min(dt,remaining);
+        const bool use_bdf2=controls.method==TransientMethod::bdf2&&has_history;
+        const TransientMethod active=use_bdf2?TransientMethod::bdf2:TransientMethod::backward_euler;
+        const auto* history=use_bdf2?&older_state:nullptr;
+        const double history_dt=use_bdf2?previous_dt:0.0;
+        const auto full=advance(state,history,history_dt,time+dt,dt,active);
+        const auto half=advance(state,history,history_dt,time+0.5*dt,0.5*dt,active);
+        const auto refined=advance(half,use_bdf2?&state:nullptr,use_bdf2?0.5*dt:0.0,
+                                   time+dt,0.5*dt,active);
+        const double richardson=use_bdf2?3.0:1.0;
+        double normalized_error=0.0;
+        const std::size_t error_unknowns=node_unknowns?node_unknowns:dimension;
+        for(std::size_t i=0;i<error_unknowns;++i){
+            const double scale=controls.absolute_tolerance+controls.relative_tolerance*std::max(std::abs(full[i]),std::abs(refined[i]));
+            normalized_error=std::max(normalized_error,std::abs(refined[i]-full[i])/(richardson*scale));
+        }
+        if(!std::isfinite(normalized_error))throw std::runtime_error("adaptive transient produced non-finite LTE estimate");
+        if(normalized_error<=1.0){
+            older_state=state;state=refined;previous_dt=dt;has_history=true;time+=dt;++result.accepted_steps;
+            result.minimum_accepted_step=std::min(result.minimum_accepted_step,dt);
+            result.maximum_accepted_step=std::max(result.maximum_accepted_step,dt);
+            save(time,state);
+        }else{
+            ++result.rejected_steps;
+            if(dt<=controls.minimum_step*(1.0+16.0*std::numeric_limits<double>::epsilon()) && remaining>controls.minimum_step)
+                throw std::runtime_error("adaptive transient LTE tolerance cannot be met at minimum step");
+        }
+        const double exponent=use_bdf2?1.0/3.0:0.5;
+        const double raw_scale=normalized_error>0.0
+            ?controls.safety_factor*std::pow(1.0/normalized_error,exponent)
+            :controls.maximum_scale;
+        const double factor=std::clamp(raw_scale,controls.minimum_scale,controls.maximum_scale);
+        dt=std::clamp(dt*factor,controls.minimum_step,controls.maximum_step);
+    }
+    if(result.accepted_steps==0U)result.minimum_accepted_step=0.0;
+    return result;
+}
+
 NoiseResult Circuit::output_noise(double frequency,std::string_view output_node,double temperature,const NewtonConfig& cfg) const {
     if (!(frequency>0.0) || !(temperature>0.0)) throw std::invalid_argument("invalid noise analysis controls");
     const auto operating=dc_operating_point_homotopy(cfg);if(!operating.converged)throw std::runtime_error("noise operating point did not converge");
@@ -990,13 +1578,65 @@ NoiseResult Circuit::output_noise(double frequency,std::string_view output_node,
     for(const auto& r:resistors_) stamp_admittance(matrix,dimension,r.p,r.n,Complex{1.0/r.value,0.0});
     for(const auto& c:capacitors_) stamp_admittance(matrix,dimension,c.p,c.n,jw*c.value);
     for(const auto& s:vccs_) stamp_vccs(matrix,dimension,s.p,s.n,s.cp,s.cn,Complex{s.gain,0});
-    std::size_t branch=0U;for(const auto&v:voltage_sources_){stamp_voltage_branch(matrix,zero_rhs,dimension,node_count(),branch,v.p,v.n,Complex{});++branch;}for(const auto&e:vcvs_){stamp_voltage_branch(matrix,zero_rhs,dimension,node_count(),branch,e.p,e.n,Complex{});stamp_vcvs_control(matrix,dimension,node_count(),branch,e.cp,e.cn,Complex{e.gain,0});++branch;}for(const auto&h:ccvs_){stamp_voltage_branch(matrix,zero_rhs,dimension,node_count(),branch,h.p,h.n,Complex{});stamp_ccvs_control(matrix,dimension,node_count(),branch,branch_index(h.control),Complex{h.gain,0});++branch;}for(const auto&l:inductors_){stamp_voltage_branch(matrix,zero_rhs,dimension,node_count(),branch,l.p,l.n,Complex{},-jw*l.value);++branch;}for(const auto&f:cccs_)stamp_cccs(matrix,dimension,node_count(),f.p,f.n,branch_index(f.control),Complex{f.gain,0});
+    for(const auto& source:behavioral_current_sources_){
+        const auto linear=behavioral_linearize(source.evaluator,operating.node_voltage,0.0);
+        stamp_behavioral_current(matrix,static_cast<std::vector<Complex>*>(nullptr),dimension,source.p,source.n,linear,operating.node_voltage);
+    }
+    std::size_t branch=0U;
+    for(const auto&v:voltage_sources_){
+        stamp_voltage_branch(matrix,zero_rhs,dimension,node_count(),branch,v.p,v.n,Complex{});++branch;
+    }
+    for(const auto& source:behavioral_voltage_sources_){
+        const auto linear=behavioral_linearize(source.evaluator,operating.node_voltage,0.0);
+        stamp_behavioral_voltage(matrix,static_cast<std::vector<Complex>*>(nullptr),dimension,node_count(),branch,source.p,source.n,linear,operating.node_voltage);
+        ++branch;
+    }
+    for(const auto&e:vcvs_){
+        stamp_voltage_branch(matrix,zero_rhs,dimension,node_count(),branch,e.p,e.n,Complex{});
+        stamp_vcvs_control(matrix,dimension,node_count(),branch,e.cp,e.cn,Complex{e.gain,0});++branch;
+    }
+    for(const auto&h:ccvs_){
+        stamp_voltage_branch(matrix,zero_rhs,dimension,node_count(),branch,h.p,h.n,Complex{});
+        stamp_ccvs_control(matrix,dimension,node_count(),branch,branch_index(h.control),Complex{h.gain,0});++branch;
+    }
+    for(const auto&l:inductors_){
+        stamp_voltage_branch(matrix,zero_rhs,dimension,node_count(),branch,l.p,l.n,Complex{},-jw*l.value);++branch;
+    }
+    for(const auto&f:cccs_)stamp_cccs(matrix,dimension,node_count(),f.p,f.n,branch_index(f.control),Complex{f.gain,0});
     for(const auto&d:diodes_){const auto&m=diode_models_.at(d.model);const double vt=m.emission_coefficient*boltzmann*m.temperature_k/electron_charge,vd=operating.node_voltage[d.a]-operating.node_voltage[d.k],g=m.saturation_current*std::exp(std::clamp(vd/vt,-40.0,40.0))/vt;stamp_admittance(matrix,dimension,d.a,d.k,Complex{g,0});}
     for(const auto&m:mosfets_){const auto lin=mos_linearize(mos_models_.at(m.model),operating.node_voltage[m.d],operating.node_voltage[m.g],operating.node_voltage[m.s]);stamp_transistor_linearization(matrix,dimension,lin,m.d,m.g,m.s);}for(const auto&j:jfets_){const auto lin=jfet_linearize(jfet_models_.at(j.model),operating.node_voltage[j.d],operating.node_voltage[j.g],operating.node_voltage[j.s]);stamp_transistor_linearization(matrix,dimension,lin,j.d,j.g,j.s);}for(const auto&q:bjts_){const auto lin=bjt_linearize(bjt_models_.at(q.model),operating.node_voltage[q.c],operating.node_voltage[q.b],operating.node_voltage[q.e]);stamp_bjt_jacobian(matrix,dimension,lin,q.c,q.b,q.e);}for(const auto&s:switches_){const double control=operating.node_voltage[s.cp]-operating.node_voltage[s.cn];stamp_admittance(matrix,dimension,s.p,s.n,Complex{switch_conductance(switch_models_.at(s.model),control),0});}
+    for(const auto& device:dynamic_devices_)stamp_dynamic_ac(matrix,dimension,device.terminals,device.evaluator,operating.node_voltage,2.0*std::numbers::pi*frequency);
     for(const auto& device:nports_) stamp_nport(matrix,dimension,device,frequency);
     auto transfer=[&](std::size_t p,std::size_t n){std::vector<Complex> rhs(dimension);stamp_current(rhs,p,n,Complex{1.0,0.0});const auto solution=solve_dense(matrix,rhs,dimension);return output?solution[output-1U]:Complex{};};
-    double density=0.0;for(const auto&r:resistors_){const Complex h=transfer(r.p,r.n);density+=std::norm(h)*4.0*boltzmann*temperature/r.value;}for(const auto&d:diodes_){const auto&m=diode_models_.at(d.model);const double vt=m.emission_coefficient*boltzmann*m.temperature_k/electron_charge,vd=operating.node_voltage[d.a]-operating.node_voltage[d.k],current=m.saturation_current*(std::exp(std::clamp(vd/vt,-40.0,40.0))-1.0);const Complex h=transfer(d.a,d.k);density+=std::norm(h)*2.0*electron_charge*std::abs(current);}
-    return {frequency,std::sqrt(std::max(0.0,density)),density};
+    NoiseResult result;result.frequency_hz=frequency;
+    const auto add_noise=[&](std::string name,std::size_t p,std::size_t n,double source_density){
+        if(!(source_density>=0.0)||!std::isfinite(source_density))throw std::runtime_error("non-finite device noise density");
+        const Complex h=transfer(p,n);const double contribution=std::norm(h)*source_density;
+        result.output_noise_density_v2_per_hz+=contribution;
+        result.contributions.push_back({std::move(name),contribution});
+    };
+    for(const auto&r:resistors_)add_noise(r.name,r.p,r.n,4.0*boltzmann*temperature/r.value);
+    for(const auto&d:diodes_){
+        const auto&m=diode_models_.at(d.model);const double vt=m.emission_coefficient*boltzmann*m.temperature_k/electron_charge;
+        const double vd=operating.node_voltage[d.a]-operating.node_voltage[d.k];
+        const double current=m.saturation_current*(std::exp(std::clamp(vd/vt,-40.0,40.0))-1.0);
+        add_noise(d.name,d.a,d.k,2.0*electron_charge*std::abs(current));
+    }
+    for(const auto&m:mosfets_){
+        const auto lin=mos_linearize(mos_models_.at(m.model),operating.node_voltage[m.d],operating.node_voltage[m.g],operating.node_voltage[m.s]);
+        add_noise(m.name,m.d,m.s,4.0*boltzmann*temperature*(2.0/3.0)*std::max(0.0,lin.gm));
+    }
+    for(const auto&j:jfets_){
+        const auto lin=jfet_linearize(jfet_models_.at(j.model),operating.node_voltage[j.d],operating.node_voltage[j.g],operating.node_voltage[j.s]);
+        add_noise(j.name,j.d,j.s,4.0*boltzmann*temperature*(2.0/3.0)*std::max(0.0,lin.gm));
+    }
+    for(const auto&q:bjts_){
+        const auto currents=bjt_currents(bjt_models_.at(q.model),operating.node_voltage[q.c],operating.node_voltage[q.b],operating.node_voltage[q.e]);
+        add_noise(q.name+":collector",q.c,q.e,2.0*electron_charge*std::abs(currents[0]));
+        add_noise(q.name+":base",q.b,q.e,2.0*electron_charge*std::abs(currents[1]));
+    }
+    result.output_noise_v_per_sqrt_hz=std::sqrt(std::max(0.0,result.output_noise_density_v2_per_hz));
+    return result;
 }
 
 double Circuit::voltage(const OperatingPoint& point,std::string_view name) const {const auto id=find_node(name);if(point.node_voltage.size()!=node_count())throw std::invalid_argument("operating point node size mismatch");return point.node_voltage[id];}
@@ -1232,6 +1872,48 @@ std::string substitute_parameter_token(std::string token,
     return token;
 }
 
+std::string map_behavior_voltage_references(std::string text,
+                                            const std::unordered_map<std::string,std::string>& node_map,
+                                            std::string_view prefix) {
+    std::string out;out.reserve(text.size()+16U);
+    for(std::size_t i=0;i<text.size();){
+        if((text[i]=='V'||text[i]=='v')&&i+1U<text.size()&&text[i+1U]=='('){
+            const auto close=text.find(')',i+2U);
+            if(close==std::string::npos)throw std::invalid_argument("unclosed V() reference in behavioral source");
+            const auto args=split_function_arguments(std::string_view(text).substr(i+2U,close-i-2U));
+            if(args.empty()||args.size()>2U)throw std::invalid_argument("behavioral V() requires one or two node names");
+            out+="V(";
+            out+=map_subcircuit_node(args[0],node_map,prefix);
+            if(args.size()==2U){out+=',';out+=map_subcircuit_node(args[1],node_map,prefix);}
+            out+=')';i=close+1U;continue;
+        }
+        out.push_back(text[i++]);
+    }
+    return out;
+}
+
+std::string substitute_behavior_parameters(std::string text,
+                                           const std::unordered_map<std::string,double>& parameters) {
+    std::string out;out.reserve(text.size()+16U);
+    for(std::size_t i=0;i<text.size();){
+        if((text[i]=='V'||text[i]=='v')&&i+1U<text.size()&&text[i+1U]=='('){
+            const auto close=text.find(')',i+2U);
+            if(close==std::string::npos)throw std::invalid_argument("unclosed V() reference in behavioral source");
+            out.append(text,i,close-i+1U);i=close+1U;continue;
+        }
+        if(std::isalpha(static_cast<unsigned char>(text[i]))||text[i]=='_'){
+            const std::size_t begin=i++;
+            while(i<text.size()&&(std::isalnum(static_cast<unsigned char>(text[i]))||text[i]=='_'))++i;
+            const std::string token=text.substr(begin,i-begin);
+            const auto found=parameters.find(upper(token));
+            if(found!=parameters.end())out+=numeric_text(found->second);else out+=token;
+            continue;
+        }
+        out.push_back(text[i++]);
+    }
+    return out;
+}
+
 std::string flatten_device_line(const std::string& raw,
                                 const std::unordered_map<std::string,std::string>& node_map,
                                 const std::unordered_map<std::string,double>& parameters,
@@ -1248,7 +1930,17 @@ std::string flatten_device_line(const std::string& raw,
     auto map_nodes=[&](std::size_t count){
         for(std::size_t i=1U;i<=count&&i<t.size();++i)t[i]=map_subcircuit_node(t[i],node_map,prefix);
     };
-    if(kind=='R'||kind=='C'||kind=='L'||kind=='D'||kind=='V'||kind=='I') map_nodes(2U);
+    const std::string dependent_mode=(kind=='G'||kind=='E')&&t.size()>3U?upper(t[3]):std::string{};
+    const bool dependent_poly=dependent_mode.rfind("POLY(",0U)==0U;
+    const bool dependent_table=dependent_mode=="TABLE";
+    if(kind=='R'||kind=='C'||kind=='L'||kind=='D'||kind=='V'||kind=='I'||kind=='B') map_nodes(2U);
+    else if((kind=='G'||kind=='E')&&(dependent_poly||dependent_table)){
+        map_nodes(2U);
+        if(dependent_poly&&t.size()>=6U){
+            t[4]=map_subcircuit_node(t[4],node_map,prefix);
+            t[5]=map_subcircuit_node(t[5],node_map,prefix);
+        }
+    }
     else if(kind=='G'||kind=='E'||kind=='S') map_nodes(4U);
     else if(kind=='F'||kind=='H') map_nodes(2U);
     else if(kind=='M') map_nodes(4U);
@@ -1261,10 +1953,26 @@ std::string flatten_device_line(const std::string& raw,
 
     // Only substitute parameter-bearing value fields; model and node names stay literal.
     if((kind=='R'||kind=='C'||kind=='L')&&t.size()>=4U)t[3]=substitute_parameter_token(t[3],parameters);
+    else if((kind=='G'||kind=='E')&&dependent_poly){
+        for(std::size_t i=6U;i<t.size();++i)t[i]=substitute_parameter_token(t[i],parameters);
+    }
+    else if((kind=='G'||kind=='E')&&dependent_table){
+        std::string specification;for(std::size_t i=4U;i<t.size();++i){if(i>4U)specification+=' ';specification+=t[i];}
+        specification=map_behavior_voltage_references(std::move(specification),node_map,prefix);
+        specification=substitute_behavior_parameters(std::move(specification),parameters);
+        t.resize(5U);t[4]=std::move(specification);
+    }
     else if((kind=='G'||kind=='E')&&t.size()>=6U)t[5]=substitute_parameter_token(t[5],parameters);
     else if((kind=='F'||kind=='H')&&t.size()>=5U)t[4]=substitute_parameter_token(t[4],parameters);
     else if(kind=='K'&&t.size()>=4U)t[3]=substitute_parameter_token(t[3],parameters);
     else if(kind=='V'||kind=='I')for(std::size_t i=3U;i<t.size();++i)t[i]=substitute_parameter_token(t[i],parameters);
+    else if(kind=='B'&&t.size()>=4U){
+        std::string specification;
+        for(std::size_t i=3U;i<t.size();++i){if(i>3U)specification+=' ';specification+=t[i];}
+        specification=map_behavior_voltage_references(std::move(specification),node_map,prefix);
+        specification=substitute_behavior_parameters(std::move(specification),parameters);
+        t.resize(4U);t[3]=std::move(specification);
+    }
 
     std::ostringstream out;
     for(std::size_t i=0;i<t.size();++i){if(i)out<<' ';out<<t[i];}
@@ -1371,7 +2079,7 @@ Circuit Circuit::parse_spice(std::istream& input) {
     for(const auto& raw:raw_lines){auto t=tokens(trim(raw));if(!t.empty()&&(upper(t[0])==".INCLUDE"||(upper(t[0])==".LIB"&&t.size()>=3U)))throw std::invalid_argument("file directives require Circuit::parse_spice_file");}
     const auto functional_lines=preprocess_user_functions(raw_lines);
     const auto flattened_lines=flatten_subcircuits(functional_lines);
-    std::vector<std::string> devices,mutuals,models,param_lines;
+    std::vector<std::string> devices,mutuals,models,param_lines,ic_lines,nodeset_lines;
     for(std::string line:flattened_lines){
         line=trim(line);
         if(line.empty()||line[0]=='*')continue;
@@ -1379,6 +2087,8 @@ Circuit Circuit::parse_spice(std::istream& input) {
             const auto t=tokens(line);
             if(!t.empty()&&upper(t[0])==".MODEL")models.push_back(line);
             else if(!t.empty()&&upper(t[0])==".PARAM")param_lines.push_back(line);
+            else if(!t.empty()&&upper(t[0])==".IC")ic_lines.push_back(line);
+            else if(!t.empty()&&upper(t[0])==".NODESET")nodeset_lines.push_back(line);
             continue;
         }
         if(std::toupper(static_cast<unsigned char>(line[0]))=='K')mutuals.push_back(line);
@@ -1397,6 +2107,40 @@ Circuit Circuit::parse_spice(std::istream& input) {
         }
     }
     const auto value=[&](std::string_view token){return evaluate_spice_expression(token,parameters);};
+    const auto behavioral_evaluator=[&](std::string expression)->BehavioralEvaluator{
+        expression=trim(std::move(expression));
+        if(expression.empty())throw std::invalid_argument("empty behavioral-source expression");
+        struct VoltageReference { std::size_t positive{},negative{}; std::string parameter; };
+        std::vector<VoltageReference> references;
+        std::string transformed;transformed.reserve(expression.size()+16U);
+        for(std::size_t i=0;i<expression.size();){
+            if((expression[i]=='V'||expression[i]=='v')&&i+1U<expression.size()&&expression[i+1U]=='('){
+                const auto close=expression.find(')',i+2U);
+                if(close==std::string::npos)throw std::invalid_argument("unclosed V() reference in behavioral source");
+                const auto args=split_function_arguments(std::string_view(expression).substr(i+2U,close-i-2U));
+                if(args.empty()||args.size()>2U)throw std::invalid_argument("behavioral V() requires one or two node names");
+                VoltageReference reference;
+                reference.positive=circuit.node(args[0]);
+                reference.negative=args.size()==2U?circuit.node(args[1]):0U;
+                reference.parameter="__BV"+std::to_string(references.size());
+                transformed+=reference.parameter;references.push_back(std::move(reference));i=close+1U;continue;
+            }
+            transformed.push_back(expression[i++]);
+        }
+        const auto captured_parameters=parameters;
+        return [transformed=std::move(transformed),references=std::move(references),captured_parameters]
+            (std::span<const double> node_voltage,double time_s){
+                std::unordered_map<std::string,double> local=captured_parameters;
+                local["TIME"]=time_s;
+                for(const auto& reference:references){
+                    if(reference.positive>=node_voltage.size()||reference.negative>=node_voltage.size())
+                        throw std::out_of_range("behavioral-source node reference out of range");
+                    local[reference.parameter]=node_voltage[reference.positive]-node_voltage[reference.negative];
+                }
+                return evaluate_spice_expression(transformed,local);
+            };
+    };
+
     const auto source_waveform=[&](std::string specification)->std::pair<double,SourceWaveform>{
         for(char& c:specification) if(c=='('||c==')'||c==',') c=' ';
         const auto args=tokens(specification);
@@ -1471,9 +2215,68 @@ Circuit Circuit::parse_spice(std::istream& input) {
             }
             if(kind=='V')circuit.add_voltage_source(t[0],p,n,dc,ac_value,std::move(transient_waveform));
             else circuit.add_current_source(t[0],p,n,dc,ac_value,std::move(transient_waveform));
-        }else if(kind=='G'&&t.size()>=6U)circuit.add_vccs(t[0],circuit.node(t[1]),circuit.node(t[2]),circuit.node(t[3]),circuit.node(t[4]),value(t[5]));
-        else if(kind=='E'&&t.size()>=6U)circuit.add_vcvs(t[0],circuit.node(t[1]),circuit.node(t[2]),circuit.node(t[3]),circuit.node(t[4]),value(t[5]));
-        else if(kind=='F'&&t.size()>=5U)circuit.add_cccs(t[0],circuit.node(t[1]),circuit.node(t[2]),t[3],value(t[4]));
+        }else if(kind=='B'&&t.size()>=4U){
+            const auto p=circuit.node(t[1]),n=circuit.node(t[2]);
+            std::string specification;for(std::size_t i=3U;i<t.size();++i){if(i>3U)specification+=' ';specification+=t[i];}
+            const auto equal=specification.find('=');
+            if(equal==std::string::npos)throw std::invalid_argument("behavioral source requires V={expr} or I={expr}");
+            const std::string output=upper(trim(specification.substr(0U,equal)));
+            auto evaluator=behavioral_evaluator(specification.substr(equal+1U));
+            if(output=="V")circuit.add_behavioral_voltage_source(t[0],p,n,std::move(evaluator));
+            else if(output=="I")circuit.add_behavioral_current_source(t[0],p,n,std::move(evaluator));
+            else throw std::invalid_argument("behavioral source output must be V or I");
+        }else if((kind=='E'||kind=='G')&&t.size()>=4U){
+            const auto p=circuit.node(t[1]),n=circuit.node(t[2]);
+            const std::string mode=upper(t[3]);
+            if(mode.rfind("POLY(",0U)==0U){
+                const auto close=mode.find(')');
+                if(close==std::string::npos)throw std::invalid_argument("malformed dependent-source POLY() declaration");
+                const auto dimensions=static_cast<std::size_t>(std::stoul(mode.substr(5U,close-5U)));
+                if(dimensions!=1U)throw std::invalid_argument("dependent-source POLY baseline currently supports POLY(1)");
+                if(t.size()<7U)throw std::invalid_argument("POLY(1) source requires control pair and coefficients");
+                const auto cp=circuit.node(t[4]),cn=circuit.node(t[5]);
+                std::vector<double> coefficients;coefficients.reserve(t.size()-6U);
+                for(std::size_t i=6U;i<t.size();++i)coefficients.push_back(value(t[i]));
+                BehavioralEvaluator evaluator=[cp,cn,coefficients=std::move(coefficients)](std::span<const double> nodes,double){
+                    const double x=nodes[cp]-nodes[cn];double result=0.0;
+                    for(auto it=coefficients.rbegin();it!=coefficients.rend();++it)result=result*x+*it;
+                    return result;
+                };
+                if(kind=='E')circuit.add_behavioral_voltage_source(t[0],p,n,std::move(evaluator));
+                else circuit.add_behavioral_current_source(t[0],p,n,std::move(evaluator));
+            }else if(mode=="TABLE"){
+                std::string specification;for(std::size_t i=4U;i<t.size();++i){if(i>4U)specification+=' ';specification+=t[i];}
+                const auto equal=specification.find('=');
+                if(equal==std::string::npos)throw std::invalid_argument("TABLE source requires input-expression = (x,y) points");
+                auto table_input=behavioral_evaluator(trim(specification.substr(0U,equal)));
+                std::string point_text=specification.substr(equal+1U);
+                for(char& c:point_text)if(c=='('||c==')'||c==',')c=' ';
+                const auto point_tokens=tokens(point_text);
+                if(point_tokens.size()<4U||point_tokens.size()%2U!=0U)
+                    throw std::invalid_argument("TABLE source requires at least two (x,y) points");
+                std::vector<std::pair<double,double>> points;points.reserve(point_tokens.size()/2U);
+                for(std::size_t i=0;i<point_tokens.size();i+=2U)points.emplace_back(value(point_tokens[i]),value(point_tokens[i+1U]));
+                std::sort(points.begin(),points.end(),[](const auto& a,const auto& b){return a.first<b.first;});
+                for(std::size_t i=1;i<points.size();++i)if(!(points[i].first>points[i-1U].first))
+                    throw std::invalid_argument("TABLE abscissas must be strictly increasing");
+                BehavioralEvaluator evaluator=[table_input=std::move(table_input),points=std::move(points)](std::span<const double> nodes,double time){
+                    const double x=table_input(nodes,time);
+                    if(x<=points.front().first)return points.front().second;
+                    if(x>=points.back().first)return points.back().second;
+                    const auto upper_point=std::upper_bound(points.begin(),points.end(),x,
+                        [](double sample,const auto& point){return sample<point.first;});
+                    const auto lower_point=std::prev(upper_point);
+                    const double fraction=(x-lower_point->first)/(upper_point->first-lower_point->first);
+                    return lower_point->second+fraction*(upper_point->second-lower_point->second);
+                };
+                if(kind=='E')circuit.add_behavioral_voltage_source(t[0],p,n,std::move(evaluator));
+                else circuit.add_behavioral_current_source(t[0],p,n,std::move(evaluator));
+            }else{
+                if(t.size()<6U)throw std::invalid_argument("dependent source requires control nodes and gain");
+                if(kind=='G')circuit.add_vccs(t[0],p,n,circuit.node(t[3]),circuit.node(t[4]),value(t[5]));
+                else circuit.add_vcvs(t[0],p,n,circuit.node(t[3]),circuit.node(t[4]),value(t[5]));
+            }
+        }else if(kind=='F'&&t.size()>=5U)circuit.add_cccs(t[0],circuit.node(t[1]),circuit.node(t[2]),t[3],value(t[4]));
         else if(kind=='H'&&t.size()>=5U)circuit.add_ccvs(t[0],circuit.node(t[1]),circuit.node(t[2]),t[3],value(t[4]));
         else if(kind=='D'&&t.size()>=4U)circuit.add_diode(t[0],circuit.node(t[1]),circuit.node(t[2]),t[3]);
         else if(kind=='M'&&t.size()>=6U)circuit.add_mosfet(t[0],circuit.node(t[1]),circuit.node(t[2]),circuit.node(t[3]),circuit.node(t[4]),t[5]);
@@ -1482,6 +2285,39 @@ Circuit Circuit::parse_spice(std::istream& input) {
         else if(kind=='S'&&t.size()>=6U)circuit.add_switch(t[0],circuit.node(t[1]),circuit.node(t[2]),circuit.node(t[3]),circuit.node(t[4]),t[5]);
     }
     for(const auto& raw:mutuals){const auto t=tokens(raw);if(t.size()>=4U)circuit.add_mutual_inductance(t[0],t[1],t[2],value(t[3]));}
+    const auto apply_voltage_directive=[&](const std::string& raw,bool initial){
+        const auto first_space=raw.find_first_of(" \t");
+        if(first_space==std::string::npos)throw std::invalid_argument("empty SPICE voltage directive");
+        const std::string body=raw.substr(first_space+1U);
+        std::size_t position=0U;bool any=false;
+        while(position<body.size()){
+            while(position<body.size()&&std::isspace(static_cast<unsigned char>(body[position])))++position;
+            if(position>=body.size())break;
+            if(std::toupper(static_cast<unsigned char>(body[position]))!='V' || position+1U>=body.size() || body[position+1U]!='(')
+                throw std::invalid_argument("SPICE .IC/.NODESET currently expects V(node)=value assignments");
+            const auto close=body.find(')',position+2U);
+            if(close==std::string::npos)throw std::invalid_argument("malformed SPICE voltage directive node");
+            const std::string node_name=trim(body.substr(position+2U,close-position-2U));
+            if(node_name.empty()||node_name.find(',')!=std::string::npos)
+                throw std::invalid_argument("SPICE .IC/.NODESET differential assignments are not supported yet");
+            std::size_t equal=close+1U;while(equal<body.size()&&std::isspace(static_cast<unsigned char>(body[equal])))++equal;
+            if(equal>=body.size()||body[equal]!='=')throw std::invalid_argument("SPICE voltage directive requires =");
+            std::size_t begin=equal+1U;while(begin<body.size()&&std::isspace(static_cast<unsigned char>(body[begin])))++begin;
+            std::size_t end=begin;int depth=0;
+            for(;end<body.size();++end){
+                const char c=body[end];if(c=='{'||c=='(')++depth;else if(c=='}'||c==')')--depth;
+                if(depth==0&&std::isspace(static_cast<unsigned char>(c)))break;
+            }
+            if(begin==end)throw std::invalid_argument("SPICE voltage directive missing value");
+            const double voltage=value(body.substr(begin,end-begin));
+            const auto node_id=circuit.node(node_name);
+            if(initial)circuit.set_initial_voltage(node_id,voltage);else circuit.set_nodeset_voltage(node_id,voltage);
+            any=true;position=end;
+        }
+        if(!any)throw std::invalid_argument("empty SPICE voltage directive");
+    };
+    for(const auto& raw:ic_lines)apply_voltage_directive(raw,true);
+    for(const auto& raw:nodeset_lines)apply_voltage_directive(raw,false);
     return circuit;
 }
 

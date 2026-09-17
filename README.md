@@ -6,9 +6,9 @@ The long-term goal is a readable solver collection covering CFD, FEM multiphysic
 
 The project is inspired by the capabilities and engineering lessons of OpenFOAM, FluidX3D, Elmer FEM, openEMS FDTD and Optiland. It is **not** a source-code merge or mechanical translation. The source projects have different licenses, and FluidX3D has additional restrictions, so performance techniques are independently implemented from publications and public descriptions.
 
-## v0.8.0 status - broad solver integration plus RF/SPICE
+## v0.8.2 status - adaptive Gear/BDF2 and orientation-independent wire RF
 
-The machine-checkable integration program now reports **429/576 capabilities (74.5%)** complete. Phase 10 RF/antenna/microwave is **30/62 (48.4%)** and Phase 11 SPICE/circuit/compact-model simulation is **61/96 (63.5%)**. Earlier CFD/LBM/FEM/FDTD/optics/electrochemistry/multiphysics families remain independently tracked and validated.
+The machine-checkable integration program now reports **439/580 capabilities (75.7%)** complete. Phase 10 RF/antenna/microwave is **32/64 (50.0%)** and Phase 11 SPICE/circuit/compact-model simulation is **69/98 (70.4%)**. The full CPU validation matrix passes **47/47 CTest targets**. Earlier CFD/LBM/FEM/FDTD/optics/electrochemistry/multiphysics families remain independently tracked and validated.
 
 This checkpoint adds or consolidates:
 
@@ -16,6 +16,9 @@ This checkpoint adds or consolidates:
 - thin-wire antenna references, phased-array utilities, PEEC filament extraction with skin-effect resistance and SPICE coupled-inductor export;
 - modified-nodal-analysis DC/AC/transient simulation with R/C/L, controlled sources, switches, mutual inductance, diode, MOS Level-1, BJT and JFET baselines;
 - backward-Euler, trapezoidal and BDF2 transient integration, homotopy/PN limiting, sweeps, noise, sensitivity, Monte Carlo and Fourier/THD analysis;
+- adaptive backward-Euler plus unequal-step BDF2/Gear step-doubling with LTE control, fitted small-signal pole/zero extraction and periodic steady-state shooting-by-settling;
+- coupled parallel-wire plus arbitrary-orientation disjoint straight-wire MoM with delta-gap feeds and lumped series loads while retaining the original center-fed and parallel-wire APIs;
+- ideal-transformer convenience stamping plus validated lossless/lossy TEM, microstrip, stripline, CPW and rectangular-waveguide AC circuit elements;
 - `.PARAM`, expressions, hierarchical `.SUBCKT`, `.FUNC`, `.INCLUDE`, `.LIB`, scoped local models, direct circuit S-parameter extraction and OSDI/OpenVAF dynamic-library discovery seam;
 - the large portable solver continuation across runtime, FVM, FEM, FDTD, optics, chemistry/electrochemistry, multiphysics and interoperability described by `docs/INTEGRATION_TRACKER.md`.
 

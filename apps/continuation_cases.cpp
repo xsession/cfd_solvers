@@ -1,8 +1,10 @@
 #include "continuation_cases.hpp"
 #include <numbers>
+#include "cfd/circuit/analysis.hpp"
 #include "cfd/circuit/spice.hpp"
 #include "cfd/rf/network.hpp"
 #include "cfd/rf/antenna.hpp"
+#include "cfd/rf/thin_wire_mom.hpp"
 #include "cfd/chemistry/aqueous_equilibrium.hpp"
 #include "cfd/chemistry/implicit_reactor.hpp"
 #include "cfd/core/parallel.hpp"
@@ -17,6 +19,7 @@
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 namespace {
@@ -144,6 +147,66 @@ int spice_diode(){
     std::cout<<"case=spice-diode converged="<<op.converged<<" iterations="<<op.iterations<<" diode_voltage="<<v<<"\n";
     return op.converged&&v>0.45&&v<0.9?0:1;
 }
+int spice_adaptive(){
+    using namespace cfd::circuit;
+    Circuit circuit;const auto input=circuit.node("in"),output=circuit.node("out");
+    circuit.add_voltage_source("VSTEP",input,0,1.0);circuit.add_resistor("R",input,output,1000.0);
+    circuit.add_capacitor("C",output,0,1.0e-6);
+    AdaptiveTransientConfig control;control.initial_step=1.0e-3;control.maximum_step=1.0e-3;
+    control.minimum_step=1.0e-8;control.relative_tolerance=2.0e-5;control.absolute_tolerance=1.0e-8;
+    const auto result=circuit.transient_adaptive(5.0e-3,control);
+    const double exact=1.0-std::exp(-5.0),error=std::abs(result.points.back().node_voltage[output]-exact);
+    control.method=TransientMethod::bdf2;
+    const auto gear=circuit.transient_adaptive(5.0e-3,control);
+    const double gear_error=std::abs(gear.points.back().node_voltage[output]-exact);
+    std::cout<<"case=spice-adaptive accepted="<<result.accepted_steps<<" rejected="<<result.rejected_steps
+        <<" dt_min="<<result.minimum_accepted_step<<" dt_max="<<result.maximum_accepted_step
+        <<" final_error="<<error<<" bdf2_accepted="<<gear.accepted_steps
+        <<" bdf2_rejected="<<gear.rejected_steps<<" bdf2_error="<<gear_error<<'\n';
+    return result.rejected_steps>0U&&result.minimum_accepted_step<result.maximum_accepted_step
+        &&error<3.0e-4&&gear.accepted_steps>1U&&gear_error<3.0e-4?0:1;
+}
+int spice_pss_pz(){
+    using namespace cfd::circuit;
+    constexpr double resistance=1000.0,capacitance=1.0e-6,frequency=100.0;
+    Circuit periodic;const auto input=periodic.node("in"),output=periodic.node("out");
+    periodic.add_voltage_source("VS",input,0,0.0,{1.0,0.0},SineWaveform{0.0,1.0,frequency,0.0,0.0,0.0});
+    periodic.add_resistor("R",input,output,resistance);periodic.add_capacitor("C",output,0,capacitance);
+    PeriodicSteadyStateConfig pss;pss.period_s=1.0/frequency;pss.samples_per_period=128U;pss.max_periods=20U;
+    pss.relative_tolerance=2.0e-4;pss.absolute_tolerance=1.0e-7;
+    const auto steady=periodic_steady_state(periodic,pss);const auto fundamental=fourier_measurement(steady.period,output,frequency);
+    PoleZeroConfig pz;pz.start_hz=1.0;pz.stop_hz=1.0e5;pz.samples=40U;pz.denominator_order=1U;pz.numerator_order=0U;
+    const auto roots=pole_zero_analysis(periodic,"out",pz);
+    const double pole=roots.poles_rad_per_s.empty()?0.0:roots.poles_rad_per_s.front().real();
+    std::cout<<"case=spice-pss-pz converged="<<steady.converged<<" periods="<<steady.periods
+        <<" pss_residual="<<steady.normalized_residual<<" fundamental="<<fundamental.magnitude
+        <<" pole_rad_per_s="<<pole<<" fit_error="<<roots.relative_rms_fit_error<<'\n';
+    return steady.converged&&roots.poles_rad_per_s.size()==1U&&std::abs((pole+1000.0)/1000.0)<2.0e-4?0:1;
+}
+int rf_multiwire(){
+    using namespace cfd::rf;
+    constexpr double frequency=3.0e8;const double wavelength=299792458.0/frequency;
+    ParallelWireMomConfig config;config.frequency_hz=frequency;config.quadrature_order=8U;
+    config.wires={{-0.05*wavelength,0.0,0.0,0.47*wavelength,0.001*wavelength,21U},
+                  { 0.05*wavelength,0.0,0.0,0.47*wavelength,0.001*wavelength,21U}};
+    config.feeds={{0U,std::numeric_limits<std::size_t>::max(),{1.0,0.0}}};
+    const auto open=solve_parallel_thin_wires(config);double driven=0.0,induced=0.0;
+    for(std::size_t i=0;i<21U;++i)driven=std::max(driven,std::abs(open.current_a[i]));
+    for(std::size_t i=21U;i<42U;++i)induced=std::max(induced,std::abs(open.current_a[i]));
+    config.loads={{0U,10U,{1.0e6,0.0}}};const auto loaded=solve_parallel_thin_wires(config);
+    const double inv=1.0/std::sqrt(2.0);OrientedWireMomConfig rotated;rotated.frequency_hz=frequency;rotated.quadrature_order=8U;
+    for(double sign:{-1.0,1.0}){const WirePoint3 center{0.0,sign*0.05*wavelength,0.0};
+        rotated.wires.push_back({{center.x-0.47*wavelength*0.5*inv,center.y,center.z-0.47*wavelength*0.5*inv},
+                                 {center.x+0.47*wavelength*0.5*inv,center.y,center.z+0.47*wavelength*0.5*inv},
+                                 0.001*wavelength,21U});}
+    rotated.feeds={{0U,std::numeric_limits<std::size_t>::max(),{1.0,0.0}}};const auto arbitrary=solve_oriented_thin_wires(rotated);
+    double rotation_error=0.0;for(std::size_t i=0;i<open.current_a.size();++i)rotation_error=std::max(rotation_error,std::abs(open.current_a[i]-arbitrary.current_a[i]));
+    const double relative_rotation=rotation_error/std::max(driven,1.0e-30);
+    std::cout<<"case=rf-multiwire coupling_ratio="<<induced/std::max(driven,1.0e-30)
+        <<" unloaded_feed_current="<<open.feed_current_a[0]<<" loaded_feed_current="<<loaded.feed_current_a[0]
+        <<" rotation_relative_error="<<relative_rotation<<'\n';
+    return induced>driven*1.0e-6&&loaded.feed_current_a[0]<open.feed_current_a[0]&&relative_rotation<2.0e-10?0:1;
+}
 
 }
 
@@ -159,5 +222,8 @@ int run_continuation_case(std::string_view name){
     if(name=="rf-microstrip")return rf_microstrip();
     if(name=="spice-rc")return spice_rc();
     if(name=="spice-diode")return spice_diode();
+    if(name=="spice-adaptive")return spice_adaptive();
+    if(name=="spice-pss-pz")return spice_pss_pz();
+    if(name=="rf-multiwire")return rf_multiwire();
     return -1;
 }

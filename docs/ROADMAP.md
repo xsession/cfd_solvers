@@ -51,11 +51,11 @@ The tracker, upstream pin manifest, benchmark history and reproducible release t
 
 ## Phase 10 - RF, antennas and microwave networks
 
-Started in v0.8.0. Validated baselines include generic N-port network math, Touchstone SnP, de-embedding, mixed-mode transforms, stability/gain metrics, common transmission-line/waveguide models, thin-wire dipole/array utilities, a center-fed thin-wire MoM reference, PEEC conductor extraction and circuit-port S-parameter bridges. Remaining work includes higher-fidelity MoM/NEC geometry and ground models, broadband vector fitting/model-order reduction, PEEC capacitive/proximity effects, discontinuity/modal matching, full 3-D RF FEM wave ports/eigenmodes and hardware-backed distributed/GPU RF.
+Started in v0.8.0. Validated baselines include generic N-port network math, Touchstone SnP, de-embedding, mixed-mode transforms, stability/gain metrics, common transmission-line/waveguide models, thin-wire dipole/array utilities, center-fed, coupled parallel-wire and arbitrary-orientation disjoint-wire MoM references, PEEC conductor extraction and circuit-port S-parameter bridges. Remaining work includes higher-fidelity MoM/NEC arbitrary connected geometry, junction basis functions, ground/image models and canonical convergence validation, broadband vector fitting/model-order reduction, PEEC capacitive/proximity effects, discontinuity/modal matching, full 3-D RF FEM wave ports/eigenmodes and hardware-backed distributed/GPU RF.
 
 ## Phase 11 - SPICE-class circuits and compact models
 
-v0.8.0 provides a clean-room MNA baseline with passive elements, controlled sources, nonlinear diode/MOS/BJT/JFET devices, switches, mutual inductance, RF N-port elements, DC/AC/transient analysis, sweeps/noise/sensitivity/Monte Carlo/Fourier, hierarchical parameterized netlists and an OSDI/OpenVAF loader seam. Next priorities are sparse MNA migration, adaptive LTE/time-step control, pole-zero/PSS/harmonic-balance, richer source/device models, full OSDI descriptor evaluation/DAE state handling, RAW/data interoperability and broader vendor-model compatibility.
+v0.8.0 provides a clean-room MNA baseline with passive elements, controlled sources, nonlinear diode/MOS/BJT/JFET devices, switches, mutual inductance, RF N-port elements, DC/AC/transient analysis, sweeps/noise/sensitivity/Monte Carlo/Fourier, hierarchical parameterized netlists and an OSDI/OpenVAF loader seam. v0.8.1 adds adaptive step-doubling LTE control, a fitted small-signal pole/zero baseline and periodic steady-state shooting-by-settling. v0.8.2 adds unequal-step adaptive BDF2/Gear control, an ideal-transformer convenience model, and validated lossy sampled transmission-line behavior. Next priorities are sparse MNA migration, BDF3+ order selection, direct generalized-eigenvalue pole-zero analysis, harmonic balance, richer source/device models, full OSDI descriptor evaluation/DAE state handling, RAW/data interoperability and broader vendor-model compatibility.
 
 ## Release checkpoints
 
@@ -66,3 +66,6 @@ v0.8.0 provides a clean-room MNA baseline with passive elements, controlled sour
 - v0.6.0/v0.6.1: FEM/FDTD/optics breadth, then nonlinear/adaptive FEM, Darcy, magnetostatics and modal analysis.
 - v0.7.0: dispersive/port/output FDTD expansion plus first validated coupled-multiphysics infrastructure.
 - v0.7.1: CPML, TFSF and field-coupled lumped R/L/C FDTD baselines.
+- v0.8.0: RF/microwave networks, thin-wire/PEEC references and the first SPICE-class MNA engine.
+- v0.8.1: adaptive circuit LTE control, pole-zero/PSS baselines and coupled parallel-wire MoM.
+- v0.8.2: unequal-step adaptive BDF2/Gear plus arbitrary-orientation disjoint-wire MoM.

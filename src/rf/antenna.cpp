@@ -96,6 +96,51 @@ std::vector<PatternSample> SinusoidalDipoleSolver::normalized_pattern(std::size_
     return out;
 }
 
+AntennaOptimizationResult optimize_antenna(std::span<const AntennaOptimizationVariable> variables,
+                                                  AntennaObjective objective,
+                                                  const AntennaOptimizationConfig& config) {
+    if(variables.empty()||!objective||config.max_iterations==0U
+       ||!(config.parameter_tolerance>0.0)||!std::isfinite(config.parameter_tolerance)
+       ||!(config.step_reduction>0.0&&config.step_reduction<1.0)||!std::isfinite(config.step_reduction))
+        throw std::invalid_argument("invalid antenna optimization controls");
+    AntennaOptimizationResult result;result.parameters.resize(variables.size());
+    std::vector<double> step(variables.size());
+    for(std::size_t i=0;i<variables.size();++i){
+        const auto& v=variables[i];
+        if(!std::isfinite(v.initial_value)||!std::isfinite(v.minimum)||!std::isfinite(v.maximum)
+           ||!std::isfinite(v.initial_step)||v.maximum<v.minimum||!(v.initial_step>0.0))
+            throw std::invalid_argument("invalid antenna optimization variable");
+        result.parameters[i]=std::clamp(v.initial_value,v.minimum,v.maximum);
+        step[i]=std::min(v.initial_step,std::max(v.maximum-v.minimum,config.parameter_tolerance));
+    }
+    const auto evaluate=[&](std::span<const double> values){
+        const double score=objective(values);++result.evaluations;
+        if(!std::isfinite(score))throw std::runtime_error("antenna objective returned non-finite value");
+        return score;
+    };
+    result.objective=evaluate(result.parameters);
+    for(std::size_t iteration=0;iteration<config.max_iterations;++iteration){
+        result.iterations=iteration+1U;bool improved=false;
+        for(std::size_t variable=0;variable<variables.size();++variable){
+            const double original=result.parameters[variable];
+            double best_value=original,best_score=result.objective;
+            for(double direction:{-1.0,1.0}){
+                const double candidate=std::clamp(original+direction*step[variable],variables[variable].minimum,variables[variable].maximum);
+                if(candidate==original)continue;
+                result.parameters[variable]=candidate;
+                const double score=evaluate(result.parameters);
+                if(score<best_score){best_score=score;best_value=candidate;}
+            }
+            result.parameters[variable]=best_value;
+            if(best_score<result.objective){result.objective=best_score;improved=true;}
+        }
+        if(!improved){for(auto& value:step)value*=config.step_reduction;}
+        const double largest=*std::max_element(step.begin(),step.end());
+        if(largest<=config.parameter_tolerance){result.converged=true;break;}
+    }
+    return result;
+}
+
 std::complex<double> array_factor(std::span<const ArrayElement> elements,double frequency,double theta,double phi) {
     if(elements.empty()||!(frequency>0.0)||!std::isfinite(frequency)||!std::isfinite(theta)||!std::isfinite(phi))
         throw std::invalid_argument("invalid phased-array controls");
@@ -127,4 +172,15 @@ PolarizationMetrics polarization_metrics(std::complex<double> et,std::complex<do
     return {axial,tilt,ellipticity,s3<0.0};
 }
 
+
+AntennaMatchMetrics antenna_match_metrics(std::complex<double> feed_impedance,double reference_impedance){
+    if(!(reference_impedance>0.0)||!std::isfinite(reference_impedance)
+       ||!std::isfinite(feed_impedance.real())||!std::isfinite(feed_impedance.imag()))
+        throw std::invalid_argument("invalid antenna match impedance");
+    const std::complex<double> reflection=(feed_impedance-reference_impedance)/(feed_impedance+reference_impedance);
+    const double magnitude=std::abs(reflection);
+    const double rl=magnitude==0.0?std::numeric_limits<double>::infinity():-20.0*std::log10(magnitude);
+    const double standing=magnitude>=1.0?std::numeric_limits<double>::infinity():(1.0+magnitude)/(1.0-magnitude);
+    return {feed_impedance,reflection,rl,standing};
+}
 } // namespace cfd::rf

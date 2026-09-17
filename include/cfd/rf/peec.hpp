@@ -25,11 +25,21 @@ struct PeecMatrices {
     std::vector<double> partial_inductance_h; // row-major Lp matrix
 };
 
+struct PeecCapacitanceMatrices {
+    std::size_t size{};
+    // Row-major coefficient-of-potential matrix P where V = P q.
+    std::vector<double> coefficient_of_potential_v_per_c;
+    // Row-major Maxwell capacitance matrix C = P^-1.
+    std::vector<double> capacitance_f;
+};
+
 class PeecFilamentSystem {
 public:
     void add_segment(FilamentSegment segment);
     [[nodiscard]] const std::vector<FilamentSegment>& segments() const noexcept { return segments_; }
     [[nodiscard]] PeecMatrices extract(std::size_t quadrature_order = 6U) const;
+    [[nodiscard]] PeecCapacitanceMatrices extract_capacitance(double relative_permittivity = 1.0,
+                                                               std::size_t quadrature_order = 6U) const;
     [[nodiscard]] std::vector<std::complex<double>> impedance_matrix(double frequency_hz,
                                                                      std::size_t quadrature_order = 6U) const;
     [[nodiscard]] std::vector<std::complex<double>> impedance_matrix_skin_effect(double frequency_hz,

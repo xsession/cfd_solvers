@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(cfd_solvers VERSION 0.8.0 LANGUAGES CXX)
+project(cfd_solvers VERSION 0.8.2 LANGUAGES CXX)
 
 option(CFD_ENABLE_OPENMP "Enable multicore CPU execution through OpenMP" ON)
 option(CFD_ENABLE_SYCL "Enable AdaptiveCpp/SYCL accelerator backend" OFF)
@@ -20,6 +20,7 @@ add_library(cfd_solvers
     src/rf/thin_wire_mom.cpp
     src/circuit/spice.cpp
     src/circuit/analysis.cpp
+    src/circuit/raw.cpp
     src/circuit/osdi_loader.cpp
     src/core/task_graph.cpp
     src/physics/material.cpp
@@ -234,6 +235,9 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     add_executable(cfd-spice-io-tests tests/test_spice_io.cpp)
     target_link_libraries(cfd-spice-io-tests PRIVATE cfd::solvers)
     add_test(NAME cfd-spice-io-tests COMMAND cfd-spice-io-tests)
+    add_executable(cfd-next-analysis-tests tests/test_next_analysis.cpp)
+    target_link_libraries(cfd-next-analysis-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-next-analysis-tests COMMAND cfd-next-analysis-tests)
     add_library(cfd-osdi-fixture SHARED tests/osdi_fixture.cpp)
     add_executable(cfd-osdi-tests tests/test_osdi.cpp)
     target_link_libraries(cfd-osdi-tests PRIVATE cfd::solvers)
@@ -258,7 +262,7 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     add_test(NAME cfd-bench-json-smoke COMMAND cfd-bench --lattice d3q19 --nx 8 --ny 8 --nz 8 --warmup 1 --steps 2 --threads 1 --json)
     add_test(NAME cfd-halo-plan-smoke COMMAND cfd-halo-plan --lattice d3q27 --nx 8 --ny 8 --nz 8)
     add_test(NAME cfd-validation-catalog-smoke COMMAND cfd-validate)
-    foreach(case_name lbm-trt fvm-workspace fdtd-pml1d chemistry-reactor chemistry-equilibrium optics-gaussian multiphysics-thermoelastic rf-dipole rf-microstrip spice-rc spice-diode)
+    foreach(case_name lbm-trt fvm-workspace fdtd-pml1d chemistry-reactor chemistry-equilibrium optics-gaussian multiphysics-thermoelastic rf-dipole rf-microstrip rf-multiwire spice-rc spice-diode spice-adaptive spice-pss-pz)
         add_test(NAME cfd-${case_name}-smoke COMMAND cfd-solve ${case_name})
     endforeach()
     add_test(NAME cfd-fvm-operators-smoke COMMAND cfd-solve fvm-operators3d)
