@@ -14,12 +14,13 @@ constexpr double mu0=1.25663706212e-6;
 
 Maxwell3D::Maxwell3D(Maxwell3DConfig c)
  :config_(c),epsilon_(epsilon0*c.epsilon_r),mu_(mu0*c.mu_r),
+  epsilon_x_(epsilon0*(c.epsilon_rx>0?c.epsilon_rx:c.epsilon_r)),epsilon_y_(epsilon0*(c.epsilon_ry>0?c.epsilon_ry:c.epsilon_r)),epsilon_z_(epsilon0*(c.epsilon_rz>0?c.epsilon_rz:c.epsilon_r)),
   ex_(c.nx*c.ny*c.nz,0.0),ey_(ex_.size(),0.0),ez_(ex_.size(),0.0),
   hx_(ex_.size(),0.0),hy_(ex_.size(),0.0),hz_(ex_.size(),0.0){
     if(c.nx<4U||c.ny<4U||c.nz<4U||!(c.dx>0.0)||!(c.dy>0.0)||!(c.dz>0.0)||
        !(c.courant>0.0&&c.courant<1.0)||!(c.epsilon_r>0.0)||!(c.mu_r>0.0))
         throw std::invalid_argument("invalid Maxwell3D configuration");
-    const double wave=1.0/std::sqrt(epsilon_*mu_);
+    const double wave=1.0/std::sqrt(std::min({epsilon_x_,epsilon_y_,epsilon_z_})*mu_);
     dt_=c.courant/(wave*std::sqrt(1.0/(c.dx*c.dx)+1.0/(c.dy*c.dy)+1.0/(c.dz*c.dz)));
 }
 std::size_t Maxwell3D::idx(std::size_t i,std::size_t j,std::size_t k) const noexcept{
@@ -43,7 +44,7 @@ void Maxwell3D::add_soft_ez_source(std::size_t i,std::size_t j,std::size_t k,dou
     ez_[idx(i,j,k)]+=value;
 }
 void Maxwell3D::step(std::size_t count){
-    const double hdt=dt_/mu_,edt=dt_/epsilon_;
+    const double hdt=dt_/mu_,edtx=dt_/epsilon_x_,edty=dt_/epsilon_y_,edtz=dt_/epsilon_z_;
     const std::size_t nx=config_.nx,ny=config_.ny,nz=config_.nz;
     for(std::size_t s=0;s<count;++s){
         cfd::core::parallel_for(nx*(ny-1U)*(nz-1U),[&](std::size_t q){
@@ -60,9 +61,9 @@ void Maxwell3D::step(std::size_t count){
         });
         cfd::core::parallel_for((nx-2U)*(ny-2U)*(nz-2U),[&](std::size_t q){
             const std::size_t i=1U+q%(nx-2U),j=1U+(q/(nx-2U))%(ny-2U),k=1U+q/((nx-2U)*(ny-2U)); const auto n=idx(i,j,k);
-            ex_[n]+=edt*((hz_[n]-hz_[idx(i,j-1U,k)])/config_.dy-(hy_[n]-hy_[idx(i,j,k-1U)])/config_.dz);
-            ey_[n]+=edt*((hx_[n]-hx_[idx(i,j,k-1U)])/config_.dz-(hz_[n]-hz_[idx(i-1U,j,k)])/config_.dx);
-            ez_[n]+=edt*((hy_[n]-hy_[idx(i-1U,j,k)])/config_.dx-(hx_[n]-hx_[idx(i,j-1U,k)])/config_.dy);
+            ex_[n]+=edtx*((hz_[n]-hz_[idx(i,j-1U,k)])/config_.dy-(hy_[n]-hy_[idx(i,j,k-1U)])/config_.dz);
+            ey_[n]+=edty*((hx_[n]-hx_[idx(i,j,k-1U)])/config_.dz-(hz_[n]-hz_[idx(i-1U,j,k)])/config_.dx);
+            ez_[n]+=edtz*((hy_[n]-hy_[idx(i-1U,j,k)])/config_.dx-(hx_[n]-hx_[idx(i,j-1U,k)])/config_.dy);
         });
         enforce_boundary();
     }
@@ -79,7 +80,7 @@ void Maxwell3D::enforce_boundary(){
 }
 double Maxwell3D::energy() const{
     return cfd::core::parallel_sum(cell_count(),[&](std::size_t n){
-        return 0.5*(epsilon_*(ex_[n]*ex_[n]+ey_[n]*ey_[n]+ez_[n]*ez_[n])+mu_*(hx_[n]*hx_[n]+hy_[n]*hy_[n]+hz_[n]*hz_[n]))*config_.dx*config_.dy*config_.dz;
+        return 0.5*(epsilon_x_*ex_[n]*ex_[n]+epsilon_y_*ey_[n]*ey_[n]+epsilon_z_*ez_[n]*ez_[n]+mu_*(hx_[n]*hx_[n]+hy_[n]*hy_[n]+hz_[n]*hz_[n]))*config_.dx*config_.dy*config_.dz;
     });
 }
 double Maxwell3D::max_field() const{

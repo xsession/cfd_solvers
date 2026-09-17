@@ -57,7 +57,7 @@ Target families:
 - near-to-far field transforms
 - MPI/SYCL domain decomposition
 
-The 1-D Yee/CFL baseline now includes heterogeneous dielectric/conductive coefficients, hard/soft sources, first-order Mur absorption and reusable time/DFT monitors. v0.6.0 also adds a 3-D Cartesian Maxwell PEC baseline. CPML/PML, dispersive/anisotropic materials, ports, NF2FF/SAR and distributed SYCL FDTD remain planned.
+The 1-D Yee/CFL baseline includes heterogeneous dielectric/conductive coefficients, hard/soft sources, first-order Mur absorption and reusable time/DFT monitors. v0.6.0 adds a 3-D Cartesian Maxwell PEC baseline. v0.7.0 independently adds Debye/Drude/Lorentz ADE media, a PMC enclosure baseline, TEM-like forward/backward wave ports with S-parameter extraction, and legacy VTK E/H output. v0.7.1 adds a 1-D CPML baseline, +x TFSF injection and field-coupled parallel lumped R/L/C cells. Anisotropic media, general 3-D waveguide ports/TFSF, NF2FF/SAR and distributed SYCL FDTD remain planned.
 
 ## Optiland -> optics
 
@@ -87,3 +87,16 @@ Phase 3A provides the CPU/MPI correctness reference. Phase 3B implements selecti
 ## Phase 4C clean-room pressure coupling
 
 The Phase-4C collocated solver was independently implemented in C++20. OpenFOAM 14's public incompressible module was consulted only for architectural concepts: momentum equation -> pressure-free predictor/inverse diagonal -> pressure/non-orthogonal correction -> face flux -> reconstructed velocity. No GPL implementation text or mechanically translated source is included.
+
+
+## Coupled multiphysics -> shared field/transfer architecture
+
+The coupling layer is framework code rather than a port from one upstream. v0.7.0 introduces explicit field metadata (units/location/topology/producer), conservative remapping/flux transfer and an Aitken-accelerated partitioned fixed-point driver. The first physical chain reuses the native FEM DC-conduction and transient-heat modules to compute `J -> |J|^2/sigma -> q'` without hidden shared globals. General FEM/FVM projections and monolithic block coupling remain planned.
+
+## RF/antenna references -> Phase 10
+
+Palace (Apache-2.0), OpenSEMBA FDTD (MIT) and OpenNEC (MIT) are capability/validation references for full-wave FEM, EMC/FDTD and thin-wire MoM respectively. The cfd_solvers RF code is independently implemented and currently covers network/N-port math, common analytic transmission structures, antenna references, PEEC extraction and a readable thin-wire MoM baseline. GPL or unclear-license RF projects are behavioral/scientific references only.
+
+## SPICE references -> Phase 11
+
+ngspice is the primary permissive behavioral reference for MNA analyses and compact-model workflows. Xyce and QucsatorRF are clean-room feature/architecture references. OpenVAF/OSDI defines the planned dynamic compact-model boundary. v0.8.0 implements an independent MNA engine and parser plus OSDI library discovery; no ngspice/Xyce/QucsatorRF/OpenVAF simulator source is copied or mechanically translated.

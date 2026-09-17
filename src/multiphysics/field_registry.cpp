@@ -1,8 +1,6 @@
 #include "cfd/multiphysics/field_registry.hpp"
 
 #include <algorithm>
-#include <cmath>
-#include <limits>
 #include <stdexcept>
 
 namespace cfd::multiphysics {
@@ -11,10 +9,7 @@ void FieldRegistry::add(FieldMetadata metadata, double initial_value) {
     if (metadata.name.empty() || metadata.components == 0U || metadata.entities == 0U) {
         throw std::invalid_argument("invalid field metadata");
     }
-    if (!(metadata.units.scale_to_si > 0.0) || !std::isfinite(metadata.units.scale_to_si)
-        || !std::isfinite(initial_value)) throw std::invalid_argument("invalid field scale/value");
-    if (metadata.entities > std::numeric_limits<std::size_t>::max()/metadata.components)
-        throw std::invalid_argument("field size overflows");
+    if (!(metadata.units.scale_to_si > 0.0)) throw std::invalid_argument("field unit scale must be positive");
     const std::string key = metadata.name;
     if (fields_.contains(key)) throw std::invalid_argument("field already exists: " + key);
     Record record;

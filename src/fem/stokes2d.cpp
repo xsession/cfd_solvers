@@ -1,0 +1,14 @@
+#include "cfd/solvers/fem/stokes2d.hpp"
+#include "cfd/core/csr_matrix.hpp"
+#include <array>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+namespace cfd::fem {namespace {
+struct G{double area;std::array<std::array<double,2>,3>grad;Node2 c;};G geom(const Mesh2D&m,const Tri3&t){auto a=m.nodes[t.node[0]],b=m.nodes[t.node[1]],c=m.nodes[t.node[2]];double det=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x),area=.5*std::abs(det);if(!(area>0))throw std::runtime_error("degenerate Stokes triangle");double q=1/det;return {area,{{{(b.y-c.y)*q,(c.x-b.x)*q},{(c.y-a.y)*q,(a.x-c.x)*q},{(a.y-b.y)*q,(b.x-a.x)*q}}},{(a.x+b.x+c.x)/3,(a.y+b.y+c.y)/3}};}
+}
+PenaltyStokes2D::PenaltyStokes2D(Mesh2D m,PenaltyStokes2DConfig c):mesh_(std::move(m)),config_(c),velocity_(mesh_.node_count()){mesh_.validate();if(!(c.viscosity>0)||!(c.divergence_penalty>=0))throw std::invalid_argument("invalid penalty Stokes controls");}
+void PenaltyStokes2D::set_dirichlet(std::function<Displacement2(Node2)> v){boundary_=std::move(v);}
+void PenaltyStokes2D::solve(std::function<Displacement2(Node2)> force){if(!boundary_)throw std::runtime_error("PenaltyStokes2D requires boundary velocity");const std::size_t N=mesh_.node_count(),bad=static_cast<std::size_t>(-1);std::vector<std::size_t>map(2*N,bad);std::size_t nf=0;for(std::size_t i=0;i<N;++i){if(mesh_.boundary_node[i])velocity_[i]=boundary_(mesh_.nodes[i]);else{map[2*i]=nf++;map[2*i+1]=nf++;}}cfd::core::CsrBuilder b(nf,nf);std::vector<double>rhs(nf);for(const auto&t:mesh_.triangles){auto g=geom(mesh_,t);auto f=force?force(g.c):Displacement2{};for(std::size_t i=0;i<3;++i)for(std::size_t a=0;a<2;++a){std::size_t gi=2*t.node[i]+a;if(map[gi]==bad)continue;auto row=map[gi];rhs[row]+=(a?f.y:f.x)*g.area/3;for(std::size_t j=0;j<3;++j)for(std::size_t c=0;c<2;++c){std::size_t gj=2*t.node[j]+c;double kij=config_.viscosity*g.area*(g.grad[i][0]*g.grad[j][0]+g.grad[i][1]*g.grad[j][1])*(a==c?1.0:0.0)+config_.divergence_penalty*g.area*g.grad[i][a]*g.grad[j][c];if(map[gj]==bad){auto v=velocity_[t.node[j]];rhs[row]-=kij*(c?v.y:v.x);}else b.add(row,map[gj],kij);}}}auto A=b.build();cfd::core::JacobiPreconditioner M(A.diagonal());cfd::core::KrylovWorkspace ws;std::vector<double>x(nf);auto result=cfd::core::preconditioned_conjugate_gradient(rhs,x,[&](auto in,auto out){A.multiply(in,out);},[&](auto in,auto out){M(in,out);},ws,config_.max_iterations,config_.relative_tolerance);if(!result.converged)throw std::runtime_error("PenaltyStokes2D did not converge");for(std::size_t i=0;i<N;++i)if(!mesh_.boundary_node[i])velocity_[i]={x[map[2*i]],x[map[2*i+1]]};}
+double PenaltyStokes2D::divergence_l2()const{double s=0,a=0;for(const auto&t:mesh_.triangles){auto g=geom(mesh_,t);double div=0;for(std::size_t i=0;i<3;++i)div+=velocity_[t.node[i]].x*g.grad[i][0]+velocity_[t.node[i]].y*g.grad[i][1];s+=div*div*g.area;a+=g.area;}return std::sqrt(s/a);}
+} // namespace cfd::fem

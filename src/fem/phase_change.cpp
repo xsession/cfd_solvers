@@ -1,0 +1,7 @@
+#include "cfd/fem/phase_change.hpp"
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
+namespace cfd::fem {namespace {void check(const PhaseChangeMaterial&m){if(!(m.liquidus>m.solidus)||!(m.heat_capacity_solid>0)||!(m.heat_capacity_liquid>0)||m.latent_heat<0)throw std::invalid_argument("invalid phase-change material");}}
+double PhaseChangeMaterial::liquid_fraction(double T)const{check(*this);return std::clamp((T-solidus)/(liquidus-solidus),0.0,1.0);}double PhaseChangeMaterial::specific_enthalpy(double T)const{check(*this);if(T<=solidus)return heat_capacity_solid*T;if(T>=liquidus)return heat_capacity_solid*solidus+latent_heat+heat_capacity_liquid*(T-solidus);double f=(T-solidus)/(liquidus-solidus);return heat_capacity_solid*solidus+f*latent_heat+0.5*(heat_capacity_solid+heat_capacity_liquid)*(T-solidus);}double PhaseChangeMaterial::effective_heat_capacity(double T)const{check(*this);if(T<=solidus)return heat_capacity_solid;if(T>=liquidus)return heat_capacity_liquid;return 0.5*(heat_capacity_solid+heat_capacity_liquid)+latent_heat/(liquidus-solidus);}double PhaseChangeMaterial::temperature_from_enthalpy(double h)const{check(*this);double lo=std::min(0.0,solidus-10000),hi=liquidus+std::max(10000.0,std::abs(h)/std::min(heat_capacity_solid,heat_capacity_liquid)+1.0);for(int i=0;i<120;++i){double mid=.5*(lo+hi);if(specific_enthalpy(mid)<h)lo=mid;else hi=mid;}return .5*(lo+hi);}double porous_effective_conductivity(double p,double ks,double kf){if(p<0||p>1||ks<0||kf<0)throw std::invalid_argument("invalid porous conductivity");return (1-p)*ks+p*kf;}
+}

@@ -36,4 +36,11 @@ const SellmeierMaterial& MaterialCatalog::at(std::string_view name) const{
     return *it;
 }
 
+
+const SellmeierMaterial& MaterialCatalog::nearest_index(double wavelength_nm,double target_index) const{
+    if(materials_.empty()||!(target_index>0.0)||!std::isfinite(target_index))throw std::invalid_argument("invalid material search");
+    const SellmeierMaterial* best=&materials_.front();double best_error=std::abs(best->refractive_index_nm(wavelength_nm)-target_index);
+    for(const auto& material:materials_){const double error=std::abs(material.refractive_index_nm(wavelength_nm)-target_index);if(error<best_error){best=&material;best_error=error;}}
+    return *best;
+}
 } // namespace cfd::optics

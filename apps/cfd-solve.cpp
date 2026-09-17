@@ -1,5 +1,5 @@
-#include "cfd/core/parallel.hpp"
 #include "continuation_cases.hpp"
+#include "cfd/core/parallel.hpp"
 #include "cfd/chemistry/kinetics.hpp"
 #include "cfd/electrochemistry/electrochemistry.hpp"
 #include "cfd/solvers/electrochemistry/corrosion1d.hpp"
@@ -49,6 +49,7 @@
 #include <numbers>
 #include <vector>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -57,13 +58,6 @@ namespace {
 void print_list() {
     std::cout
         << "Available solvers:\n"
-        << "  lbm-trt               periodic D3Q19 two-relaxation-time CPU baseline\n"
-        << "  fvm-workspace         scalar workspace and operator-cache benchmark\n"
-        << "  fdtd-pml1d            matched-layer pulse absorption\n"
-        << "  chemistry-reactor     reversible stiff isothermal batch reaction\n"
-        << "  chemistry-equilibrium ideal acid/base speciation and charge-balanced pH\n"
-        << "  optics-gaussian       ABCD Gaussian-beam focusing\n"
-        << "  multiphysics-thermoelastic DC conduction -> heat -> thermal expansion\n"
         << "  lbm-d2q9-cpu           legacy two-grid periodic BGK D2Q9 baseline (OpenMP)\n"
         << "  lbm-d2q9-inplace-cpu   single-grid periodic BGK D2Q9 (OpenMP)\n"
         << "  lbm-d3q19-cpu          single-grid periodic BGK D3Q19 (OpenMP)\n"
@@ -95,14 +89,20 @@ void print_list() {
         << "  fdtd-mur1d             dielectric/lossy 1-D FDTD with Mur absorbing boundaries\n"
         << "  fdtd-dispersive1d      Debye/Drude/Lorentz ADE material smoke case\n"
         << "  fdtd-port-vtk          PMC + synthetic S-parameters + VTK export\n"
+        << "  fdtd-cpml-tfsf         CPML attenuation + +x total/scattered-field injection\n"
+        << "  fdtd-lumped-rlc        field-coupled parallel R/L/C element smoke case\n"
         << "  multiphysics-coupling field registry, conservative transfer, Aitken fixed point\n"
-        << "  multiphysics-joule-heat DC conduction -> Joule source -> transient FEM heat\n"
+        << "  multiphysics-electrothermal DC conduction -> Joule heat -> transient FEM thermal\n"
         << "  optics-snell           geometric-optics refraction/reflection demo\n"
         << "  optics-lens            sequential/paraxial lens + coating/material demo\n"
         << "  electrochem-corrosion1d ohmic electrolyte + Butler-Volmer corrosion cell\n"
         << "  electrochem-pnp1d      conservative 1-D Nernst-Planck transport demo\n"
         << "  electrochem-pnp-poly   PolyMesh Poisson-Nernst-Planck charged-slab demo\n"
-        << "  electrochem-galvanic   multi-reaction galvanic mixed-potential demo\n";
+        << "  electrochem-galvanic   multi-reaction galvanic mixed-potential demo\n"
+        << "  rf-dipole              sinusoidal half-wave dipole radiation baseline\n"
+        << "  rf-microstrip          quasi-static microstrip impedance baseline\n"
+        << "  spice-rc               MNA small-signal RC low-pass baseline\n"
+        << "  spice-diode            nonlinear diode DC operating-point baseline\n";
 }
 
 int run_lbm_cpu_legacy() {
@@ -672,6 +672,64 @@ int run_fdtd_port_vtk() {
             && std::abs(std::abs(sp.s21) - transmission) < 3.0e-3 && bytes > 0U) ? 0 : 2;
 }
 
+
+int run_fdtd_cpml_tfsf() {
+    using cfd::fdtd::Boundary1D;
+    using cfd::fdtd::Maxwell1D;
+    Maxwell1D absorber({400,1.0e-3,0.95,1.0,1.0,Boundary1D::cpml,24U,3.0,1.0e-8,5.0,0.0});
+    absorber.initialize_gaussian(0.35,0.025);
+    const double initial=absorber.energy();
+    absorber.step(700U);
+    const double residual=absorber.energy()/initial;
+
+    Maxwell1D tfsf({500,1.0e-3,0.95,1.0,1.0,Boundary1D::cpml,32U,3.0,1.0e-10,6.0,0.0});
+    const double dt=tfsf.dt(),t0=35.0*dt,tau=10.0*dt;
+    tfsf.set_tfsf_source(120U,[=](double time){const double q=(time-t0)/tau;return std::exp(-q*q);});
+    double scattered=0.0,total=0.0;
+    for(std::size_t n=0;n<120U;++n){
+        tfsf.step();
+        scattered=std::max(scattered,std::abs(tfsf.electric()[80U]));
+        total=std::max(total,std::abs(tfsf.electric()[160U]));
+    }
+    const double leakage=scattered/std::max(total,1.0e-300);
+    std::cout << "case=fdtd-cpml-tfsf"
+              << " cpml_energy_ratio=" << residual
+              << " total_peak=" << total
+              << " scattered_peak=" << scattered
+              << " leakage_ratio=" << leakage << '\n';
+    return residual<1.0e-4 && total>0.5 && leakage<1.0e-4 ? 0 : 2;
+}
+
+int run_fdtd_lumped_rlc() {
+    using cfd::fdtd::Boundary1D;
+    using cfd::fdtd::Maxwell1D;
+    constexpr std::size_t cell=64U;
+    constexpr double length=1.0e-3,area=1.0e-6,inductance=1.0e-6,field=0.2;
+    Maxwell1D inductor({128,1.0e-3,0.5,1.0,1.0,Boundary1D::mur1});
+    inductor.set_parallel_lumped_rlc(cell,length,area,std::numeric_limits<double>::infinity(),inductance,0.0);
+    const double drive=length/(inductance*area);
+    double expected=0.0;
+    for(std::size_t n=0;n<20U;++n){
+        inductor.set_hard_source(cell,field);
+        inductor.step();
+        expected+=inductor.dt()*drive*field;
+    }
+
+    Maxwell1D resistor({256,1.0e-3,0.8,1.0,1.0,Boundary1D::mur1});
+    Maxwell1D reference({256,1.0e-3,0.8,1.0,1.0,Boundary1D::mur1});
+    resistor.set_parallel_lumped_rlc(128U,1.0e-3,1.0e-6,25.0);
+    resistor.initialize_gaussian(0.5,0.025);
+    reference.initialize_gaussian(0.5,0.025);
+    resistor.step(120U); reference.step(120U);
+    const double dissipative_ratio=resistor.energy()/reference.energy();
+    const double current_error=std::abs(inductor.lumped_inductor_current_density(cell)-expected);
+    std::cout << "case=fdtd-lumped-rlc"
+              << " inductor_current_density=" << inductor.lumped_inductor_current_density(cell)
+              << " current_error=" << current_error
+              << " resistor_energy_ratio=" << dissipative_ratio << '\n';
+    return current_error<1.0e-12*std::max(1.0,std::abs(expected)) && dissipative_ratio<0.9 ? 0 : 2;
+}
+
 int run_multiphysics_coupling() {
     cfd::multiphysics::FieldRegistry registry;
     cfd::multiphysics::FieldMetadata temperature;
@@ -700,7 +758,7 @@ int run_multiphysics_coupling() {
     return result.converged && std::abs(mapped.front() - 1.5) < 1.0e-14 ? 0 : 2;
 }
 
-int run_multiphysics_joule_heat() {
+int run_multiphysics_electrothermal() {
     using Type=cfd::fem::ScalarBoundaryType;
     cfd::fem::Heat2DConfig thermal;
     thermal.conductivity=1.0;
@@ -718,7 +776,7 @@ int run_multiphysics_joule_heat() {
     for(double q:coupled.joule_heating_density())mean_q+=q;
     mean_q/=static_cast<double>(coupled.joule_heating_density().size());
     for(double t:coupled.thermal().temperature())max_t=std::max(max_t,t);
-    std::cout << "case=multiphysics-joule-heat"
+    std::cout << "case=multiphysics-electrothermal"
               << " mean_joule_W_m3=" << mean_q
               << " max_temperature_K=" << max_t
               << " time_s=" << coupled.thermal().time()
@@ -727,6 +785,7 @@ int run_multiphysics_joule_heat() {
     return coupled.electrical().linear_result().converged&&coupled.thermal().linear_result().converged
         &&std::abs(mean_q-20.0)<1.0e-6&&max_t>300.0?0:2;
 }
+
 
 int run_corrosion1d() {
     cfd::electrochemistry::CorrosionCell1DConfig config;
@@ -842,8 +901,6 @@ int main(int argc, char** argv) {
         return 0;
     }
     const std::string_view solver = argv[1];
-    const int continuation=run_continuation_case(solver);
-    if(continuation>=0)return continuation;
     if (solver == "lbm-d2q9-cpu") return run_lbm_cpu_legacy();
     if (solver == "lbm-d2q9-inplace-cpu") {
         return run_lbm_inplace_cpu<cfd::lbm::D2Q9InPlaceDescriptor>({256, 256, 1, 0.60F}, 200);
@@ -887,14 +944,18 @@ int main(int argc, char** argv) {
     if (solver == "fdtd-mur1d") return run_fdtd_mur1d();
     if (solver == "fdtd-dispersive1d") return run_fdtd_dispersive1d();
     if (solver == "fdtd-port-vtk") return run_fdtd_port_vtk();
+    if (solver == "fdtd-cpml-tfsf") return run_fdtd_cpml_tfsf();
+    if (solver == "fdtd-lumped-rlc") return run_fdtd_lumped_rlc();
     if (solver == "multiphysics-coupling") return run_multiphysics_coupling();
-    if (solver == "multiphysics-joule-heat") return run_multiphysics_joule_heat();
+    if (solver == "multiphysics-electrothermal") return run_multiphysics_electrothermal();
     if (solver == "optics-snell") return run_optics();
     if (solver == "optics-lens") return run_optics_lens();
     if (solver == "electrochem-corrosion1d") return run_corrosion1d();
     if (solver == "electrochem-pnp1d") return run_nernst_planck1d();
     if (solver == "electrochem-pnp-poly") return run_nernst_planck_poly();
     if (solver == "electrochem-galvanic") return run_galvanic();
+    const int continuation = run_continuation_case(solver);
+    if (continuation >= 0) return continuation;
     std::cerr << "Unknown solver: " << solver << "\n";
     print_list();
     return 1;

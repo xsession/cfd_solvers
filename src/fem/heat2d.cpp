@@ -33,12 +33,9 @@ Heat2D::Heat2D(Mesh2D mesh, Heat2DConfig config)
     }
 }
 void Heat2D::initialize(const std::function<double(Node2)>& temperature) {
-    if (!temperature) throw std::invalid_argument("Heat2D requires an initial temperature");
     for (std::size_t i=0;i<mesh_.node_count();++i) temperature_[i]=temperature(mesh_.nodes[i]);
-    time_=0.0;
 }
 void Heat2D::set_dirichlet(const std::function<double(Node2,double)>& boundary_temperature) {
-    if (!boundary_temperature) throw std::invalid_argument("Heat2D requires a boundary temperature");
     boundary_temperature_=boundary_temperature;
 }
 void Heat2D::run(std::size_t steps,const std::function<double(Node2,double)>& source) {
@@ -49,7 +46,6 @@ void Heat2D::step(const std::function<double(Node2,double)>& source) {
 }
 void Heat2D::step_element_source(std::span<const double> element_source) {
     if (element_source.size()!=mesh_.element_count()) throw std::invalid_argument("Heat2D element source size mismatch");
-    for (double q : element_source) if (!std::isfinite(q)) throw std::invalid_argument("non-finite Heat2D source");
     step_impl([&](std::size_t element,Node2,double){ return element_source[element]; });
 }
 void Heat2D::step_impl(const ElementSource& source) {
@@ -97,4 +93,5 @@ void Heat2D::step_impl(const ElementSource& source) {
     temperature_.swap(next_temperature);
     time_=next_time;
 }
+
 } // namespace cfd::fem

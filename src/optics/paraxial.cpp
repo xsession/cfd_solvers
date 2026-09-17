@@ -16,7 +16,7 @@ ParaxialTraceResult trace_paraxial(const SequentialOpticalSystem& system,Paraxia
         if(std::abs(ray.height)>s.aperture_radius) return {ray,false,count};
         const double n2=s.refractive_index_after;
         if(!(n2>0.0)) return {ray,false,count};
-        const double curvature=s.type!=SurfaceType::plane?1.0/s.radius:0.0;
+        const double curvature=s.type==SurfaceType::sphere?1.0/s.radius:0.0;
         ray.angle=(n/n2)*ray.angle-((n2-n)/n2)*curvature*ray.height;
         n=n2;++count;
     }

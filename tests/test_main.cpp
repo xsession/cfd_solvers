@@ -1248,9 +1248,11 @@ void test_fdtd_material_mur_monitors() {
 
     cfd::fdtd::Maxwell1D pec({400,1.0e-3,0.95,1.0,1.0,cfd::fdtd::Boundary1D::pec});
     cfd::fdtd::Maxwell1D mur({400,1.0e-3,0.95,1.0,1.0,cfd::fdtd::Boundary1D::mur1});
-    pec.initialize_gaussian(0.35,0.025); mur.initialize_gaussian(0.35,0.025);
-    pec.step(700U); mur.step(700U);
+    cfd::fdtd::Maxwell1D pml({400,1.0e-3,0.95,1.0,1.0,cfd::fdtd::Boundary1D::pml,24U,3.0,1.0e-8});
+    pec.initialize_gaussian(0.35,0.025); mur.initialize_gaussian(0.35,0.025); pml.initialize_gaussian(0.35,0.025);
+    pec.step(700U); mur.step(700U); pml.step(700U);
     require(mur.energy()<1.0e-4*pec.energy(),"first-order Mur boundary strongly reduces reflected pulse energy versus PEC");
+    require(pml.energy()<mur.energy(),"1-D matched-loss PML absorbs pulse more strongly than Mur in the regression case");
 
     cfd::fdtd::TimeProbe probe;
     cfd::fdtd::DftMonitor dft(10.0);
@@ -1258,6 +1260,76 @@ void test_fdtd_material_mur_monitors() {
     for(std::size_t i=0;i<=1000U;++i){const double t=dt*static_cast<double>(i);const double v=std::sin(2.0*std::numbers::pi*10.0*t);probe.sample(t,v);dft.sample(t,v);}
     require(probe.time().size()==1001U&&probe.value().size()==1001U,"FDTD time probe records samples");
     require(std::abs(dft.amplitude(1.0)-1.0)<2.0e-3,"FDTD DFT monitor recovers sinusoid amplitude");
+}
+
+
+void test_fdtd_cpml_tfsf_lumped() {
+    using cfd::fdtd::Boundary1D;
+    using cfd::fdtd::Maxwell1D;
+
+    Maxwell1D pec({400,1.0e-3,0.95,1.0,1.0,Boundary1D::pec});
+    Maxwell1D cpml({400,1.0e-3,0.95,1.0,1.0,Boundary1D::cpml,24U,3.0,1.0e-8,5.0,0.0});
+    pec.initialize_gaussian(0.35,0.025);
+    cpml.initialize_gaussian(0.35,0.025);
+    const double cpml_initial=cpml.energy();
+    pec.step(700U);
+    cpml.step(700U);
+    require(std::isfinite(cpml.energy()) && cpml.energy() < 1.0e-4*cpml_initial,
+            "1-D CPML strongly attenuates the outgoing Gaussian pulse");
+    require(cpml.energy() < 1.0e-4*pec.energy(),
+            "1-D CPML leaves far less residual field energy than PEC");
+
+    Maxwell1D tfsf({500,1.0e-3,0.95,1.0,1.0,Boundary1D::cpml,32U,3.0,1.0e-10,6.0,0.0});
+    const double dt=tfsf.dt();
+    const double t0=35.0*dt, tau=10.0*dt;
+    tfsf.set_tfsf_source(120U,[=](double time){
+        const double q=(time-t0)/tau;
+        return std::exp(-q*q);
+    });
+    double scattered_max=0.0,total_max=0.0;
+    for(std::size_t n=0;n<120U;++n){
+        tfsf.step();
+        scattered_max=std::max(scattered_max,std::abs(tfsf.electric()[80U]));
+        total_max=std::max(total_max,std::abs(tfsf.electric()[160U]));
+    }
+    require(total_max>0.5,"TFSF launches a finite +x incident field into the total-field region");
+    require(scattered_max/total_max<1.0e-4,
+            "homogeneous 1-D TFSF keeps the exterior scattered-field region quiet");
+
+    Maxwell1D rlc({128,1.0e-3,0.5,1.0,1.0,Boundary1D::mur1});
+    constexpr std::size_t cell=64U;
+    constexpr double length=1.0e-3,area=1.0e-6,inductance=1.0e-6,field=0.2;
+    rlc.set_parallel_lumped_rlc(cell,length,area,std::numeric_limits<double>::infinity(),inductance,0.0);
+    const double drive=length/(inductance*area);
+    double expected_current_density=0.0;
+    for(std::size_t n=0;n<20U;++n){
+        rlc.set_hard_source(cell,field);
+        rlc.step();
+        expected_current_density+=rlc.dt()*drive*field;
+    }
+    require(std::abs(rlc.lumped_inductor_current_density(cell)-expected_current_density)
+                < 1.0e-12*std::max(1.0,std::abs(expected_current_density)),
+            "parallel lumped inductor current follows the analytical constant-voltage ramp");
+
+    Maxwell1D resistor({256,1.0e-3,0.8,1.0,1.0,Boundary1D::mur1});
+    Maxwell1D reference({256,1.0e-3,0.8,1.0,1.0,Boundary1D::mur1});
+    resistor.set_parallel_lumped_rlc(128U,1.0e-3,1.0e-6,25.0,
+                                     std::numeric_limits<double>::infinity(),0.0);
+    resistor.initialize_gaussian(0.5,0.025);
+    reference.initialize_gaussian(0.5,0.025);
+    resistor.step(120U);
+    reference.step(120U);
+    require(std::isfinite(resistor.energy()) && resistor.energy()<0.9*reference.energy(),
+            "parallel lumped resistor dissipates field energy");
+
+    Maxwell1D capacitor({256,1.0e-3,0.8,1.0,1.0,Boundary1D::mur1});
+    capacitor.set_parallel_lumped_rlc(128U,1.0e-3,1.0e-6,
+                                      std::numeric_limits<double>::infinity(),
+                                      std::numeric_limits<double>::infinity(),2.0e-12);
+    capacitor.initialize_gaussian(0.5,0.025);
+    capacitor.step(120U);
+    require(std::isfinite(capacitor.energy()) && std::isfinite(capacitor.electric()[128U]),
+            "parallel lumped capacitor remains numerically stable");
 }
 
 void test_sparse_krylov_solvers() {
@@ -1886,6 +1958,7 @@ int main() {
         test_fem_modal_bar();
         test_fdtd_finite();
         test_fdtd_material_mur_monitors();
+        test_fdtd_cpml_tfsf_lumped();
         test_fdtd_maxwell3d();
         test_fdtd_dispersive_materials();
         test_fdtd_pmc_ports_and_vtk();

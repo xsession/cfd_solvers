@@ -71,10 +71,7 @@ void Elasticity2D::solve_impl(const std::function<Displacement2(Node2)>& body_fo
             for(std::size_t a=0;a<3U;++a) for(std::size_t b=0;b<3U;++b) ke[i][j]+=g.area*B[a][i]*D[a][b]*B[b][j];
         const auto bf=body_force?body_force(g.centroid):Displacement2{};
         double thermal_strain=0.0;
-        if(!temperature.empty()) thermal_strain=expansion*((temperature[t.node[0]]+temperature[t.node[1]]
-            +temperature[t.node[2]])/3.0-reference);
-        // Plane strain constrains epsilon_zz=0; eliminating the 3-D thermal
-        // eigenstrain gives (1+nu)*alpha*dT in the in-plane constitutive form.
+        if(!temperature.empty()) thermal_strain=expansion*((temperature[t.node[0]]+temperature[t.node[1]]+temperature[t.node[2]])/3.0-reference);
         if(config_.mode==ElasticityMode2D::planeStrain)thermal_strain*=1.0+config_.poisson_ratio;
         std::array<double,3> thermal_stress{};
         for(std::size_t a=0;a<3;++a)thermal_stress[a]=(D[a][0]+D[a][1])*thermal_strain;
@@ -94,6 +91,6 @@ void Elasticity2D::solve_impl(const std::function<Displacement2(Node2)>& body_fo
     linear_result_=cfd::core::preconditioned_conjugate_gradient(rhs,x,[&](std::span<const double>v,std::span<double>o){A.multiply(v,o);},
         [&](std::span<const double>r,std::span<double>z){jacobi(r,z);},ws,config_.max_iterations,config_.relative_tolerance);
     if(!linear_result_.converged) throw std::runtime_error("Elasticity2D PCG did not converge");
-    for(std::size_t n=0;n<mesh_.node_count();++n){ if(map[2*n]!=static_cast<std::size_t>(-1)) displacement_[n].x=x[map[2*n]]; if(map[2*n+1]!=static_cast<std::size_t>(-1)) displacement_[n].y=x[map[2*n+1]]; }
+    for(std::size_t n=0;n<mesh_.node_count();++n){if(map[2*n]!=static_cast<std::size_t>(-1))displacement_[n].x=x[map[2*n]];if(map[2*n+1]!=static_cast<std::size_t>(-1))displacement_[n].y=x[map[2*n+1]];}
 }
 } // namespace cfd::fem

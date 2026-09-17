@@ -1,17 +1,5 @@
 # Validation
 
-## Unreleased CPU continuation (2026-09-16)
-
-Current local environment: Ubuntu 22.04 under WSL, Intel Core i7-8750H, GCC 11.4, MPICH 4.0.
-GCC Release/OpenMP and Release/serial each pass 34 CTest targets. The MPI configuration passes
-37 targets, including actual four-rank D3Q19/D3Q27 and halo/restart regression execution.
-The focused `cfd-extension-tests` and existing `cfd-sanitize-smoke` pass GCC ASan+UBSan with leak detection.
-Clang is unavailable locally and package download failed on WSL DNS; GCC/Clang CI remains configured.
-AdaptiveCpp/GPU execution remains unvalidated.
-
-`CONTINUATION_CPU.md` records the new APIs, analytical gates and performance samples.
-The development-container results below are historical checkpoints, not results from this WSL run.
-
 The regression suite preserves the Phase-2/3 LBM and distributed gates and now also validates the Phase-4A finite-volume foundation.
 
 ## Numerical regression
@@ -142,3 +130,49 @@ These cases validate the current pressure/velocity coupling and mesh correction.
 - fixed-free Line2 generalized eigenmodes agree with analytical axial-bar eigenfrequencies;
 - dedicated CLI smoke tests cover nonlinear FEM, Darcy, magnetostatics and modal analysis;
 - the sanitizer smoke target exercises nonlinear solve, adaptive mesh generation, Darcy, magnetostatics and the generalized eigen path on small meshes.
+
+## v0.7.0 FDTD and multiphysics gates
+
+Clean v0.7.0 source configurations define **26 CTest tests** with MPI/SYCL disabled. The complete CPU suite passes under GCC 14 + OpenMP, Clang 17 without OpenMP, and serial GCC; the dedicated ASan+UBSan smoke target also passes.
+
+- Debye, Drude and Lorentz ADE material regions remain finite under the regression pulses and produce nonzero polarization response; replacing a dispersive region with `set_material()` clears its ADE state.
+- 3-D PMC baseline clamps the magnetic boundary state and remains finite.
+- Synthetic TEM-like port data recovers `|S11|=0.20` and `|S21|=0.75` in the CLI smoke case (unit test also checks complex amplitudes against known values).
+- Maxwell3D legacy ASCII VTK output is written and parsed back for expected geometry/E/H field sections.
+- Exact-overlap 1-D cell transfer preserves the integrated scalar to floating-point tolerance.
+- `PolyMesh` face-flux-to-cell transfer cancels internal flux exactly in the volume-weighted global sum.
+- Aitken partitioned coupling reaches the cosine fixed point in six iterations in the development-container smoke case.
+- Shared-mesh DC conduction with 4 V across 2 m and `sigma=5 S/m` reproduces `q=20 W/m^3`; the transient heat solve remains converged and raises the interior temperature above the fixed 300 K boundaries.
+- `scripts/integration_status.py --json` emits a machine-readable report with the same completion counts as the Markdown tracker.
+
+## v0.7.0 build matrix
+
+Validated on 2026-09-16 in the development container:
+
+- GCC 14.2 Release + OpenMP: full regression executable passes; 26 CTest entries are configured.
+- Clang 17 Release with `CFD_ENABLE_OPENMP=OFF`: full regression executable and sanitizer-smoke executable pass.
+- GCC 14.2 Release serial (`CFD_ENABLE_OPENMP=OFF`): full regression executable, sanitizer smoke, dispersive-FDTD and electrothermal CLI cases pass.
+- GCC ASan + UBSan Debug serial build: `cfd-sanitize-smoke` passes with the new dispersive-FDTD and multiphysics paths.
+- `git diff --check`: clean before release freeze.
+
+The OpenMP small-loop cutoff was separately microbenchmarked on the 5-vCPU development runner. Forced OpenMP was slower than serial execution below roughly 2k trivial iterations in that environment, while becoming beneficial at and above the selected 2048-iteration threshold. With the cutoff/nested-team guard enabled, the full OpenMP regression executable completed in about 2.4 s in the measured run, versus the earlier order-of-13--15 s baseline. This is a development-runner observation, not a portable performance guarantee.
+## v0.7.1 advanced FDTD gates
+
+A clean v0.7.1 CPU configuration defines **28 CTest tests** with MPI/SYCL disabled.
+
+- 1-D CPML reduces the residual Gaussian-pulse field energy below `1e-4` of its initial value and more than four orders of magnitude below the PEC residual in the regression case.
+- The homogeneous +x TFSF regression launches a transmitted peak above `0.5` while keeping the sampled scattered-field-side leakage below `1e-4` of that peak; the development run is approximately `5.2e-6`.
+- A parallel lumped inductor driven by a repeatedly imposed constant cell voltage reproduces the analytical current-density ramp to floating-point tolerance.
+- A parallel lumped resistor dissipates more than 10% of the corresponding reference field energy over the smoke interval; a capacitor-only element remains finite.
+
+## v0.8.0 RF/SPICE gates
+
+Validated on 2026-09-16 in the development container:
+
+- GCC 14/OpenMP clean configuration passes **43/43 CTest targets**.
+- Focused Clang 17 and serial-GCC RF/SPICE builds pass the RF/network, PEEC/MoM, circuit-analysis, hierarchy/file-parser and OSDI seams.
+- SPICE regressions cover linear/nonlinear DC, AC, BE/trapezoidal/BDF2 transient, controlled sources, switches, mutual inductance, diode/MOS/BJT/JFET models, sampled N-port stamping, source/parameter/temperature sweeps, resistor noise, sensitivity, Monte Carlo, Fourier/THD, `.PARAM`, expressions, nested `.SUBCKT`, `.FUNC`, `.INCLUDE`, `.LIB` and scoped models.
+- RF regressions cover Z/S/ABCD and generic N-port round-trips, Touchstone, de-embedding, mixed-mode conversion, passivity/reciprocity, return loss/VSWR, K/mu, stability circles, transducer gain/load-pull, transmission-line/waveguide baselines, array/polarization utilities, PEEC reciprocity/skin-effect behavior and center-fed thin-wire MoM finite input impedance/current distribution.
+- OSDI regression loads a synthetic shared library, validates ABI version/count metadata and move semantics; descriptor evaluation is intentionally still open.
+- Focused ASan+UBSan with leak detection passes SPICE file/hierarchy parsing, OSDI loading and a PEEC + thin-wire-MoM + nonlinear circuit smoke.
+- The broad sanitizer build is intentionally not used as the RF/SPICE gate because the monolithic project build produces excessive debug/instrumentation compile cost; focused instrumentation covers the newly changed paths directly.

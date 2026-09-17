@@ -1,4 +1,8 @@
 #include "continuation_cases.hpp"
+#include <numbers>
+#include "cfd/circuit/spice.hpp"
+#include "cfd/rf/network.hpp"
+#include "cfd/rf/antenna.hpp"
 #include "cfd/chemistry/aqueous_equilibrium.hpp"
 #include "cfd/chemistry/implicit_reactor.hpp"
 #include "cfd/core/parallel.hpp"
@@ -108,6 +112,39 @@ int fvm_workspace(){
         <<" operator_assemblies="<<cached.operator_assemblies()<<" max_parity_error="<<cache_error<<'\n';
     return error<1.0e-12&&cache_error<1.0e-12&&std::abs(integral-net_boundary)<1.0e-12?0:1;
 }
+
+int rf_dipole(){
+    const double frequency=1.0e9;
+    cfd::rf::SinusoidalDipoleSolver dipole(0.5*299792458.0/frequency,frequency);
+    const double resistance=dipole.radiation_resistance();
+    const double directivity=dipole.directivity();
+    std::cout<<"case=rf-dipole frequency_hz="<<frequency<<" radiation_resistance_ohm="<<resistance
+             <<" directivity="<<directivity<<"\n";
+    return std::abs(resistance-73.13)<0.5&&std::abs(directivity-1.64)<0.03?0:1;
+}
+int rf_microstrip(){
+    const auto line=cfd::rf::microstrip_quasi_static(2.0e-3,1.0e-3,4.4,2.4e9);
+    std::cout<<"case=rf-microstrip z0_ohm="<<line.characteristic_impedance
+             <<" eps_eff="<<line.effective_permittivity<<" guided_wavelength_m="<<line.guided_wavelength<<"\n";
+    return line.characteristic_impedance>40.0&&line.characteristic_impedance<60.0?0:1;
+}
+int spice_rc(){
+    cfd::circuit::Circuit circuit;const auto input=circuit.node("in"),output=circuit.node("out");
+    circuit.add_voltage_source("V1",input,0,0.0,{1.0,0.0});circuit.add_resistor("R1",input,output,1000.0);
+    circuit.add_capacitor("C1",output,0,1.0e-6);
+    const double fc=1.0/(2.0*std::numbers::pi*1.0e3*1.0e-6);const auto ac=circuit.ac(fc);const auto h=circuit.voltage(ac,"out");
+    std::cout<<"case=spice-rc frequency_hz="<<fc<<" magnitude="<<std::abs(h)<<" phase_deg="<<std::arg(h)*180.0/std::numbers::pi<<"\n";
+    return std::abs(std::abs(h)-1.0/std::sqrt(2.0))<1.0e-5?0:1;
+}
+int spice_diode(){
+    cfd::circuit::Circuit circuit;const auto input=circuit.node("in"),output=circuit.node("out");
+    circuit.add_voltage_source("V1",input,0,5.0);circuit.add_resistor("R1",input,output,1000.0);
+    circuit.add_diode_model("DDEFAULT",{1.0e-12,1.0,300.0});circuit.add_diode("D1",output,0,"DDEFAULT");
+    const auto op=circuit.dc_operating_point();const double v=circuit.voltage(op,"out");
+    std::cout<<"case=spice-diode converged="<<op.converged<<" iterations="<<op.iterations<<" diode_voltage="<<v<<"\n";
+    return op.converged&&v>0.45&&v<0.9?0:1;
+}
+
 }
 
 int run_continuation_case(std::string_view name){
@@ -118,5 +155,9 @@ int run_continuation_case(std::string_view name){
     if(name=="optics-gaussian")return gaussian();
     if(name=="multiphysics-thermoelastic")return thermal_structure();
     if(name=="fvm-workspace")return fvm_workspace();
+    if(name=="rf-dipole")return rf_dipole();
+    if(name=="rf-microstrip")return rf_microstrip();
+    if(name=="spice-rc")return spice_rc();
+    if(name=="spice-diode")return spice_diode();
     return -1;
 }

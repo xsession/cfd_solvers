@@ -86,3 +86,17 @@ Every implementation derived from a restrictive/copyleft reference must be based
 - MOOSE phase-field corrosion concepts and OpenPNM porous reactive-transport concepts are tracked as later capability references rather than source donors.
 
 Exact research pins are recorded in `docs/upstreams.json`.
+
+## RF and microwave references
+
+- Palace: https://github.com/awslabs/palace — Apache-2.0; RF FEM/eigenmode/driven/wave-port/HPC capability reference.
+- OpenSEMBA FDTD: https://github.com/OpenSEMBA/fdtd — MIT; EMC/FDTD, wire/Huygens/NF2FF capability reference.
+- OpenNEC: https://github.com/maurymarkowitz/OpenNEC — MIT; thin-wire antenna/MoM capability reference.
+- PEEC and other RF extraction projects with copyleft/unclear licensing are used only as mathematical/behavioral references unless explicitly documented otherwise.
+
+## SPICE and compact-model references
+
+- ngspice — modified-BSD simulator; primary behavioral reference for SPICE analyses and model interoperability.
+- Xyce — GPL-3.0; clean-room capability reference for scalable DAE, harmonic balance and Verilog-A workflows.
+- QucsatorRF — GPL-2.0; clean-room RF-network/circuit capability reference.
+- OpenVAF/OSDI — external Verilog-A/compact-model toolchain/interface target. The core only implements an independent loader/adapter boundary; OpenVAF source is not vendored.

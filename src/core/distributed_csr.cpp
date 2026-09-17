@@ -1,0 +1,7 @@
+#include "cfd/core/distributed_csr.hpp"
+#include <algorithm>
+#include <stdexcept>
+namespace cfd::core {
+DistributedCsrPartition::DistributedCsrPartition(CsrMatrix A,std::size_t begin,std::size_t end):matrix_(std::move(A)),row_begin_(begin),row_end_(end){if(begin>=end||end>matrix_.rows()||matrix_.rows()!=matrix_.cols())throw std::invalid_argument("invalid distributed CSR row partition");for(std::size_t r=begin;r<end;++r)for(std::size_t k=matrix_.row_offsets()[r];k<matrix_.row_offsets()[r+1];++k){auto c=matrix_.column_indices()[k];if(c<begin||c>=end)halo_columns_.push_back(c);}std::sort(halo_columns_.begin(),halo_columns_.end());halo_columns_.erase(std::unique(halo_columns_.begin(),halo_columns_.end()),halo_columns_.end());}
+void DistributedCsrPartition::multiply(std::span<const double>local,std::span<const double>halo,std::span<double>y)const{if(local.size()!=local_rows()||halo.size()!=halo_columns_.size()||y.size()!=local_rows())throw std::invalid_argument("distributed CSR buffer mismatch");for(std::size_t lr=0;lr<local_rows();++lr){const std::size_t r=row_begin_+lr;double sum=0;for(std::size_t k=matrix_.row_offsets()[r];k<matrix_.row_offsets()[r+1];++k){const auto c=matrix_.column_indices()[k];double x{};if(c>=row_begin_&&c<row_end_)x=local[c-row_begin_];else{auto it=std::lower_bound(halo_columns_.begin(),halo_columns_.end(),c);if(it==halo_columns_.end()||*it!=c)throw std::runtime_error("distributed CSR missing halo column");x=halo[static_cast<std::size_t>(it-halo_columns_.begin())];}sum+=matrix_.values()[k]*x;}y[lr]=sum;}}
+} // namespace cfd::core

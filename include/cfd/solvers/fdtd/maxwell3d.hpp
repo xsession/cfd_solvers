@@ -19,6 +19,10 @@ struct Maxwell3DConfig {
     double epsilon_r{1.0};
     double mu_r{1.0};
     Boundary3D boundary{Boundary3D::pec};
+    // Optional diagonal anisotropy. Non-positive entries fall back to epsilon_r.
+    double epsilon_rx{};
+    double epsilon_ry{};
+    double epsilon_rz{};
 };
 
 // 3-D Cartesian Yee scheme. The component staggering is implicit in the
@@ -53,6 +57,7 @@ private:
     Maxwell3DConfig config_;
     double dt_{};
     double epsilon_{};
+    double epsilon_x_{},epsilon_y_{},epsilon_z_{};
     double mu_{};
     cfd::core::AlignedVector<double> ex_,ey_,ez_,hx_,hy_,hz_;
 

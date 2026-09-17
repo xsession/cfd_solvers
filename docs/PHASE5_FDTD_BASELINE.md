@@ -13,8 +13,4 @@ New validated primitives:
 
 The Mur validation launches the same Gaussian pulse in PEC and absorbing domains and requires the residual Mur energy after exit to be below 1e-4 of the PEC reflected-energy level.
 
-The unreleased continuation adds a 1-D matched electric/magnetic loss layer, Debye/Drude/Lorentz ADE,
-wave decomposition and legacy ASCII VTK field export. Analytical ADE response, timestep refinement,
-pulse absorption and a physical wave-direction regression are in `tests/test_extensions.cpp`.
-See `CONTINUATION_CPU.md` for conventions and limits. Multidimensional UPML/CPML, general waveguide/lumped
-ports, NF2FF, SAR and accelerator kernels remain tracked work.
+UPML/CPML, dispersive Drude/Lorentz/Debye materials, ports/S-parameters, NF2FF, SAR and accelerator kernels remain tracked work.

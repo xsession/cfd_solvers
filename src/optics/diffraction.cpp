@@ -1,0 +1,9 @@
+#include "cfd/optics/diffraction.hpp"
+#include <cmath>
+#include <numbers>
+#include <stdexcept>
+namespace cfd::optics {namespace {std::vector<std::complex<double>> dft(std::span<const std::complex<double>>x){const std::size_t n=x.size();std::vector<std::complex<double>>out(n);for(std::size_t k=0;k<n;++k)for(std::size_t j=0;j<n;++j){const double a=-2*std::numbers::pi*static_cast<double>(k*j)/static_cast<double>(n);out[k]+=x[j]*std::complex<double>(std::cos(a),std::sin(a));}return out;}}
+std::vector<DiffractionSample> fraunhofer_1d(std::span<const std::complex<double>>p,double dx,double wavelength,double z){if(p.size()<2||!(dx>0)||!(wavelength>0)||!(z>0))throw std::invalid_argument("invalid Fraunhofer inputs");auto f=dft(p);double max=0;for(auto q:f)max=std::max(max,std::norm(q));std::vector<DiffractionSample>out(p.size());for(std::size_t k=0;k<p.size();++k){const long long centered=static_cast<long long>(k)-static_cast<long long>(p.size()/2);const std::size_t src=(k+p.size()/2)%p.size();const double freq=static_cast<double>(centered)/(static_cast<double>(p.size())*dx);out[k]={wavelength*z*freq,max>0?std::norm(f[src])/max:0};}return out;}
+std::vector<double> normalized_psf_1d(std::span<const std::complex<double>>p){if(p.empty())throw std::invalid_argument("empty pupil");auto f=dft(p);double sum=0;std::vector<double>out(f.size());for(std::size_t i=0;i<f.size();++i){out[i]=std::norm(f[i]);sum+=out[i];}if(sum>0)for(auto&v:out)v/=sum;return out;}
+std::vector<double> mtf_from_psf_1d(std::span<const double>psf){if(psf.empty())throw std::invalid_argument("empty PSF");std::vector<std::complex<double>>x(psf.size());for(std::size_t i=0;i<psf.size();++i)x[i]=psf[i];auto f=dft(x);const double dc=std::abs(f[0]);std::vector<double>out(f.size());for(std::size_t i=0;i<f.size();++i)out[i]=dc>0?std::abs(f[i])/dc:0;return out;}
+} // namespace cfd::optics

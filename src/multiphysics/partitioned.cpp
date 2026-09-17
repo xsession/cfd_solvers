@@ -25,7 +25,7 @@ PartitionedCouplerResult solve_partitioned_fixed_point(std::span<double> state,
     double omega = config.initial_relaxation;
     double rms = 0.0;
 
-    for (std::size_t iteration = 0U; ; ++iteration) {
+    for (std::size_t iteration = 0U; iteration < config.max_iterations; ++iteration) {
         update(std::span<const double>(state.data(), n), std::span<double>(candidate.data(), n));
         double rr = 0.0;
         for (std::size_t i = 0U; i < n; ++i) {
@@ -35,7 +35,6 @@ PartitionedCouplerResult solve_partitioned_fixed_point(std::span<double> state,
         rms = std::sqrt(rr / static_cast<double>(n));
         if (!std::isfinite(rms)) return {iteration, rms, omega, false};
         if (rms <= config.absolute_tolerance) return {iteration, rms, omega, true};
-        if (iteration == config.max_iterations) return {iteration, rms, omega, false};
 
         if (config.aitken && iteration > 0U) {
             double numerator = 0.0;
@@ -56,6 +55,7 @@ PartitionedCouplerResult solve_partitioned_fixed_point(std::span<double> state,
             previous_residual[i] = residual[i];
         }
     }
+    return {config.max_iterations, rms, omega, false};
 }
 
 } // namespace cfd::multiphysics

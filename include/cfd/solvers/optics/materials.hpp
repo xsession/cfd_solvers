@@ -20,6 +20,7 @@ public:
     void add(SellmeierMaterial material);
     [[nodiscard]] const SellmeierMaterial& at(std::string_view name) const;
     [[nodiscard]] const std::vector<SellmeierMaterial>& materials() const noexcept{return materials_;}
+    [[nodiscard]] const SellmeierMaterial& nearest_index(double wavelength_nm,double target_index) const;
 private:
     std::vector<SellmeierMaterial> materials_;
 };

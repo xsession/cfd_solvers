@@ -30,6 +30,16 @@ struct StoichiometricTerm {
     double coefficient{}; // positive magnitude
 };
 
+struct ReactionOrder {
+    std::size_t species{};
+    double order{};
+};
+
+struct ThirdBodyEfficiency {
+    std::size_t species{};
+    double efficiency{1.0};
+};
+
 // Concentration-form Kc in the same concentration units as the reaction.
 // Constant reaction enthalpy gives a van't Hoff temperature dependence.
 struct EquilibriumConstant {
@@ -44,6 +54,15 @@ struct ElementaryReaction {
     std::vector<StoichiometricTerm> products;
     ArrheniusRate forward;
     std::optional<EquilibriumConstant> equilibrium;
+
+    // Optional extensions. Existing aggregate initializers that provide the
+    // four fields above retain their historical behavior.
+    std::vector<ReactionOrder> forward_orders;
+    bool third_body{};
+    std::vector<ThirdBodyEfficiency> third_body_efficiencies;
+    // When present, use Lindemann falloff: k_eff = k_inf*Pr/(1+Pr),
+    // Pr = k0*[M]/k_inf. Specifying this also enables third-body [M].
+    std::optional<ArrheniusRate> low_pressure_limit;
 };
 
 class ReactionNetwork {

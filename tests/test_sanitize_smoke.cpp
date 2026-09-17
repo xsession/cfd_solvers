@@ -217,6 +217,14 @@ int main() {
         if(!std::isfinite(dispersive.energy())) return 28;
     }
     {
+        cfd::fdtd::Maxwell1D advanced({128,1.0e-3,0.8,1.0,1.0,cfd::fdtd::Boundary1D::cpml,12U,3.0,1.0e-6,4.0,0.0});
+        const double dt=advanced.dt(),t0=12.0*dt,tau=5.0*dt;
+        advanced.set_tfsf_source(36U,[=](double t){const double q=(t-t0)/tau;return std::exp(-q*q);});
+        advanced.set_parallel_lumped_rlc(72U,1.0e-3,1.0e-6,50.0,1.0e-6,1.0e-13);
+        advanced.step(24U);
+        if(!std::isfinite(advanced.energy())||!std::isfinite(advanced.lumped_inductor_current_density(72U))) return 30;
+    }
+    {
         cfd::fdtd::Maxwell1D em({96,1.0e-3,0.9,1.0,1.0,cfd::fdtd::Boundary1D::mur1});
         em.set_material(48,80,2.5,0.01); em.initialize_gaussian(0.3,0.05); em.step(20);
         if(!std::isfinite(em.energy())) return 17;

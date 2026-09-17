@@ -6,46 +6,20 @@ The long-term goal is a readable solver collection covering CFD, FEM multiphysic
 
 The project is inspired by the capabilities and engineering lessons of OpenFOAM, FluidX3D, Elmer FEM, openEMS FDTD and Optiland. It is **not** a source-code merge or mechanical translation. The source projects have different licenses, and FluidX3D has additional restrictions, so performance techniques are independently implemented from publications and public descriptions.
 
-## Current development status - CPU continuation after v0.6.1
+## v0.8.0 status - broad solver integration plus RF/SPICE
 
-The tracker now reports **165/402 capabilities (41.0%)**. The unreleased continuation adds CPU TRT,
-reusable scalar FVM workspaces and operator caching, reversible/stiff chemistry and acid/base pH,
-conic/aspheric and Gaussian optics, and thermal expansion coupling. It also adds analytical validation
-and correctness fixes for the existing FDTD/electro-thermal work. Local four-rank MPICH execution passes.
-See [`docs/CONTINUATION_CPU.md`](docs/CONTINUATION_CPU.md) for APIs, benchmarks, validation and limits.
+The machine-checkable integration program now reports **429/576 capabilities (74.5%)** complete. Phase 10 RF/antenna/microwave is **30/62 (48.4%)** and Phase 11 SPICE/circuit/compact-model simulation is **61/96 (63.5%)**. Earlier CFD/LBM/FEM/FDTD/optics/electrochemistry/multiphysics families remain independently tracked and validated.
 
-## v0.6.1 checkpoint - nonlinear/adaptive FEM and additional Elmer-class physics
+This checkpoint adds or consolidates:
 
-At that checkpoint the integration program reported **137/398 capabilities (34.4%)** complete. The tracker remains conservative: a capability is checked only when implementation and validation are both present. Phase 0 traceability/release infrastructure was complete; the Elmer-class FEM family was 27/46 (58.7%), openEMS-class FDTD was 8/26, and Optiland-class optics was 12/43.
+- generic N-port RF math, Touchstone SnP, mixed-mode/de-embedding/stability/gain utilities and common transmission-line/waveguide models;
+- thin-wire antenna references, phased-array utilities, PEEC filament extraction with skin-effect resistance and SPICE coupled-inductor export;
+- modified-nodal-analysis DC/AC/transient simulation with R/C/L, controlled sources, switches, mutual inductance, diode, MOS Level-1, BJT and JFET baselines;
+- backward-Euler, trapezoidal and BDF2 transient integration, homotopy/PN limiting, sweeps, noise, sensitivity, Monte Carlo and Fourier/THD analysis;
+- `.PARAM`, expressions, hierarchical `.SUBCKT`, `.FUNC`, `.INCLUDE`, `.LIB`, scoped local models, direct circuit S-parameter extraction and OSDI/OpenVAF dynamic-library discovery seam;
+- the large portable solver continuation across runtime, FVM, FEM, FDTD, optics, chemistry/electrochemistry, multiphysics and interoperability described by `docs/INTEGRATION_TRACKER.md`.
 
-This checkpoint builds on v0.6.0 and adds:
-
-- generic Newton nonlinear solves with backtracking and ILU(0)-GMRES linearization;
-- nonlinear Tri3 Poisson/reaction validation;
-- residual/jump error estimation, Dorfler marking and conforming longest-edge adaptive refinement;
-- saturated Darcy porous flow;
-- 2-D magnetostatics using an out-of-plane vector potential;
-- generalized sparse FEM eigenanalysis and a fixed-free bar modal benchmark.
-
-The v0.6.0 breadth work remains part of this tree, including:
-
-- reference-element topology, shape functions, gradients and Gaussian quadrature for Line2/Tri3/Quad4/Tet4/Hex8/Prism6/Pyramid5;
-- isoparametric mapping/Jacobians and physical shape gradients;
-- reusable Tri3 CSR and matrix-free Laplace assembly;
-- mixed Dirichlet/Neumann/Robin scalar FEM boundaries;
-- 2-D Poisson/heat/linear-elasticity, electrostatics and DC conduction;
-- axisymmetric linear elasticity with the cylindrical `2*pi*r` weak form and hoop strain;
-- convergent 3-D Tet4 Poisson assembly;
-- 3-D Cartesian Maxwell FDTD baseline;
-- heterogeneous dielectric/conductive 1-D FDTD coefficients, hard/soft sources, first-order Mur absorption, time probes and DFT monitors;
-- sequential real-ray tracing plus paraxial first-order optics;
-- Sellmeier glass dispersion, Jones/Stokes polarization, Fresnel interfaces and normal-incidence multilayer thin films;
-- benchmark NDJSON output plus history summarization;
-- tag-driven release artifacts: source archives, delta patch, Git bundle and SHA-256 manifest.
-
-The v0.5.0 sparse/FVM/electrochemistry work remains part of this tree, including ILU(0)-GMRES collocated momentum solves, Nernst-Planck/PNP transport, Scharfetter-Gummel fluxes, Butler-Volmer/Faradaic boundaries and galvanic mixed-potential calculations.
-
-See `docs/INTEGRATION_TRACKER.md`, `docs/PHASE4E_FEM_CORE.md`, `docs/PHASE4F_FEM_ADVANCED.md`, `docs/PHASE5_FDTD_BASELINE.md`, `docs/PHASE6_OPTICS_BASELINE.md`, and `docs/VALIDATION.md`.
+The clean-room rule remains unchanged: upstream projects are capability/research references unless a permissive interface is explicitly used. Copyleft/restrictive source is not translated or copied into the MIT core.
 
 ## Build
 
@@ -78,6 +52,12 @@ Examples:
 ./build/cfd-solve fem-magnetostatic
 ./build/cfd-solve fem-modal-bar
 ./build/cfd-solve fdtd-mur1d
+./build/cfd-solve fdtd-dispersive1d
+./build/cfd-solve fdtd-port-vtk
+./build/cfd-solve fdtd-cpml-tfsf
+./build/cfd-solve fdtd-lumped-rlc
+./build/cfd-solve multiphysics-coupling
+./build/cfd-solve multiphysics-electrothermal
 ./build/cfd-solve optics-lens
 ./build/cfd-solve electrochem-corrosion1d
 ./build/cfd-solve electrochem-pnp1d

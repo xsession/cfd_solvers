@@ -1,0 +1,10 @@
+#include "cfd/fvm/turbulence.hpp"
+#include "cfd/fvm/operators.hpp"
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <stdexcept>
+namespace cfd::fvm {
+TurbulenceModel parse_turbulence_model(std::string_view n){if(n=="laminar")return TurbulenceModel::laminar;if(n=="mixingLength"||n=="mixing_length")return TurbulenceModel::mixing_length;if(n=="Smagorinsky"||n=="smagorinsky")return TurbulenceModel::smagorinsky;if(n=="WALE"||n=="wale")return TurbulenceModel::wale;throw std::invalid_argument("unknown turbulence model");}
+std::vector<double> eddy_viscosity(const PolyMesh&m,std::span<const Vec3>u,const TurbulenceConfig&c){if(u.size()!=m.cell_count())throw std::invalid_argument("turbulence velocity size");if(c.mixing_length<0||c.smagorinsky_constant<0||c.wale_constant<0)throw std::invalid_argument("invalid turbulence controls");std::vector<double>x(u.size()),y(u.size()),z(u.size());for(std::size_t i=0;i<u.size();++i){x[i]=u[i].x;y[i]=u[i].y;z[i]=u[i].z;}auto gx=least_squares_gradient_scalar(m,x),gy=least_squares_gradient_scalar(m,y),gz=least_squares_gradient_scalar(m,z);std::vector<double>nut(u.size());for(std::size_t n=0;n<u.size();++n){if(c.model==TurbulenceModel::laminar)continue;double G[3][3]={{gx[n].x,gx[n].y,gx[n].z},{gy[n].x,gy[n].y,gy[n].z},{gz[n].x,gz[n].y,gz[n].z}};double S[3][3]{},ss=0;for(int i=0;i<3;++i)for(int j=0;j<3;++j){S[i][j]=0.5*(G[i][j]+G[j][i]);ss+=S[i][j]*S[i][j];}const double magS=std::sqrt(2.0*ss),delta=std::cbrt(m.cells()[n].volume);if(c.model==TurbulenceModel::mixing_length){nut[n]=c.mixing_length*c.mixing_length*magS;continue;}if(c.model==TurbulenceModel::smagorinsky){nut[n]=std::pow(c.smagorinsky_constant*delta,2)*magS;continue;}double G2[3][3]{},sd2=0,tr=0;for(int i=0;i<3;++i)for(int j=0;j<3;++j)for(int k=0;k<3;++k)G2[i][j]+=G[i][k]*G[k][j];for(int i=0;i<3;++i)tr+=G2[i][i];for(int i=0;i<3;++i)for(int j=0;j<3;++j){double sd=0.5*(G2[i][j]+G2[j][i])-(i==j?tr/3.0:0.0);sd2+=sd*sd;}const double num=std::pow(sd2,1.5),den=std::pow(ss,2.5)+std::pow(sd2,1.25)+1e-30;nut[n]=std::pow(c.wale_constant*delta,2)*num/den;}return nut;}
+}

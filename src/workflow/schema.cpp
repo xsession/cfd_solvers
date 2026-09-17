@@ -1,0 +1,16 @@
+#include "cfd/workflow/schema.hpp"
+#include <algorithm>
+#include <iomanip>
+#include <sstream>
+#include <regex>
+namespace cfd::workflow {namespace {std::string esc(std::string_view s){std::string o;for(char c:s){if(c=='"'||c=='\\')o+='\\';o+=c;}return o;}}
+const UnitValue& CaseConfig::at(std::string_view k)const{auto it=values_.find(std::string(k));if(it==values_.end())throw std::out_of_range("case parameter not found");return it->second;}
+void CaseConfig::validate(const std::vector<ParameterRule>& rules)const{for(const auto&r:rules){auto it=values_.find(r.key);if(it==values_.end()){if(r.required)throw std::invalid_argument("required case parameter missing: "+r.key);continue;}const auto&v=it->second;if(!std::isfinite(v.value))throw std::invalid_argument("non-finite case parameter");if(!r.unit.empty()&&v.unit!=r.unit)throw std::invalid_argument("case parameter unit mismatch: "+r.key);if(r.minimum&&v.value<*r.minimum)throw std::invalid_argument("case parameter below minimum");if(r.maximum&&v.value>*r.maximum)throw std::invalid_argument("case parameter above maximum");}}
+std::string CaseConfig::to_json()const{std::vector<std::string>keys;for(auto&kv:values_)keys.push_back(kv.first);std::sort(keys.begin(),keys.end());std::ostringstream o;o<<std::setprecision(17)<<"{\"parameters\":{";bool first=true;for(auto&k:keys){if(!first)o<<',';first=false;auto&v=values_.at(k);o<<'"'<<esc(k)<<"\":{\"value\":"<<v.value<<",\"unit\":\""<<esc(v.unit)<<"\"}";}o<<"}}";return o.str();}
+void MaterialDatabase::add(Material m){if(m.name.empty())throw std::invalid_argument("material name is empty");for(auto&kv:m.property)if(!std::isfinite(kv.second.value))throw std::invalid_argument("non-finite material property");materials_[m.name]=std::move(m);}
+const Material& MaterialDatabase::at(std::string_view n)const{auto it=materials_.find(std::string(n));if(it==materials_.end())throw std::out_of_range("material not found");return it->second;}
+std::string MaterialDatabase::to_json()const{std::vector<std::string>names;for(auto&kv:materials_)names.push_back(kv.first);std::sort(names.begin(),names.end());std::ostringstream o;o<<std::setprecision(17)<<"{\"materials\":[";bool fm=true;for(auto&name:names){if(!fm)o<<',';fm=false;const auto&m=materials_.at(name);o<<"{\"name\":\""<<esc(name)<<"\",\"properties\":{";std::vector<std::string>keys;for(auto&kv:m.property)keys.push_back(kv.first);std::sort(keys.begin(),keys.end());bool fp=true;for(auto&k:keys){if(!fp)o<<',';fp=false;auto&v=m.property.at(k);o<<'"'<<esc(k)<<"\":{\"value\":"<<v.value<<",\"unit\":\""<<esc(v.unit)<<"\"}";}o<<"}}";}o<<"]}";return o.str();}
+
+CaseConfig case_config_from_json(std::string_view json){CaseConfig c;const std::string s(json);std::regex item(R"JSON("([^"]+)"\s*:\s*\{\s*"value"\s*:\s*([-+0-9.eE]+)\s*,\s*"unit"\s*:\s*"([^"]*)"\s*\})JSON");for(auto it=std::sregex_iterator(s.begin(),s.end(),item);it!=std::sregex_iterator();++it)c.set((*it)[1].str(),{std::stod((*it)[2].str()),(*it)[3].str()});return c;}
+CaseConfig case_config_from_yaml(std::string_view yaml){CaseConfig c;std::istringstream in{std::string(yaml)};std::string line;std::regex item(R"(^\s*([A-Za-z0-9_.-]+)\s*:\s*([-+0-9.eE]+)\s+([^#\s]+)\s*$)");while(std::getline(in,line)){std::smatch m;if(std::regex_match(line,m,item))c.set(m[1].str(),{std::stod(m[2].str()),m[3].str()});}return c;}
+} // namespace cfd::workflow

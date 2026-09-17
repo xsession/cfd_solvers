@@ -44,6 +44,15 @@ void ReactionNetwork::validate_reaction(const ElementaryReaction& reaction) cons
     };
     for (const auto& term : reaction.reactants) check(term);
     for (const auto& term : reaction.products) check(term);
+    for (const auto& order : reaction.forward_orders) {
+        if (order.species >= species_.size()) throw std::out_of_range("reaction-order species index out of range");
+        if (!std::isfinite(order.order)) throw std::invalid_argument("reaction order must be finite");
+    }
+    for (const auto& efficiency : reaction.third_body_efficiencies) {
+        if (efficiency.species >= species_.size()) throw std::out_of_range("third-body species index out of range");
+        if (!(efficiency.efficiency >= 0.0) || !std::isfinite(efficiency.efficiency))
+            throw std::invalid_argument("third-body efficiency must be finite and non-negative");
+    }
 }
 
 void ReactionNetwork::add_reaction(ElementaryReaction reaction) {
@@ -67,15 +76,39 @@ void ReactionNetwork::reaction_rates(std::span<const double> concentrations,doub
         throw std::invalid_argument("invalid reaction concentration");
     for (std::size_t r = 0; r < reactions_.size(); ++r) {
         const auto& reaction = reactions_[r];
-        const double kf = reaction.forward.rate_constant(temperature);
-        double rate = kf;
-        for (const auto& term : reaction.reactants) {
-            const double concentration = concentrations[term.species];
-            if (concentration < 0.0) throw std::invalid_argument("negative concentration in reaction network");
-            rate *= std::pow(concentration, term.coefficient);
+        const double k_inf = reaction.forward.rate_constant(temperature);
+        const bool uses_third_body = reaction.third_body || reaction.low_pressure_limit.has_value();
+        double collider = 1.0;
+        if (uses_third_body) {
+            collider = 0.0;
+            for (double concentration : concentrations) collider += concentration;
+            for (const auto& efficiency : reaction.third_body_efficiencies)
+                collider += (efficiency.efficiency - 1.0) * concentrations[efficiency.species];
+            if (!(collider >= 0.0) || !std::isfinite(collider))
+                throw std::overflow_error("third-body concentration out of range");
+        }
+        double k_effective = k_inf;
+        if (reaction.low_pressure_limit) {
+            const double k0 = reaction.low_pressure_limit->rate_constant(temperature);
+            if (k_inf == 0.0) k_effective = 0.0;
+            else {
+                const double reduced_pressure = k0 * collider / k_inf;
+                k_effective = k_inf * reduced_pressure / (1.0 + reduced_pressure);
+            }
+        } else if (reaction.third_body) {
+            k_effective *= collider;
+        }
+
+        double rate = k_effective;
+        if (!reaction.forward_orders.empty()) {
+            for (const auto& order : reaction.forward_orders)
+                rate *= std::pow(concentrations[order.species], order.order);
+        } else {
+            for (const auto& term : reaction.reactants)
+                rate *= std::pow(concentrations[term.species], term.coefficient);
         }
         if(reaction.equilibrium){
-            double reverse=kf/reaction.equilibrium->value(temperature);
+            double reverse=k_effective/reaction.equilibrium->value(temperature);
             for(const auto& term:reaction.products) reverse*=std::pow(concentrations[term.species],term.coefficient);
             rate-=reverse;
         }

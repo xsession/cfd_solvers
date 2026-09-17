@@ -10,8 +10,6 @@ namespace cfd::fvm {
 enum class FaceInterpolationScheme {
     linear,
     upwind,
-    // MUSCL-style upwind reconstruction with a Barth-Jespersen limiter.
-    // Second-order on smooth linear fields and bounded by the local stencil.
     bounded_linear,
     minmod,
     van_leer
@@ -24,8 +22,6 @@ struct ScalarSchemeWorkspace {
     [[nodiscard]] std::size_t allocated_bytes() const noexcept;
 };
 
-// Output and input spans must not overlap. Resizing the workspace once makes
-// subsequent scalar reconstruction/divergence calls allocation-free.
 void interpolate_scalar_to_faces_into(const PolyMesh& mesh,std::span<const double> cell_values,
     std::span<double> output,ScalarSchemeWorkspace& workspace,
     FaceInterpolationScheme scheme = FaceInterpolationScheme::linear,
@@ -35,9 +31,6 @@ void convective_divergence_scalar_into(const PolyMesh& mesh,std::span<const doub
     FaceInterpolationScheme scheme = FaceInterpolationScheme::upwind,
     std::span<const double> boundary_face_values = {});
 
-// face_flux is oriented with Face::area: positive means owner -> neighbour/outside.
-// Boundary values are indexed by global face index. Empty boundary spans request
-// zero-gradient/outflow behavior.
 [[nodiscard]] std::vector<double> interpolate_scalar_to_faces(
     const PolyMesh& mesh,
     std::span<const double> cell_values,

@@ -18,16 +18,13 @@ class OneStepPullSolver {
 public:
     static constexpr int q = Descriptor::q;
 
-    // A nonzero odd_tau enables TRT; config.tau is the even (viscous) time.
-    // Defaults retain the BGK reference path exactly.
     explicit OneStepPullSolver(InPlaceLbmConfig config,float odd_tau=0.0F)
         : config_(normalized_config(config)),
           odd_tau_(odd_tau==0.0F?config_.tau:odd_tau),
           cells_(config_.nx * config_.ny * config_.nz),
           f_(cells_),
           next_(cells_) {
-        if (!(config_.tau > 0.5F)||!std::isfinite(config_.tau)
-            ||!(odd_tau_>0.5F)||!std::isfinite(odd_tau_)) {
+        if (!(config_.tau > 0.5F)||!std::isfinite(config_.tau)||!(odd_tau_>0.5F)||!std::isfinite(odd_tau_)) {
             throw std::invalid_argument("LBM tau must be > 0.5 for positive viscosity");
         }
         initialize_uniform();
@@ -187,22 +184,20 @@ private:
             ux += 0.5F * config_.acceleration_x;
             uy += 0.5F * config_.acceleration_y;
             uz += 0.5F * config_.acceleration_z;
-            if(odd_tau_!=config_.tau){
-                const float omega_odd=1.0F/odd_tau_;
-                std::array<float,q> feq{},force{};
-                for(int d=0;d<q;++d){
+            if (odd_tau_ != config_.tau) {
+                const float omega_odd = 1.0F / odd_tau_;
+                std::array<float,q> feq{}, force{};
+                for (int d=0; d<q; ++d) {
                     const auto i=static_cast<std::size_t>(d);
                     feq[i]=detail::equilibrium<Descriptor>(d,rho,ux,uy,uz);
-                    force[i]=detail::guo_force<Descriptor>(d,rho,ux,uy,uz,
-                        config_.acceleration_x,config_.acceleration_y,config_.acceleration_z,0.0F);
+                    force[i]=detail::guo_force<Descriptor>(d,rho,ux,uy,uz,config_.acceleration_x,config_.acceleration_y,config_.acceleration_z,0.0F);
                 }
-                for(int d=0;d<q;++d){
+                for (int d=0; d<q; ++d) {
                     const auto i=static_cast<std::size_t>(d);
                     const auto o=static_cast<std::size_t>(Descriptor::opposite(d));
                     const float even=0.5F*((fin[i]-feq[i])+(fin[o]-feq[o]));
                     const float odd=0.5F*((fin[i]-feq[i])-(fin[o]-feq[o]));
-                    const float forcing=0.5F*(1.0F-0.5F*omega)*(force[i]+force[o])
-                        +0.5F*(1.0F-0.5F*omega_odd)*(force[i]-force[o]);
+                    const float forcing=0.5F*(1.0F-0.5F*omega)*(force[i]+force[o])+0.5F*(1.0F-0.5F*omega_odd)*(force[i]-force[o]);
                     next_(i,n)=fin[i]-omega*even-omega_odd*odd+forcing;
                 }
                 return;

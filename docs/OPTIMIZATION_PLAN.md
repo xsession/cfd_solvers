@@ -10,7 +10,7 @@ Correctness precedes optimization. Each optimization must keep a reference path 
 - [x] CSR storage/builder.
 - [x] Jacobi-PCG.
 - [x] Jacobi-BiCGStab.
-- [x] GMRES baseline for nonsymmetric scalar transport and collocated momentum.
+- [x] restarted GMRES for strongly nonsymmetric systems.
 - [x] ILU(0).
 - [ ] AMG adapter.
 - [ ] block matrices for coupled vector/species systems.
@@ -22,9 +22,8 @@ Correctness precedes optimization. Each optimization must keep a reference path 
 
 - [x] aligned LBM SoA.
 - [x] one-grid LBM streaming.
-- [x] reusable scalar FVM face/cell scratch workspaces; vector and collocated-loop adoption remains open.
-- [x] caller-owned chemistry reaction-rate/source buffers.
-- [x] scalar-transport matrix/ILU cache when boundary and flux coefficients are unchanged.
+- [ ] reusable FVM face/cell scratch workspaces.
+- [ ] reusable chemistry reaction scratch buffers.
 - [ ] monotonic/pool allocator for per-step temporary fields.
 - [ ] topology-dependent sparsity cache.
 - [ ] field packing/reordering for cache locality.
@@ -32,6 +31,7 @@ Correctness precedes optimization. Each optimization must keep a reference path 
 ### CPU
 
 - [x] OpenMP cell/rank execution.
+- [x] small-loop OpenMP serial cutoff and nested-team guard; current CPU baseline uses a conservative 2048-iteration threshold.
 - [ ] explicit SIMD for fixed-size Vec3 and stencil loops.
 - [ ] NUMA first-touch and rank/thread affinity helpers.
 - [ ] graph/mesh reordering benchmark (RCM/METIS order).

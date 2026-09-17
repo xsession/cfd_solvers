@@ -1,0 +1,8 @@
+#include "cfd/fvm/mesh_motion.hpp"
+#include <cmath>
+#include <stdexcept>
+namespace cfd::fvm {namespace {Vec3 rotate(Vec3 p,Vec3 axis,double a){double m=magnitude(axis);if(m<1e-30)return p;axis=axis/m;double c=std::cos(a),s=std::sin(a);Vec3 cross{axis.y*p.z-axis.z*p.y,axis.z*p.x-axis.x*p.z,axis.x*p.y-axis.y*p.x};return p*c+cross*s+axis*(dot(axis,p)*(1-c));}}
+PolyMesh rigidly_moved_mesh(const PolyMesh&m,Vec3 tr,Vec3 axis,double a){auto cells=m.cells();auto faces=m.faces();auto patches=m.patches();for(auto&c:cells)c.center=rotate(c.center,axis,a)+tr;for(auto&f:faces){f.center=rotate(f.center,axis,a)+tr;f.area=rotate(f.area,axis,a);}return {std::move(cells),std::move(faces),std::move(patches)};}
+std::vector<double> ale_mesh_flux(const PolyMesh&a,const PolyMesh&b,double dt){if(a.face_count()!=b.face_count()||!(dt>0))throw std::invalid_argument("ALE mesh mismatch");std::vector<double>phi(a.face_count());for(std::size_t f=0;f<phi.size();++f){Vec3 v=(b.faces()[f].center-a.faces()[f].center)/dt;phi[f]=dot(v,a.faces()[f].area);}return phi;}
+std::vector<double> conservative_nearest_remap(const PolyMesh&a,std::span<const double>field,const PolyMesh&b){if(field.size()!=a.cell_count())throw std::invalid_argument("remap field size");std::vector<double>out(b.cell_count());for(std::size_t j=0;j<b.cell_count();++j){std::size_t best=0;double d2=1e300;for(std::size_t i=0;i<a.cell_count();++i){auto d=a.cells()[i].center-b.cells()[j].center;double q=dot(d,d);if(q<d2){d2=q;best=i;}}out[j]=field[best];}double oldi=0,newi=0;for(std::size_t i=0;i<a.cell_count();++i)oldi+=field[i]*a.cells()[i].volume;for(std::size_t i=0;i<b.cell_count();++i)newi+=out[i]*b.cells()[i].volume;if(std::abs(newi)>1e-30){double s=oldi/newi;for(double&v:out)v*=s;}return out;}
+}

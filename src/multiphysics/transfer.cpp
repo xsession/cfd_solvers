@@ -8,7 +8,6 @@ namespace cfd::multiphysics {
 
 void CellGrid1D::validate() const {
     if (edge.size() < 2U) throw std::invalid_argument("1-D transfer grid requires at least one cell");
-    for (double x : edge) if (!std::isfinite(x)) throw std::invalid_argument("non-finite transfer edge");
     for (std::size_t i = 1U; i < edge.size(); ++i) {
         if (!(edge[i] > edge[i - 1U])) throw std::invalid_argument("1-D transfer edges must be strictly increasing");
     }

@@ -107,6 +107,69 @@
       "license_source": "USGS distribution",
       "tracker_phase": 7,
       "integration": "aqueous equilibrium/speciation and reactive-transport validation/reference"
+    },
+    {
+      "name": "Palace RF FEM",
+      "repository": "https://github.com/awslabs/palace",
+      "branch": "main",
+      "commit": "dff1ef9d1794ff8733ac8b939fb185b181786c1d",
+      "license": "Apache-2.0",
+      "license_source": "LICENSE",
+      "tracker_phase": 10,
+      "integration": "permissive RF FEM, port, eigenmode and HPC capability reference"
+    },
+    {
+      "name": "OpenSEMBA FDTD",
+      "repository": "https://github.com/OpenSEMBA/fdtd",
+      "branch": "master",
+      "commit": "82e310c9ac43d729256b23a42d8c20799ad42b8a",
+      "license": "MIT",
+      "license_source": "LICENSE",
+      "tracker_phase": 10,
+      "integration": "permissive EMC/FDTD, wire, Huygens, NF2FF and SPICE-coupling reference"
+    },
+    {
+      "name": "OpenNEC",
+      "repository": "https://github.com/maurymarkowitz/OpenNEC",
+      "branch": "main",
+      "commit": "acafb3796066562cf3331fc9106485f33b6dbcc6",
+      "license": "MIT",
+      "license_source": "LICENSE",
+      "tracker_phase": 10,
+      "integration": "permissive thin-wire NEC/MoM antenna capability reference"
+    },
+    {
+      "name": "ngspice",
+      "repository": "https://sourceforge.net/projects/ngspice/",
+      "branch": null,
+      "commit": null,
+      "release": "47",
+      "license": "modified-BSD",
+      "license_source": "ngspice project FAQ",
+      "tracker_phase": 11,
+      "integration": "primary permissive SPICE behavior, analyses and compact-model reference"
+    },
+    {
+      "name": "Xyce",
+      "repository": "https://github.com/Xyce/Xyce",
+      "branch": "master",
+      "commit": null,
+      "release": "7.10",
+      "license": "GPL-3.0",
+      "license_source": "Sandia Xyce downloads",
+      "tracker_phase": 11,
+      "integration": "clean-room parallel DAE, harmonic-balance and Verilog-A capability reference"
+    },
+    {
+      "name": "QucsatorRF",
+      "repository": "https://github.com/ra3xdh/qucsator_rf",
+      "branch": "develop",
+      "commit": null,
+      "release": "1.0.7-dev-news",
+      "license": "GPL-2.0",
+      "license_source": "COPYING/GitHub license metadata",
+      "tracker_phase": 11,
+      "integration": "clean-room RF network/microwave component capability reference"
     }
   ]
 }

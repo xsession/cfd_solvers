@@ -1,18 +1,41 @@
 # Changelog
 
-## Unreleased - CPU solver continuation and local MPI validation
+## 0.8.0 - RF/antenna and SPICE-class solver expansion
 
-- Added periodic CPU TRT collision for D2Q9/D3Q19/D3Q27, including split Guo forcing.
-- Added reusable scalar FVM workspaces, minmod/van-Leer reconstruction, and scalar-transport matrix/ILU caching.
-- Added reversible kinetics, caller-owned reaction buffers, adaptive implicit isothermal integration and ideal acid/base pH equilibrium.
-- Added conic/even-asphere ray intersections and Gaussian-beam ABCD propagation.
-- Added thermal-strain loading for plane-stress/plane-strain FEM and analytical DC -> heat -> expansion validation.
-- Corrected the 1-D FDTD magnetic sign, material CFL/ADE guards, initialization reset, old-time FEM boundary mass contribution and final-iteration coupling residual.
-- Validated the existing 1-D matched layer and ADE material work with absorption, analytical response and refinement regressions.
-- Added seven CLI cases, a focused numerical regression target, and its sanitizer CI coverage.
-- Executed four-rank distributed CPU regressions locally with MPICH in WSL; GPU validation remains open.
+- Integrated the latest remote CPU continuation with the locally validated advanced FDTD/multiphysics work without dropping either feature set.
+- Added generic two-port/N-port RF conversions, Touchstone SnP, real-reference renormalization, mixed-mode conversion, reference-plane shifts, passivity/reciprocity, K/mu stability, stability circles, transducer gain and load-pull sampling.
+- Added microstrip, stripline, CPW, coax, TEM-line and rectangular-waveguide TE10 analytical/network baselines plus antenna-array/polarization utilities.
+- Added thin-wire center-fed MoM and PEEC filament extraction baselines, including skin-depth/AC resistance and SPICE coupled-inductor export.
+- Added a clean-room MNA circuit engine with R/C/L, independent/controlled sources, switches, mutual inductance, diode, MOS Level-1, BJT, JFET and sampled RF N-port devices.
+- Added DC/AC/transient analyses, backward-Euler/trapezoidal/BDF2 integration, homotopy/PN limiting, sweeps, thermal noise integration, sensitivity, Monte Carlo, Fourier/THD and circuit S-parameter extraction.
+- Extended SPICE parsing with engineering suffixes, `.MODEL`, `.PARAM`, expressions, nested `.SUBCKT`, scoped local models, `.FUNC`, `.INCLUDE` and `.LIB`.
+- Added an OSDI/OpenVAF dynamic-library discovery/ABI-version seam while deliberately leaving descriptor evaluation and full DAE integration for the next compact-model phase.
+- Added `docs/RF_CIRCUIT_RESEARCH.md` and expanded the authoritative tracker with Palace/OpenSEMBA/OpenNEC and ngspice/Xyce/QucsatorRF capability families.
+- Final tracker state for this checkpoint is 429/576 validated capabilities (74.5%).
+- GCC/OpenMP clean matrix passes 43/43 tests; focused Clang and serial RF/SPICE tests pass; focused ASan+UBSan runs pass for SPICE hierarchy/file IO, OSDI loading, PEEC/MoM and nonlinear circuit paths.
 
-See `docs/CONTINUATION_CPU.md` for API assumptions, performance measurements and remaining work.
+## 0.7.1 - CPML, TFSF and lumped FDTD elements
+
+- Added a clean-room 1-D convolutional PML with graded sigma/kappa profiles and convolution memory variables.
+- Added a +x 1-D total-field/scattered-field source with Yee temporal and half-cell spatial staggering.
+- Added field-coupled parallel lumped R/L/C elements; resistor and capacitor contributions modify local Ampere coefficients while inductor current is advanced as an auxiliary state.
+- Added CPML attenuation, homogeneous TFSF leakage, analytical inductor-ramp, resistor-dissipation and capacitor-stability regressions.
+- Added CLI/CTest and sanitizer-smoke coverage for the new FDTD paths.
+- Integration tracker advanced to 152/398 validated capabilities (38.2%), with openEMS-class FDTD at 17/26 (65.4%).
+
+## 0.7.0 - dispersive FDTD and coupled-multiphysics foundation
+
+- Added Debye, Drude and Lorentz 1-D FDTD auxiliary-differential-equation material models.
+- Added 3-D PMC boundary baseline, TEM-like 1-D wave-port decomposition and complex S-parameter extraction.
+- Added portable legacy ASCII VTK export for 3-D electric and magnetic fields.
+- Added unit/location/topology-aware multiphysics field registry.
+- Added conservative exact-overlap cell remapping and conservative face-flux-to-cell transfer.
+- Added partitioned fixed-point coupling with Aitken relaxation.
+- Added shared-mesh DC-conduction -> Joule-heating -> transient-FEM thermal coupling.
+- Added user-visible FDTD/multiphysics CLI smoke cases and sanitizer coverage.
+- Reworked the high-level roadmap to use the same phase numbering as the authoritative integration tracker.
+- Upgraded `scripts/integration_status.py` with explicit tracker/manifest selection and JSON output.
+- Integration tracker advanced to 149/398 validated capabilities (37.4%), with openEMS-class FDTD at 14/26 (53.8%) and coupled multiphysics at 6/15 (40.0%).
 
 ## 0.6.1 - nonlinear/adaptive FEM, porous flow, magnetostatics and modal analysis
 

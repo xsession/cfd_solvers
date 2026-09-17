@@ -1,0 +1,15 @@
+#include "cfd/fvm/derived_fields.hpp"
+#include "cfd/fvm/operators.hpp"
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+namespace cfd::fvm {namespace {
+std::array<double,3> eigen_sym(double a00,double a01,double a02,double a11,double a12,double a22){double a[3][3]{{a00,a01,a02},{a01,a11,a12},{a02,a12,a22}};for(int it=0;it<20;++it){int p=0,q=1;double mx=std::abs(a[0][1]);for(auto ij:{std::pair{0,2},std::pair{1,2}})if(std::abs(a[ij.first][ij.second])>mx){p=ij.first;q=ij.second;mx=std::abs(a[p][q]);}if(mx<1e-14)break;const double phi=.5*std::atan2(2*a[p][q],a[q][q]-a[p][p]),c=std::cos(phi),s=std::sin(phi);for(int k=0;k<3;++k){const double apk=a[p][k],aqk=a[q][k];a[p][k]=c*apk-s*aqk;a[q][k]=s*apk+c*aqk;}for(int k=0;k<3;++k){const double akp=a[k][p],akq=a[k][q];a[k][p]=c*akp-s*akq;a[k][q]=s*akp+c*akq;}}std::array<double,3>e{a[0][0],a[1][1],a[2][2]};std::sort(e.begin(),e.end());return e;}
+}
+DerivedFlowFields velocity_derived_fields(const PolyMesh&m,std::span<const Vec3>u){if(u.size()!=m.cell_count())throw std::invalid_argument("velocity field size mismatch");std::vector<double>x(u.size()),y(u.size()),z(u.size());for(std::size_t i=0;i<u.size();++i){x[i]=u[i].x;y[i]=u[i].y;z[i]=u[i].z;}auto gx=least_squares_gradient_scalar(m,x),gy=least_squares_gradient_scalar(m,y),gz=least_squares_gradient_scalar(m,z);DerivedFlowFields d;d.vorticity.resize(u.size());d.q_criterion.resize(u.size());d.lambda2.resize(u.size());d.enstrophy.resize(u.size());for(std::size_t c=0;c<u.size();++c){double G[3][3]{{gx[c].x,gx[c].y,gx[c].z},{gy[c].x,gy[c].y,gy[c].z},{gz[c].x,gz[c].y,gz[c].z}},S[3][3]{},O[3][3]{};double sn=0,on=0;for(int i=0;i<3;++i)for(int j=0;j<3;++j){S[i][j]=.5*(G[i][j]+G[j][i]);O[i][j]=.5*(G[i][j]-G[j][i]);sn+=S[i][j]*S[i][j];on+=O[i][j]*O[i][j];}d.vorticity[c]={G[2][1]-G[1][2],G[0][2]-G[2][0],G[1][0]-G[0][1]};d.q_criterion[c]=.5*(on-sn);d.enstrophy[c]=.5*dot(d.vorticity[c],d.vorticity[c]);double M[3][3]{};for(int i=0;i<3;++i)for(int j=0;j<3;++j)for(int k=0;k<3;++k)M[i][j]+=S[i][k]*S[k][j]+O[i][k]*O[k][j];d.lambda2[c]=eigen_sym(M[0][0],M[0][1],M[0][2],M[1][1],M[1][2],M[2][2])[1];}return d;}
+double wall_y_plus(double y,double tau,double rho,double mu){if(y<0||tau<0||!(rho>0)||!(mu>0))throw std::invalid_argument("invalid y+ inputs");return y*std::sqrt(tau/rho)/(mu/rho);}
+Vec3 pressure_force_on_patch(const PolyMesh&m,std::span<const double>p,std::size_t patch){if(p.size()!=m.cell_count()||patch>=m.patches().size())throw std::invalid_argument("pressure-force input mismatch");Vec3 f{};for(const auto&face:m.faces())if(face.boundary()&&face.patch==patch)f-=face.area*p[face.owner];return f;}
+double sample_nearest_cell(const PolyMesh&m,std::span<const double>field,Vec3 pt){if(field.size()!=m.cell_count())throw std::invalid_argument("sample field size mismatch");double best=std::numeric_limits<double>::infinity();std::size_t idx=0;for(std::size_t i=0;i<m.cell_count();++i){auto d=m.cells()[i].center-pt;double r=dot(d,d);if(r<best){best=r;idx=i;}}return field[idx];}
+} // namespace cfd::fvm
