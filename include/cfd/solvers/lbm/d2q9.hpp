@@ -18,6 +18,11 @@ struct D2Q9Config {
     float acceleration_y{0.0F};
 };
 
+[[nodiscard]] float bouzidi_interpolated_bounce_back(float wall_fraction,
+                                                        float opposite_here,
+                                                        float opposite_away,
+                                                        float incoming_here);
+
 struct D2Q9Descriptor {
     static constexpr int q = 9;
 
@@ -56,6 +61,8 @@ public:
     void set_body_acceleration(float ax, float ay) noexcept;
     void set_solid(std::size_t x, std::size_t y, bool solid = true);
     void set_wall_velocity(std::size_t x, std::size_t y, float ux, float uy);
+    void set_interpolated_wall_link(std::size_t fluid_x, std::size_t fluid_y, int incoming_direction, float wall_fraction);
+    void clear_interpolated_wall_links() noexcept;
     void set_velocity_inlet_left(float ux, float uy = 0.0F) noexcept;
     void set_pressure_outlet_right(float rho, float uy = 0.0F) noexcept;
     void clear_x_boundaries() noexcept;
@@ -88,6 +95,7 @@ private:
     cfd::core::AlignedVector<std::uint8_t> solid_;
     cfd::core::AlignedVector<float> wall_ux_;
     cfd::core::AlignedVector<float> wall_uy_;
+    cfd::core::StaticSoA<float, D2Q9Descriptor::q> wall_fraction_;
 
     bool left_velocity_inlet_{false};
     float inlet_ux_{0.0F};

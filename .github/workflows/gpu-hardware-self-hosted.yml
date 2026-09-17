@@ -1,0 +1,55 @@
+name: GPU hardware validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'include/cfd/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/gpu-hardware-self-hosted.yml'
+
+concurrency:
+  group: gpu-hardware-${{ github.ref }}-${{ matrix.vendor }}
+  cancel-in-progress: true
+
+jobs:
+  sycl-gpu:
+    name: SYCL ${{ matrix.vendor }} hardware
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - vendor: nvidia
+            label: gpu-nvidia
+          - vendor: amd
+            label: gpu-amd
+          - vendor: intel
+            label: gpu-intel
+    runs-on: [self-hosted, linux, x64, "${{ matrix.label }}"]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - name: Show accelerator inventory
+        run: |
+          set -euxo pipefail
+          command -v acpp-info
+          acpp-info
+      - name: Configure SYCL build
+        run: >-
+          cmake -S . -B build-gpu
+          -DCMAKE_BUILD_TYPE=Release
+          -DCFD_ENABLE_SYCL=ON
+          -DCFD_ENABLE_OPENMP=ON
+          -DCFD_BUILD_TESTS=ON
+          -DCFD_BUILD_PYTHON_BINDINGS=OFF
+      - name: Build focused accelerator regressions
+        run: >-
+          cmake --build build-gpu --parallel
+          --target cfd-tests cfd-v0140-hpc-runtime-tests cfd-v0141-lbm-les-qcriterion-tests cfd-v0142-portability-tests
+      - name: Run focused accelerator regressions
+        run: >-
+          ctest --test-dir build-gpu --output-on-failure
+          -R 'cfd-tests|v0140|v0141|v0142'

@@ -1,5 +1,149 @@
 # Changelog
 
+## 0.15.2 - transported RANS, Reynolds stress and SST-DES
+
+- Added shared implicit finite-volume transport for turbulence variables with variable diffusion, upwind convection, semi-implicit sinks, fixed/zero-gradient boundaries and Euler/BDF2/Crank-Nicolson time integration.
+- Added transported Spalart-Allmaras, standard k-epsilon and k-omega SST models with positivity and production safeguards.
+- Added SST F1/F2 blending, cross diffusion and an integrated DES dissipation switch with optional F1/F2 zonal shielding.
+- Added six-component Reynolds-stress transport plus epsilon, LRR-style pressure-strain redistribution and realizability projection.
+- Added focused v0.15.2 turbulence regressions and advanced Phase 3 to 94/106 tracked capabilities.
+
+## 0.15.0 - FVM second-order time integration and pressure AMG seam
+
+- Integrated BDF2/backward and off-centered Crank-Nicolson into production scalar FVM assembly.
+- Integrated second-order physical time stepping into PISO/PIMPLE momentum prediction while retaining SIMPLE pseudo-time semantics.
+- Added matrix-free pressure PCG with Jacobi and external AMG/V-cycle preconditioner paths.
+- Added focused temporal-accuracy, PISO/PIMPLE history and AMG-callback regressions.
+- Closed three Phase-3 tracker items.
+
+## 0.14.2
+
+- Added device-keyed kernel fusion/autotuning database and benchmark selection API.
+- Added multi-device accelerator groups/work slices per local rank plus SYCL queue groups.
+- Added weighted adaptive contiguous repartition planning and migration-segment analysis.
+- Added self-hosted NVIDIA/AMD/Intel GPU workflow definitions without claiming hardware qualification before successful runs.
+- Added focused portability/autotuning regression and updated integration tracker to 597/719.
+
+
+## 0.14.1 - LBM physics, geometry, precision and diagnostics wave
+
+- Added a D2Q9 cumulant collision baseline and Smagorinsky-Lilly LES option.
+- Added conservative VOF/free-surface transport, interface geometry and capillary-force coupling.
+- Added interpolated curved-wall bounce-back and passive/two-way immersed-boundary particles.
+- Added local LBM acceleration fields and optional SYCL triangle-mesh voxelization.
+- Added 16-bit compressed population storage with FP16/BF16/shifted/custom codec experiments and explicit accuracy gates.
+- Added 3-D Q-criterion output and a standalone interactive HTML scalar viewer.
+- Advanced Phase 2 from 29/46 to 40/46 tracked capabilities.
+
+## 0.14.0 - Phase 1 common HPC runtime completion
+
+- Added NUMA topology discovery, compact/spread/explicit-node thread placement plans, per-thread CPU binding and placement-aware first touch.
+- Added dynamic Linux affinity masks so systems above CPU 1023 do not silently fall back to fixed `cpu_set_t` limits.
+- Added persistent-device SYCL CSR SpMV plus a device-resident conjugate-gradient Krylov baseline using USM and SYCL reductions.
+- Added MPI ownership discovery and cached sparse-vector request exchange integrated directly into distributed CG iterations.
+- Added focused v0.14.0 CPU/SYCL tests and extended the MPI regression with a distributed tridiagonal solve.
+- Completed Phase 1 at 34/34 tracked capabilities.
+
+## 0.13.0 - Phase 9 interoperability completion
+
+- Added inline XDMF Tri3 mesh and nodal-scalar output with deterministic validation.
+- Added optional native HDF5 datasets and XDMF heavy-data sidecars through `CFD_ENABLE_HDF5`.
+- Added a stable shared C ABI and a pure-stdlib `ctypes` Python package.
+- Added C++ boundary and end-to-end Python binding smoke tests.
+- Completed the Phase 9 interoperability/workflow/UX tracker at 50/50.
+
+## 0.12.0 - production controller deployment baseline
+
+- Added TLS 1.2+ server wrapping with required operator-supplied certificate and key paths.
+- Added SHA-256 bearer-token identities, constant-time verification and viewer/operator/admin roles.
+- Added bounded rotating NDJSON audit history and authenticated live deployment probes.
+- Added hardened systemd and Caddy reverse-proxy artifacts plus secret-free environment templates.
+- Added focused production-controller regression coverage and generated Python syntax validation.
+
+## 0.11.8 - server-sent controller status events
+
+- Added `GET /api/events/stream` with SSE status events, monotonic per-connection IDs and configurable heartbeat comments.
+- Updated the generated dashboard to use `EventSource` with automatic reconnect while retaining periodic polling as a compatibility fallback.
+- Added controller stream configuration validation, OpenAPI/route-table exposure and focused v0.11.8 regression coverage.
+- Added release, deployment, learning and clean-room notes for the live event seam.
+
+## 0.11.7 - generated multi-server controller dashboard
+
+- Added generated browser dashboard assets: `controller/index.html`, `controller/dashboard.js` and `controller/dashboard.css`.
+- Added controller routes for `/`, `/dashboard.js`, `/dashboard.css` and `/api/events`.
+- Added polling dashboard UI with summary cards, case table, stdout/stderr log preview and token-prompted control buttons.
+- Added newline-delimited `controller/events.ndjson` event snapshot for downstream dashboards.
+- Added configurable dashboard title and refresh cadence to `RemoteControllerConfig`.
+- Added CLI smoke case `particle-multiserver-dashboard` and focused regression target `cfd-v0117-controller-dashboard-tests`.
+- Updated deployment docs, SU2/csauto notes, study guide, learning resources, README, release notes and integration tracker.
+
+## 0.11.6 - multi-server controller API scaffold
+
+- Added generated dependency-free Python controller service scaffold for multi-server supervision artifacts.
+- Added controller routes for health, status, case listing and stdout/stderr log tails.
+- Added optional token-gated mutation route that writes `.cfd_control/<action>.directive` files for approved control actions.
+- Added generated OpenAPI JSON, status JSON, route table, environment example, controller README and `multiserver_controller.sh` launcher.
+- Added read-only controller planning mode for dashboard-only deployments.
+- Added CLI smoke case `particle-multiserver-controller` and focused regression target `cfd-v0116-multiserver-controller-tests`.
+- Updated deployment docs, SU2/csauto notes, study guide, learning resources, README, release notes and integration tracker.
+
+## 0.11.5 - multi-server supervision hardening
+
+- Added multi-server supervision plans on top of supervised remote job metadata.
+- Added SSH/local access probes, Docker daemon probes and campaign-root writability checks.
+- Added retry-wrapped remote launch command plans with configurable attempt count and delay.
+- Added stdout/stderr tail command plans for dashboard/log-panel integration.
+- Added sensitive command-display redaction for inline TOKEN/PASSWORD/SECRET/KEY-style values.
+- Added persisted `multiserver_access_checks.sh`, `multiserver_retry_launch.sh`, `multiserver_tail_logs.sh`, `multiserver_dashboard.json` and `multiserver_supervision.tsv`.
+- Added CLI smoke case `particle-multiserver-supervision` and focused regression target `cfd-v0115-multiserver-supervision-tests`.
+- Updated deployment docs, SU2/csauto notes, study guide, learning resources, README, release notes and integration tracker.
+
+## 0.11.4 - supervised multi-server execution and Docker healthchecks
+
+- Added supervised multi-server execution planning on top of the v0.11.3 placement layer.
+- Added remote host health-check command plans for campaign root, native/Docker runtime availability and disk-space inspection.
+- Added per-case remote job plans with launch, status, cancel and fetch-log commands, plus `.cfd_run` stdout/stderr/pid/exit-code paths.
+- Added persisted `multiserver_health.sh`, `multiserver_launch.sh`, `multiserver_status.sh`, `multiserver_fetch_logs.sh` and `multiserver_jobs.tsv` artifacts.
+- Added remote job status table parsing and registry update helpers for running/done/failed/stopped distributed cases.
+- Extended Docker deploy scaffolding with Compose healthchecks plus `deploy/healthcheck.sh` and `deploy/worker-entrypoint.sh`.
+- Added CLI smoke case `particle-multiserver-execution` and focused regression target `cfd-v0114-multiserver-execution-tests`.
+- Updated deployment docs, SU2/csauto notes, study guide, learning resources, README, release notes and integration tracker.
+
+## 0.11.3 - multi-server campaign planning and Docker deployment scaffold
+
+- Added `CampaignServerDescriptor` and multi-server campaign placement with server slots, online filtering, tag filtering and deterministic assignment.
+- Added generated remote command plans for directory creation, rsync-style case synchronization and native/Docker solver launch commands.
+- Added persisted `multiserver_assignments.tsv` and `multiserver_commands.sh` plan files for auditable distributed campaign launches.
+- Added Docker/Compose deployment scaffold generation: Dockerfile, `compose.yaml`, `.dockerignore`, `deploy/deploy.sh`, `deploy/env.example`, `deploy/servers.example.tsv` and deployment README.
+- Added CLI smoke case `particle-multiserver-deploy` and focused regression target `cfd-v0113-multiserver-deploy-tests`.
+- Updated SU2/csauto clean-room notes, deployment docs, study guide, learning resources, README, release notes and integration tracker.
+
+## 0.11.2 - campaign control directives and scheduler status refresh
+
+- Added live-control directive files for solver-adapter-approved stop, extend, checkpoint and flush actions.
+- Added directive discovery for generated case folders under `.cfd_control`.
+- Added Slurm-style scheduler queue parsing and registry status application for queued/running/done/failed/cancelled jobs.
+- Added campaign output refresh that scans discovered logs, residual histories and performance files to update registry status/objective/iteration fields without relaunching cases.
+- Added CLI smoke case `particle-campaign-control` and focused regression target `cfd-v0112-campaign-control-tests`.
+- Updated SU2/csauto clean-room notes, study guide, learning resources, README, release notes and integration tracker.
+
+## 0.11.1 - local campaign runner and runtime doctor checks
+
+- Added runtime doctor checks for solver adapter descriptors, case directories and launch executables across native/container/scheduler boundaries.
+- Added POSIX native argv process launching for local solver runs with captured stdout/stderr logs and without shell command-string execution.
+- Added campaign output discovery for residual/history and performance/timing files.
+- Added a local campaign runner that executes pending cases, parses residual/performance outputs and updates `registry.tsv` objective/iteration/status fields.
+- Added CLI smoke case `particle-campaign-local-runner` and focused regression target `cfd-v0111-local-campaign-runner-tests`.
+- Updated SU2/csauto clean-room notes, study guide, learning resources, README, release notes and integration tracker.
+
+## 0.11.0 - persistent campaign execution and external-solver workflow boundary
+
+- Added persistent campaign folder generation with rendered per-case files, `doe_row.csv` snapshots, template manifests and registry TSV roundtrips.
+- Added external-solver command planning for native, Docker, Apptainer/Singularity and Slurm-style wrappers while keeping actual process launch outside this safe reference layer.
+- Added residual-history and performance-metric log parsers plus a finite-difference gradient-descent campaign optimization loop.
+- Added CLI smoke case `particle-campaign-execution` and focused regression target `cfd-v0110-campaign-execution-tests`.
+- Updated SU2/csauto clean-room notes, study guide, learning resources, README, release notes and integration tracker.
+
 ## 0.10.9 - stochastic transport, dose scoring and SU2/csauto campaign workflow
 
 - Extended the Geant4-inspired particle-through-matter seam with stochastic sampled interaction lengths, physics-list bundles, production-cut overrides, region BVH lookup, sensitive-detector hit collection, dose-grid scoring and SAR projection into the Pennes bioheat solver.

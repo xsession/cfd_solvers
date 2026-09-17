@@ -6,22 +6,15 @@ The long-term goal is a readable solver collection covering CFD, FEM multiphysic
 
 The project is inspired by the capabilities and engineering lessons of OpenFOAM, FluidX3D, Elmer FEM, openEMS FDTD and Optiland. It is **not** a source-code merge or mechanical translation. The source projects have different licenses, and FluidX3D has additional restrictions, so performance techniques are independently implemented from publications and public descriptions.
 
-## v0.10.9 status - stochastic transport, dose scoring and campaign workflow
+## v0.15.2 status - transported RANS, Reynolds stress and SST-DES
 
-The machine-checkable integration program now reports **546/687 capabilities (79.5%)** complete. Phase 9 workflow/UX is **16/18 (88.9%)**, Phase 10 RF/antenna/microwave is **46/70 (65.7%)**, Phase 11 SPICE/circuit/compact-model simulation is **80/98 (81.6%)**, and Phase 12 CST-class expansion is **76/95 (80.0%)**. The CPU validation matrix contains **95 CTest targets**.
+The machine-checkable integration program now reports **608/719 capabilities (84.6%)** complete. Phase 1 common HPC runtime remains **34/34 (100.0%)**, Phase 2 FluidX3D-class LBM remains **43/46 (93.5%)**, Phase 3 OpenFOAM-class FVM advances to **94/106 (88.7%)**, and Phase 9 workflow/UX remains **50/50 (100.0%)**. The default CPU regression matrix contains **122 CTest targets**.
 
-This checkpoint deepens the Geant4-inspired transport seam and adds SU2/csauto-inspired workflow infrastructure:
+This checkpoint closes the five remaining turbulence-transport tracker items. `SpalartAllmarasTransport`, `KEpsilonTransport` and `KOmegaSSTTransport` add transported turbulence state on the polyhedral FVM mesh with implicit upwind advection, variable diffusion, semi-implicit destruction, positivity bounds, fixed-value/zero-gradient patches and Euler/BDF2/Crank-Nicolson time integration. SST includes F1/F2 blending, cross diffusion, production limiting and an integrated DES dissipation-length switch with optional F1/F2 zonal shielding.
 
-- stochastic sampled physical interaction lengths for discrete particle-through-matter events;
-- physics-list process bundles with production-cut override;
-- BVH-accelerated region lookup for axis-aligned transport regions;
-- sensitive-detector hit collection, dose-grid scoring and dose-rate/SAR projection into the Pennes bioheat solver;
-- factorial and Latin-hypercube DOE campaign generation;
-- template placeholder and `<!-- IF ... -->` / `<!-- ENDIF -->` rendering;
-- solver-adapter descriptors/capability checks, campaign registry summaries and finite-difference gradient/descent utilities;
-- CLI smoke cases `particle-transport-dose-bvh` and `particle-campaign-doe`.
+`ReynoldsStressTransport` adds six symmetric Reynolds-stress equations plus an epsilon equation, LRR-style pressure-strain redistribution, production from the supplied velocity gradient, a turbulent-diffusion closure, optional source injection and a realizability projection that keeps the transported covariance tensor positive semidefinite.
 
-This is still a **clean-room reference layer**, not a Geant4, SU2, code_saturne or csauto adapter. It does not copy or translate Geant4, SU2 or csauto source code. It extracts portable architecture lessons: track/step/process transport, PDE-constrained campaign/gradient loops, and adapter-bounded solver automation.
+Validation passes **122/122** CPU tests. The focused v0.15.2 regression covers analytic linear shear, SA growth, k-epsilon decay/production, SST blending, SST-DES switching, Reynolds-stress anisotropy/realizability and fixed-boundary turbulent diffusion. Clean-room documentation is in `docs/UPSTREAM_DOCUMENTATION_REVIEW_0_15_2.md`.
 
 The clean-room rule remains unchanged: upstream projects and commercial-product capability descriptions are architecture/research references only; incompatible source code is not translated or copied into the MIT core.
 
@@ -81,6 +74,10 @@ Examples:
 ./build/cfd-solve particle-geant4-transport
 ./build/cfd-solve particle-transport-dose-bvh
 ./build/cfd-solve particle-campaign-doe
+./build/cfd-solve particle-campaign-execution
+./build/cfd-solve particle-multiserver-deploy
+./build/cfd-solve particle-multiserver-execution
+./build/cfd-solve particle-multiserver-supervision
 ./scripts/integration_status.py
 ```
 

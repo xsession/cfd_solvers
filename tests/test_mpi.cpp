@@ -1,5 +1,7 @@
 #include "cfd/distributed/device_assignment.hpp"
 #include "cfd/distributed/mpi_runtime.hpp"
+#include "cfd/distributed/mpi_sparse.hpp"
+#include "cfd/core/csr_matrix.hpp"
 #include "cfd/distributed/mpi_selective_halo.hpp"
 #include "cfd/solvers/lbm/distributed_pull.hpp"
 #include "cfd/solvers/lbm/precision_pull.hpp"
@@ -149,6 +151,47 @@ void run_sycl_case(const cfd::distributed::MpiCartesianRuntime& runtime) {
 }
 #endif
 
+void run_distributed_sparse_krylov(const cfd::distributed::MpiCartesianRuntime& runtime) {
+    const std::size_t ranks = static_cast<std::size_t>(runtime.size());
+    const std::size_t rank = static_cast<std::size_t>(runtime.rank());
+    const std::size_t n = std::max<std::size_t>(8U, ranks * 4U);
+    const std::size_t begin = n * rank / ranks;
+    const std::size_t end = n * (rank + 1U) / ranks;
+
+    cfd::core::CsrBuilder builder(n, n);
+    for (std::size_t i = 0U; i < n; ++i) {
+        if (i > 0U) builder.add(i, i - 1U, -1.0);
+        builder.add(i, i, 2.0);
+        if (i + 1U < n) builder.add(i, i + 1U, -1.0);
+    }
+    const auto matrix = builder.build();
+    std::vector<double> exact(n);
+    for (std::size_t i = 0U; i < n; ++i) exact[i] = 1.0 + 0.125 * static_cast<double>(i);
+    std::vector<double> global_rhs(n);
+    matrix.multiply(exact, global_rhs);
+
+    std::vector<double> local_rhs(global_rhs.begin() + static_cast<std::ptrdiff_t>(begin),
+                                  global_rhs.begin() + static_cast<std::ptrdiff_t>(end));
+    std::vector<double> local_x(end - begin, 0.0);
+    cfd::distributed::MpiDistributedCsrOperator distributed(matrix, begin, end, runtime.communicator());
+    cfd::core::KrylovWorkspace workspace;
+    const auto result = cfd::distributed::mpi_distributed_conjugate_gradient(
+        distributed, local_rhs, local_x, workspace, 256U, 1.0e-12);
+    if (!result.converged) throw std::runtime_error("MPI distributed CG failed to converge");
+
+    double local_error = 0.0;
+    for (std::size_t i = begin; i < end; ++i) {
+        local_error = std::max(local_error, std::abs(local_x[i - begin] - exact[i]));
+    }
+    double global_error = 0.0;
+    MPI_Allreduce(&local_error, &global_error, 1, MPI_DOUBLE, MPI_MAX, runtime.communicator());
+    if (global_error >= 1.0e-9) throw std::runtime_error("MPI distributed CG solution regression");
+
+    if (runtime.size() > 1 && distributed.halo_value_count() == 0U) {
+        throw std::runtime_error("MPI distributed CSR partition unexpectedly has no halo columns");
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -157,6 +200,7 @@ int main(int argc, char** argv) {
         cfd::distributed::MpiCartesianRuntime runtime({18, 14, 10}, 3, {true, true, true});
         run_cpu_case<cfd::lbm::D3Q19Descriptor>(runtime);
         run_cpu_case<cfd::lbm::D3Q27Descriptor>(runtime);
+        run_distributed_sparse_krylov(runtime);
 #if defined(CFD_HAS_SYCL)
         run_sycl_case<cfd::lbm::D3Q19Descriptor>(runtime);
         run_sycl_case<cfd::lbm::D3Q27Descriptor>(runtime);

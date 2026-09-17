@@ -28,6 +28,19 @@ inline float guo_source(int q, float rho, float ux, float uy,
 
 } // namespace
 
+float bouzidi_interpolated_bounce_back(float wall_fraction, float opposite_here,
+                                        float opposite_away, float incoming_here) {
+    if (!(wall_fraction > 0.0F && wall_fraction <= 1.0F)) {
+        throw std::invalid_argument("Bouzidi wall fraction must be in (0, 1]");
+    }
+    if (wall_fraction <= 0.5F) {
+        return 2.0F * wall_fraction * opposite_here +
+               (1.0F - 2.0F * wall_fraction) * opposite_away;
+    }
+    const float inv_2q = 0.5F / wall_fraction;
+    return inv_2q * opposite_here + (1.0F - inv_2q) * incoming_here;
+}
+
 D2Q9Solver::D2Q9Solver(D2Q9Config config)
     : config_(config),
       grid_(config.nx, config.ny),
@@ -38,10 +51,12 @@ D2Q9Solver::D2Q9Solver(D2Q9Config config)
       uy_(grid_.cells(), 0.0F),
       solid_(grid_.cells(), 0U),
       wall_ux_(grid_.cells(), 0.0F),
-      wall_uy_(grid_.cells(), 0.0F) {
+      wall_uy_(grid_.cells(), 0.0F),
+      wall_fraction_(grid_.cells()) {
     if (config_.tau <= 0.5F) {
         throw std::invalid_argument("D2Q9 tau must be > 0.5 for positive viscosity");
     }
+    std::fill(wall_fraction_.raw().begin(), wall_fraction_.raw().end(), -1.0F);
     initialize_uniform();
 }
 
@@ -97,6 +112,19 @@ void D2Q9Solver::set_wall_velocity(std::size_t x, std::size_t y, float ux, float
     solid_[i] = 1U;
     wall_ux_[i] = ux;
     wall_uy_[i] = uy;
+}
+
+
+void D2Q9Solver::set_interpolated_wall_link(std::size_t fluid_x, std::size_t fluid_y,
+                                             int incoming_direction, float wall_fraction) {
+    if (fluid_x >= grid_.nx || fluid_y >= grid_.ny) throw std::out_of_range("curved-wall fluid cell outside grid");
+    if (incoming_direction <= 0 || incoming_direction >= D2Q9Descriptor::q) throw std::invalid_argument("curved-wall direction must be a moving D2Q9 population");
+    if (!(wall_fraction > 0.0F && wall_fraction <= 1.0F)) throw std::invalid_argument("curved-wall fraction must be in (0, 1]");
+    wall_fraction_(static_cast<std::size_t>(incoming_direction), grid_.index(fluid_x, fluid_y)) = wall_fraction;
+}
+
+void D2Q9Solver::clear_interpolated_wall_links() noexcept {
+    std::fill(wall_fraction_.raw().begin(), wall_fraction_.raw().end(), -1.0F);
 }
 
 void D2Q9Solver::set_velocity_inlet_left(float ux, float uy) noexcept {
@@ -177,11 +205,22 @@ void D2Q9Solver::step_once() {
             float value;
             if (solid_[source] != 0U) {
                 const int qo = D2Q9Descriptor::opposite(q);
+                const float fraction = wall_fraction_(static_cast<std::size_t>(q), i);
+                if (fraction > 0.0F) {
+                    const std::size_t ax = static_cast<std::size_t>((static_cast<int>(x) + cx + static_cast<int>(nx)) % static_cast<int>(nx));
+                    const std::size_t ay = static_cast<std::size_t>((static_cast<int>(y) + cy + static_cast<int>(ny)) % static_cast<int>(ny));
+                    const std::size_t away = ay * nx + ax;
+                    const float opposite_here = f_(static_cast<std::size_t>(qo), i);
+                    const float opposite_away = solid_[away] == 0U ? f_(static_cast<std::size_t>(qo), away) : opposite_here;
+                    const float incoming_here = f_(static_cast<std::size_t>(q), i);
+                    value = bouzidi_interpolated_bounce_back(fraction, opposite_here, opposite_away, incoming_here);
+                } else {
+                    value = f_(static_cast<std::size_t>(qo), i);
+                }
                 const float wall_dot_c = static_cast<float>(cx) * wall_ux_[source] +
                                          static_cast<float>(cy) * wall_uy_[source];
                 const float rho_wall = std::max(rho_[i], 1.0e-8F);
-                value = f_(static_cast<std::size_t>(qo), i) +
-                        6.0F * D2Q9Descriptor::weight(q) * rho_wall * wall_dot_c;
+                value += 6.0F * D2Q9Descriptor::weight(q) * rho_wall * wall_dot_c;
             } else {
                 value = f_(static_cast<std::size_t>(q), source);
             }

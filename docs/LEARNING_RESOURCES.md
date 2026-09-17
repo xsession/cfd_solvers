@@ -287,3 +287,189 @@ ctest -R cfd-v0108-geant4-transport-tests --output-on-failure
 - Keep solver-specific runtime knowledge behind a small adapter descriptor and test that generic workflow code does not depend on solver names.
 - Treat DOE generation, template rendering, doctor checks, run registry, status, residual/performance extraction and cleanup as separate concerns.
 - Add persistent campaign folders and JSON/CSV exports only after the in-memory campaign primitives are stable.
+
+## v0.11.0 learning queue - campaign execution and solver workflow adapters
+
+Suggested study topics:
+
+- Campaign directory layout: one generated case per folder, immutable DOE row snapshots, manifest files and registry state.
+- Solver adapter boundaries: keep runtime, parser and control conventions outside the generic campaign core.
+- Native/container/scheduler command planning: validate argv construction separately from process execution.
+- Residual and performance telemetry: parse common log events into typed samples before drawing dashboards or driving optimization.
+- Finite-difference optimization loops: understand step-size sensitivity and backtracking before implementing adjoint-compatible interfaces.
+
+Repository exercises:
+
+```bash
+./build/cfd-solve particle-campaign-execution
+ctest -R cfd-v0110-campaign-execution-tests --output-on-failure
+```
+
+
+## v0.11.1 workflow learning checklist
+
+To understand the local campaign runner, study these concepts in order:
+
+- argv-based process launching vs shell command strings;
+- PATH/executable and case-directory doctor checks;
+- stdout/stderr capture as reproducible per-case artifacts;
+- residual/performance discovery contracts independent of solver names;
+- registry status transitions from `pending` -> `running` -> `done`/`failed`/`stopped`;
+- why container and scheduler runners should reuse the same adapter and parser boundary instead of duplicating workflow logic.
+
+
+## v0.11.2 workflow learning checklist
+
+To understand the campaign-control layer, study these concepts in order:
+
+- why live steering should be represented as durable directives before adding runtime-specific APIs;
+- adapter-declared capabilities vs hard-coded solver action names;
+- queued/running/done/failed/cancelled scheduler-state normalization;
+- separating scheduler polling from residual/performance file refresh;
+- how registry updates can be replayed deterministically from logs, residual histories and performance files.
+
+## v0.11.3 deployment learning checklist
+
+- Compare local campaign execution, scheduler status refresh, and multi-server placement as separate layers.
+- Verify that solver-specific knowledge stays in `SolverAdapterDescriptor` and server/deployment knowledge stays in `CampaignServerDescriptor` / Docker deploy config.
+- Review the generated Docker/Compose files before using them on a real host.
+- Treat generated SSH/rsync scripts as operator-reviewed artifacts until supervised remote execution is added.
+
+
+## v0.11.4 workflow/deployment study checklist
+
+- Compare static placement planning with supervised execution planning.
+- Trace how health, launch, status, cancel and fetch-log scripts are generated from one assignment table.
+- Verify how tabular remote status rows become registry state transitions.
+- Review why Docker healthchecks and worker entrypoints are generated as files rather than embedded as hidden runtime behavior.
+
+
+## v0.11.5 learning checkpoint - deployment supervision contracts
+
+To understand the new workflow layer, study these concepts in order:
+
+1. Remote execution should expose auditable command plans before it becomes a daemon.
+2. Retry loops need bounded attempts and explicit delays so failures remain observable.
+3. Log streaming starts with stable stdout/stderr path metadata and tail commands.
+4. Dashboard JSON should be derived from the same job metadata that launch/status scripts use.
+5. Redaction helps prevent accidental leaks in display artifacts, but does not replace secret management.
+
+Run `cfd-solve particle-multiserver-supervision` to see the offline generated supervision path.
+
+## v0.11.6 learning checkpoint - controller/API scaffolding
+
+To understand the controller layer, study these concepts in order:
+
+1. A dashboard should read the same status artifacts that scripts and tests already validate.
+2. Mutating API routes should write durable directive files, not call hidden solver-specific code paths.
+3. Token checks protect only the scaffolded API; production deployments still need TLS, reverse-proxy auth and secret management.
+4. OpenAPI and routes TSV files make the controller auditable before a richer frontend is added.
+5. Read-only controller mode is useful for dashboards that must never alter remote runs.
+
+Run `cfd-solve particle-multiserver-controller` to generate and validate the offline controller scaffold.
+
+## v0.11.7 learning notes - generated operations dashboard
+
+Study topics added by the v0.11.7 dashboard layer:
+
+- Polling dashboards versus live WebSocket/SSE log streaming.
+- Static asset serving from Python's standard-library HTTP server.
+- Separation between read-only status endpoints and token-gated mutating routes.
+- NDJSON event snapshots as a simple bridge between batch supervision scripts and future real-time dashboards.
+- Why production deployments still need TLS, identity, secret management and a reverse proxy even when the generated controller is useful for local review.
+
+## v0.11.8 learning notes - server-sent events
+
+- Compare SSE's one-way UTF-8 event stream with polling and bidirectional WebSockets.
+- Trace how event IDs, named `status` events and heartbeat comments are encoded.
+- Observe browser `EventSource` reconnection while the polling loop continues as a fallback.
+- Keep streaming transport independent of solver adapters and remote execution mechanisms.
+- Treat TLS, identity, secret management and daemon supervision as mandatory production boundaries.
+
+## v0.12.0 learning notes - production controller boundary
+
+- Compare plaintext tokens with stored SHA-256 digests and constant-time verification.
+- Study role separation between read-only viewers and control-capable operators.
+- Trace fail-closed TLS startup and reverse-proxy TLS termination as alternative deployment patterns.
+- Review bounded audit files, rotation and centralized-log forwarding requirements.
+- Examine subprocess timeout, output bounding and service-account permissions for live probes.
+- Audit the generated systemd sandbox directives before adapting them to a host.
+
+## v0.13.0 learning notes - HDF5/XDMF and Python ABI
+
+- Compare XDMF inline XML data with HDF5 heavy-data references.
+- Inspect the `/Mesh/Points`, `/Mesh/Cells` and `/Fields/<name>` dataset contract.
+- Understand why optional HDF5 support fails explicitly instead of silently changing formats.
+- Study ABI stability: flat pointers, counts, integer return codes and caller-owned error buffers.
+- Compare a `ctypes` package with pybind11 and direct CPython-extension approaches.
+- Trace Python input validation through the C ABI into the existing C++ mesh validator.
+
+## v0.14.0 learning notes - NUMA, SYCL sparse Krylov and MPI ownership
+
+- OpenMP affinity concepts: places, `OMP_PLACES`, and `OMP_PROC_BIND` / `proc_bind`.
+- Linux per-thread CPU affinity and why cpuset/cgroup restrictions must be treated as an upper bound on placement.
+- Dynamic Linux CPU sets (`CPU_ALLOC`) for machines whose affinity mask exceeds 1024 logical CPUs.
+- SYCL USM device allocations, explicit queue copies and standard reductions.
+- CSR SpMV as the dominant memory-bandwidth kernel inside many Krylov methods.
+- Setup-time sparse ownership/request discovery versus per-iteration value exchange.
+- Why distributed Krylov dot products require global reductions even when SpMV itself is locally row-partitioned.
+
+Primary references are recorded in `UPSTREAM_DOCUMENTATION_REVIEW_0_14_0.md`.
+
+## v0.14.1 learning notes - advanced LBM boundaries
+
+- Compare raw-moment, central-moment and cumulant collision spaces and identify which moments control viscosity.
+- Derive the Smagorinsky effective relaxation time from the non-equilibrium stress tensor rather than treating LES as an arbitrary viscosity knob.
+- Trace how a link-wise wall fraction changes bounce-back and why the half-way value is a useful regression invariant.
+- Follow immersed-boundary interpolation and equal-and-opposite force spreading as one discrete conservation pair.
+- Separate VOF transport, interface geometry and capillary forcing; then compare this baseline with PLIC-based free-surface methods.
+- Treat reduced-precision storage as an error-budget problem: measure mass and macroscopic fields against a higher-precision reference.
+- Validate derived visualization fields such as Q-criterion against analytic velocity gradients before using them for qualitative plots.
+
+
+## v0.14.2 learning notes - tuning, multi-device execution and repartitioning
+
+- Build portable accelerator identity from SYCL vendor/name/driver queries instead of requiring a vendor UUID extension.
+- Treat work-group size, vector width and fusion depth as measured device-specific choices rather than universal constants.
+- Keep tuning persistence separate from benchmarking so production runs can consume previously qualified choices without retuning.
+- Compare one-device-per-rank and many-devices-per-rank layouts; understand why USM/context ownership prevents blindly sharing one allocation across arbitrary queues.
+- Derive weighted contiguous partition boundaries from prefix load and inspect the resulting migration overlaps.
+- Use imbalance and minimum-benefit thresholds to prevent adaptive repartition thrashing.
+- Treat a configured GPU CI workflow as different from a successful physical-hardware qualification.
+
+Primary references and design mapping are recorded in `UPSTREAM_DOCUMENTATION_REVIEW_0_14_2.md`.
+
+## v0.15.0 learning notes - production temporal schemes and pressure AMG
+
+- Distinguish a time-discretization helper formula from integration into the assembled FVM equation.
+- Trace BDF2 startup: one Euler step creates the old-old history needed by subsequent second-order steps.
+- For Crank-Nicolson, follow both sides of the equation: the new spatial operator is implicit while the old spatial residual contributes explicitly.
+- Compare Euler/BDF2/CN on the same semi-discrete diffusion operator so the regression isolates temporal error rather than mesh error.
+- Keep SIMPLE pseudo-time iteration separate from PISO/PIMPLE physical-time history.
+- Treat AMG as a preconditioner contract (`residual -> correction`) so hierarchy construction can come from an in-tree or external backend without coupling it to Rhie-Chow pressure assembly.
+
+Primary references and design mapping are recorded in `UPSTREAM_DOCUMENTATION_REVIEW_0_15_0.md`.
+
+## v0.15.1 learning notes - thermal source composition and restart state
+
+- Derive the solid temperature equation from `rho*cp*dT/dt = div(k grad T) + qdot` and identify where each physical coefficient enters `SolidHeatConduction`.
+- Verify source-term units by comparing integrated volumetric power with the change in total sensible energy.
+- Separate constitutive material functions (`cp(T)`, `k(T)`) from physical source models (chemistry, radiation).
+- Treat callback lifetime as part of API correctness: an energy source that retains a model by reference can outlive that model unless ownership is explicit.
+- Compare post-processing output with restart output: restart must preserve topology/patch identity, time level and equation fields together.
+- Inspect HDF5 dataset shapes and primitive types, then follow readback through `PolyMesh` validation rather than trusting file indices blindly.
+- Keep optional-backend behavior explicit: a build without HDF5 should reject HDF5 checkpoint requests instead of silently changing formats.
+
+Primary references and design mapping are recorded in `UPSTREAM_DOCUMENTATION_REVIEW_0_15_1.md`.
+
+## v0.15.2 learning notes - RANS transport, RSM and DES
+
+- Separate constitutive viscosity formulas from the PDEs that transport their state variables.
+- Derive k-epsilon destruction as a semi-implicit diagonal term so `epsilon` cannot drive `k` negative in one explicit source update.
+- Trace SST F1/F2 blending from wall distance and local turbulence scales, then inspect how cross diffusion changes the omega equation.
+- Compare RANS SST with SST-DES: DES must change the k-equation dissipation length/time scale, not merely report a different diagnostic length.
+- Study Reynolds-stress production as a tensor contraction with the mean velocity gradient instead of reconstructing all stresses from one scalar eddy viscosity.
+- Treat Reynolds-stress realizability as a covariance-matrix constraint: non-negative normal stresses, Cauchy-Schwarz bounds and a non-negative determinant.
+- Keep wall-reflection, buoyancy and rotation corrections behind source/closure extension seams rather than hard-wiring every RSM variant into the transport kernel.
+
+Primary public references and clean-room mapping are recorded in `UPSTREAM_DOCUMENTATION_REVIEW_0_15_2.md`.

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(cfd_solvers VERSION 0.10.9 LANGUAGES CXX)
+project(cfd_solvers VERSION 0.15.2 LANGUAGES C CXX)
 
 option(CFD_ENABLE_OPENMP "Enable multicore CPU execution through OpenMP" ON)
 option(CFD_ENABLE_SYCL "Enable AdaptiveCpp/SYCL accelerator backend" OFF)
@@ -7,12 +7,17 @@ option(CFD_ENABLE_MPI "Enable MPI distributed-memory runtime" OFF)
 option(CFD_ENABLE_NATIVE_ARCH "Enable -march=native on supported compilers" ON)
 option(CFD_FAST_MATH "Enable aggressive floating-point optimizations" OFF)
 option(CFD_BUILD_TESTS "Build tests" ON)
+option(CFD_ENABLE_HDF5 "Enable native HDF5 plus XDMF output" ON)
+option(CFD_BUILD_PYTHON_BINDINGS "Build the stable C ABI used by the Python ctypes package" ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(cfd_solvers
+    src/core/numa.cpp
+    src/core/autotune.cpp
+    src/distributed/repartition.cpp
     src/core/complex_sparse.cpp
     src/em/frequency_domain.cpp
     src/em/edge_fem2d.cpp
@@ -45,10 +50,13 @@ add_library(cfd_solvers
     src/workflow/validation_catalog.cpp
     src/workflow/runner.cpp
     src/workflow/campaign.cpp
+    src/workflow/campaign_control.cpp
+    src/workflow/deploy.cpp
     src/fvm/derived_fields.cpp
     src/fvm/reordering.cpp
     src/fvm/fv_matrix.cpp
     src/fvm/turbulence.cpp
+    src/fvm/rans_transport.cpp
     src/fvm/vof.cpp
     src/fvm/particles.cpp
     src/fvm/compressible1d.cpp
@@ -60,6 +68,8 @@ add_library(cfd_solvers
     src/fvm/mesh_motion.cpp
     src/lbm/diagnostics.cpp
     src/lbm/visualization.cpp
+    src/lbm/particles.cpp
+    src/lbm/free_surface.cpp
     src/lbm/advanced_d2q9.cpp
     src/lbm/voxelize.cpp
     src/fvm/thermal_transport.cpp
@@ -78,6 +88,8 @@ add_library(cfd_solvers
     src/multiphysics/bioheat.cpp
     src/multiphysics/electrochemical_heat.cpp
     src/io/mesh_io.cpp
+    src/io/hdf5_xdmf.cpp
+    src/io/fvm_checkpoint.cpp
     src/io/openfoam_io.cpp
     src/optics/transform.cpp
     src/optics/analysis.cpp
@@ -97,6 +109,7 @@ add_library(cfd_solvers
     src/fvm/collocated_incompressible.cpp
     src/fvm/incompressible2d.cpp
     src/fvm/scalar_transport.cpp
+    src/fvm/solid_heat.cpp
     src/fem/poisson1d.cpp
     src/fem/mesh2d.cpp
     src/fem/mesh3d.cpp
@@ -155,6 +168,25 @@ add_library(cfd_solvers
 )
 add_library(cfd::solvers ALIAS cfd_solvers)
 
+if(CFD_ENABLE_HDF5)
+    find_package(HDF5 QUIET COMPONENTS C)
+    if(HDF5_FOUND)
+        target_include_directories(cfd_solvers PRIVATE ${HDF5_INCLUDE_DIRS})
+        target_link_libraries(cfd_solvers PRIVATE ${HDF5_LIBRARIES})
+        target_compile_definitions(cfd_solvers PUBLIC CFD_HAS_HDF5=1)
+    else()
+        message(WARNING "HDF5 requested but not found; inline XDMF remains available")
+    endif()
+endif()
+
+if(CFD_BUILD_PYTHON_BINDINGS)
+    set_target_properties(cfd_solvers PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    add_library(cfd_solvers_capi SHARED src/python/c_api.cpp)
+    target_link_libraries(cfd_solvers_capi PRIVATE cfd::solvers)
+    target_include_directories(cfd_solvers_capi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    set_target_properties(cfd_solvers_capi PROPERTIES OUTPUT_NAME cfd_solvers_capi)
+endif()
+
 target_include_directories(cfd_solvers PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -194,7 +226,8 @@ endif()
 
 if(CFD_ENABLE_MPI)
     find_package(MPI REQUIRED COMPONENTS CXX)
-    target_sources(cfd_solvers PRIVATE src/distributed/mpi_runtime.cpp)
+    target_sources(cfd_solvers PRIVATE src/distributed/mpi_runtime.cpp
+        src/distributed/mpi_sparse.cpp)
     target_link_libraries(cfd_solvers PUBLIC MPI::MPI_CXX)
     target_compile_definitions(cfd_solvers PUBLIC CFD_HAS_MPI=1)
 
@@ -207,11 +240,15 @@ if(CFD_ENABLE_SYCL)
     target_sources(cfd_solvers PRIVATE
         src/sycl/d2q9_sycl.cpp
         src/sycl/esoteric_pull_sycl.cpp
+        src/sycl/sparse_linalg_sycl.cpp
+        src/sycl/voxelize_sycl.cpp
     )
     target_compile_definitions(cfd_solvers PUBLIC CFD_HAS_SYCL=1)
     add_sycl_to_target(TARGET cfd_solvers SOURCES
         src/sycl/d2q9_sycl.cpp
         src/sycl/esoteric_pull_sycl.cpp
+        src/sycl/sparse_linalg_sycl.cpp
+        src/sycl/voxelize_sycl.cpp
     )
     if(TARGET cfd-distributed)
         add_sycl_to_target(TARGET cfd-distributed SOURCES apps/cfd-distributed.cpp)
@@ -315,6 +352,69 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     add_executable(cfd-v0109-transport-campaign-tests tests/test_v0109_transport_campaign.cpp)
     target_link_libraries(cfd-v0109-transport-campaign-tests PRIVATE cfd::solvers)
     add_test(NAME cfd-v0109-transport-campaign-tests COMMAND cfd-v0109-transport-campaign-tests)
+    add_executable(cfd-v0110-campaign-execution-tests tests/test_v0110_campaign_execution.cpp)
+    target_link_libraries(cfd-v0110-campaign-execution-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0110-campaign-execution-tests COMMAND cfd-v0110-campaign-execution-tests)
+    add_executable(cfd-v0111-local-campaign-runner-tests tests/test_v0111_local_campaign_runner.cpp)
+    target_link_libraries(cfd-v0111-local-campaign-runner-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0111-local-campaign-runner-tests COMMAND cfd-v0111-local-campaign-runner-tests)
+    add_executable(cfd-v0112-campaign-control-tests tests/test_v0112_campaign_control.cpp)
+    target_link_libraries(cfd-v0112-campaign-control-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0112-campaign-control-tests COMMAND cfd-v0112-campaign-control-tests)
+    add_executable(cfd-v0113-multiserver-deploy-tests tests/test_v0113_multiserver_deploy.cpp)
+    target_link_libraries(cfd-v0113-multiserver-deploy-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0113-multiserver-deploy-tests COMMAND cfd-v0113-multiserver-deploy-tests)
+    add_executable(cfd-v0114-multiserver-execution-tests tests/test_v0114_multiserver_execution.cpp)
+    target_link_libraries(cfd-v0114-multiserver-execution-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0114-multiserver-execution-tests COMMAND cfd-v0114-multiserver-execution-tests)
+    add_executable(cfd-v0115-multiserver-supervision-tests tests/test_v0115_multiserver_supervision.cpp)
+    target_link_libraries(cfd-v0115-multiserver-supervision-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0115-multiserver-supervision-tests COMMAND cfd-v0115-multiserver-supervision-tests)
+    add_executable(cfd-v0116-multiserver-controller-tests tests/test_v0116_multiserver_controller.cpp)
+    target_link_libraries(cfd-v0116-multiserver-controller-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0116-multiserver-controller-tests COMMAND cfd-v0116-multiserver-controller-tests)
+    add_executable(cfd-v0117-controller-dashboard-tests tests/test_v0117_controller_dashboard.cpp)
+    target_link_libraries(cfd-v0117-controller-dashboard-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0117-controller-dashboard-tests COMMAND cfd-v0117-controller-dashboard-tests)
+    add_executable(cfd-v0118-controller-sse-tests tests/test_v0118_controller_sse.cpp)
+    target_link_libraries(cfd-v0118-controller-sse-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0118-controller-sse-tests COMMAND cfd-v0118-controller-sse-tests)
+    add_executable(cfd-v0120-production-controller-tests tests/test_v0120_production_controller.cpp)
+    target_link_libraries(cfd-v0120-production-controller-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0120-production-controller-tests COMMAND cfd-v0120-production-controller-tests)
+    add_executable(cfd-v0130-xdmf-python-tests tests/test_v0130_xdmf_python.cpp)
+    target_link_libraries(cfd-v0130-xdmf-python-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0130-xdmf-python-tests COMMAND cfd-v0130-xdmf-python-tests)
+    add_executable(cfd-v0140-hpc-runtime-tests tests/test_v0140_hpc_runtime.cpp)
+    target_link_libraries(cfd-v0140-hpc-runtime-tests PRIVATE cfd::solvers)
+    if(CFD_ENABLE_SYCL)
+        add_sycl_to_target(TARGET cfd-v0140-hpc-runtime-tests SOURCES tests/test_v0140_hpc_runtime.cpp)
+    endif()
+    add_test(NAME cfd-v0140-hpc-runtime-tests COMMAND cfd-v0140-hpc-runtime-tests)
+    add_executable(cfd-v0141-lbm-les-qcriterion-tests tests/test_v0141_lbm_les_qcriterion.cpp)
+    target_link_libraries(cfd-v0141-lbm-les-qcriterion-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0141-lbm-les-qcriterion-tests COMMAND cfd-v0141-lbm-les-qcriterion-tests)
+    add_executable(cfd-v0142-portability-tests tests/test_v0142_portability.cpp)
+    target_link_libraries(cfd-v0142-portability-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0142-portability-tests COMMAND cfd-v0142-portability-tests)
+    add_executable(cfd-v0150-fvm-temporal-pressure-tests tests/test_v0150_fvm_temporal_pressure.cpp)
+    target_link_libraries(cfd-v0150-fvm-temporal-pressure-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0150-fvm-temporal-pressure-tests COMMAND cfd-v0150-fvm-temporal-pressure-tests)
+    add_executable(cfd-v0151-thermal-coupling-tests tests/test_v0151_thermal_coupling.cpp)
+    target_link_libraries(cfd-v0151-thermal-coupling-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0151-thermal-coupling-tests COMMAND cfd-v0151-thermal-coupling-tests)
+    add_executable(cfd-v0151-fvm-hdf5-checkpoint-tests tests/test_v0151_fvm_hdf5_checkpoint.cpp)
+    target_link_libraries(cfd-v0151-fvm-hdf5-checkpoint-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0151-fvm-hdf5-checkpoint-tests COMMAND cfd-v0151-fvm-hdf5-checkpoint-tests)
+    add_executable(cfd-v0152-rans-transport-tests tests/test_v0152_rans_transport.cpp)
+    target_link_libraries(cfd-v0152-rans-transport-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0152-rans-transport-tests COMMAND cfd-v0152-rans-transport-tests)
+    if(CFD_BUILD_PYTHON_BINDINGS)
+        find_package(Python3 QUIET COMPONENTS Interpreter)
+        if(Python3_Interpreter_FOUND)
+            add_test(NAME cfd-v0130-python-binding-smoke COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_python_bindings.py $<TARGET_FILE:cfd_solvers_capi> ${CMAKE_CURRENT_SOURCE_DIR}/python)
+        endif()
+    endif()
     add_library(cfd-osdi-fixture SHARED tests/osdi_fixture.cpp)
     add_executable(cfd-osdi-tests tests/test_osdi.cpp)
     target_link_libraries(cfd-osdi-tests PRIVATE cfd::solvers)
@@ -339,7 +439,7 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     add_test(NAME cfd-bench-json-smoke COMMAND cfd-bench --lattice d3q19 --nx 8 --ny 8 --nz 8 --warmup 1 --steps 2 --threads 1 --json)
     add_test(NAME cfd-halo-plan-smoke COMMAND cfd-halo-plan --lattice d3q27 --nx 8 --ny 8 --nz 8)
     add_test(NAME cfd-validation-catalog-smoke COMMAND cfd-validate)
-    foreach(case_name lbm-trt fvm-workspace fdtd-pml1d chemistry-reactor chemistry-equilibrium optics-gaussian multiphysics-thermoelastic em-frequency1d em-edge2d em-edge3d em-waveport particle-pic1d particle-em-pic1d particle-pic2d particle-em-pic2d particle-staggered-em-pic2d particle-pic3d particle-em-pic3d particle-staggered-em-pic3d particle-local-current3d particle-sort-halo3d particle-domain-exchange3d particle-comm-exchange3d particle-transport3d particle-serialized-transport3d particle-distributed-round3d particle-field-guards3d particle-distributed-step3d particle-geant4-transport particle-transport-dose-bvh particle-campaign-doe particle-plasma-chemistry particle-breakdown-threshold bioheat-sar rf-dipole rf-microstrip rf-multiwire spice-rc spice-diode spice-adaptive spice-pss-pz)
+    foreach(case_name lbm-trt fvm-workspace fdtd-pml1d chemistry-reactor chemistry-equilibrium optics-gaussian multiphysics-thermoelastic em-frequency1d em-edge2d em-edge3d em-waveport particle-pic1d particle-em-pic1d particle-pic2d particle-em-pic2d particle-staggered-em-pic2d particle-pic3d particle-em-pic3d particle-staggered-em-pic3d particle-local-current3d particle-sort-halo3d particle-domain-exchange3d particle-comm-exchange3d particle-transport3d particle-serialized-transport3d particle-distributed-round3d particle-field-guards3d particle-distributed-step3d particle-geant4-transport particle-transport-dose-bvh particle-campaign-doe particle-campaign-execution particle-campaign-local-runner particle-campaign-control particle-multiserver-deploy particle-multiserver-execution particle-multiserver-supervision particle-multiserver-controller particle-multiserver-dashboard particle-plasma-chemistry particle-breakdown-threshold bioheat-sar rf-dipole rf-microstrip rf-multiwire spice-rc spice-diode spice-adaptive spice-pss-pz)
         add_test(NAME cfd-${case_name}-smoke COMMAND cfd-solve ${case_name})
     endforeach()
     add_test(NAME cfd-fvm-operators-smoke COMMAND cfd-solve fvm-operators3d)

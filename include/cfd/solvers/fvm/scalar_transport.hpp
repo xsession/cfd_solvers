@@ -2,6 +2,7 @@
 
 #include "cfd/core/iterative_solvers.hpp"
 #include "cfd/fvm/poly_mesh.hpp"
+#include "cfd/fvm/temporal.hpp"
 
 #include <cstddef>
 #include <functional>
@@ -16,6 +17,8 @@ struct ScalarBoundaryCondition { ScalarBoundaryType type{ScalarBoundaryType::zer
 struct ScalarTransportConfig {
     double dt{1.0e-3}; double diffusivity{1.0e-2}; std::size_t linear_iterations{400};
     std::size_t gmres_restart{30}; double linear_tolerance{1.0e-10};
+    TemporalScheme temporal_scheme{TemporalScheme::euler};
+    double crank_nicolson_off_centering{1.0};
 };
 
 class ScalarTransport {
@@ -40,10 +43,10 @@ public:
     [[nodiscard]] std::size_t operator_assemblies() const noexcept { return operator_assemblies_; }
 private:
     PolyMesh mesh_; ScalarTransportConfig config_; std::vector<ScalarBoundaryCondition> boundary_;
-    std::vector<double> values_,old_values_,source_,face_flux_; cfd::core::CsrMatrix matrix_;
+    std::vector<double> values_,old_values_,source_,face_flux_; cfd::core::CsrMatrix spatial_matrix_,matrix_;
     std::optional<cfd::core::Ilu0Preconditioner> preconditioner_;
-    std::vector<double> boundary_rhs_,rhs_,candidate_; bool operator_dirty_{true};
-    std::size_t operator_assemblies_{}; cfd::core::IterativeSolverResult linear_result_{}; double time_{};
+    std::vector<double> boundary_rhs_,rhs_,candidate_,spatial_action_; bool operator_dirty_{true};
+    std::size_t operator_assemblies_{}; std::size_t steps_{}; cfd::core::IterativeSolverResult linear_result_{}; double time_{};
     void assemble_operator();
 };
 } // namespace cfd::fvm

@@ -770,3 +770,195 @@ Try the new focused cases:
 ```
 
 Limitations: the dose scorer uses axis-aligned regions and a regular grid, the stochastic transport only handles the compact process interfaces already implemented here, and the campaign layer is an in-process reference library rather than a persistent web dashboard or external solver launcher.
+
+## v0.11.0 - persistent campaign execution workflow
+
+Source files:
+
+- `include/cfd/workflow/campaign.hpp`
+- `src/workflow/campaign.cpp`
+- `tests/test_v0110_campaign_execution.cpp`
+
+Study path:
+
+1. Start with `generate_factorial_campaign` or `generate_latin_hypercube_campaign` to create rows.
+2. Pass those rows plus `CampaignTemplateFile` entries to `write_campaign_case_folders`.
+3. Inspect the generated case folders: rendered input files, `doe_row.csv`, `registry.tsv` and `template_manifest.tsv`.
+4. Build a `SolverRunRequest` and inspect the returned `SolverCommandPlan` before adding any real process launcher.
+5. Feed a synthetic solver log into `parse_residual_history`, `parse_performance_metrics` and `detect_solver_outcome_from_log`.
+6. Use parsed residuals/objectives to update the registry, then run `run_gradient_descent_campaign` to study a compact finite-difference optimization loop.
+
+Exercises:
+
+- Add a new runtime enum value for a local job queue and test only the command-plan contract first.
+- Extend the residual parser with a solver-specific grammar while preserving the generic parser tests.
+- Add JSON export next to `registry.tsv` and compare roundtrip robustness.
+
+
+## v0.11.1 workflow study: local campaign execution
+
+The campaign layer now has a minimal native execution path:
+
+1. Generate or persist a campaign with `write_campaign_case_folders`.
+2. Validate the selected solver/case combination with `doctor_solver_runtime`.
+3. Launch a native executable with `run_local_solver_case`, which uses argv execution and captures stdout/stderr logs.
+4. Discover residual/history and performance/timing files with `discover_campaign_outputs`.
+5. Run all pending cases and update `registry.tsv` with `run_local_campaign`.
+
+The regression target `cfd-v0111-local-campaign-runner-tests` builds a stub executable, runs a two-case campaign, verifies residual/performance parsing, and checks registry status/objective/iteration updates.
+
+
+## v0.11.2 workflow study: control directives and scheduler refresh
+
+The campaign workflow now has a control/monitoring seam on top of the local runner:
+
+1. Use `validate_campaign_control_request` to ensure the selected solver adapter advertises both the `control` capability and the requested action.
+2. Use `write_campaign_control_directive` to write deterministic `.cfd_control/<action>.directive` files for stop, extend, checkpoint or flush requests.
+3. Use `discover_campaign_control_directives` to enumerate pending steering requests from a generated case folder.
+4. Use `parse_slurm_queue_table` to convert compact scheduler output into typed `SchedulerJobRecord` values.
+5. Use `apply_scheduler_records_to_registry` and `refresh_campaign_status_from_outputs` to update registry state from scheduler status or solver logs without relaunching cases.
+
+The regression target `cfd-v0112-campaign-control-tests` checks control capability validation, directive persistence/discovery, scheduler-state mapping and output-based registry refresh.
+
+## v0.11.3 workflow/deployment study notes
+
+Study the new workflow deployment seam by starting with `include/cfd/workflow/deploy.hpp`. The core exercise is to generate a factorial campaign, persist it with `write_campaign_case_folders`, create several `CampaignServerDescriptor` entries, and call `plan_multi_server_campaign`. Inspect the resulting assignments, native/Docker solver plans, and generated `multiserver_commands.sh` before attempting any real remote execution.
+
+
+## v0.11.4 supervised campaign execution layer
+
+Study these functions together with the v0.11.3 placement planner:
+
+- `plan_multiserver_execution(...)` converts case-to-server assignments into health checks and supervised jobs.
+- Each `RemoteSupervisedJobPlan` owns launch, status, cancel and fetch-log command plans plus `.cfd_run` metadata paths.
+- `parse_remote_job_status_table(...)` accepts tab-separated status rows.
+- `apply_remote_job_status_to_registry(...)` maps distributed job state back into the campaign registry.
+
+The design is intentionally deterministic so remote execution semantics are tested before adding real SSH/Docker daemon orchestration.
+
+
+## v0.11.5 - Multi-server supervision hardening
+
+New workflow APIs in `cfd/workflow/deploy.hpp` convert the v0.11.4 supervised job plan into operator/dashboard artifacts:
+
+- `plan_multiserver_supervision(...)` creates access probes, retry launch plans, stdout/stderr tail plans and dashboard case summaries.
+- `redact_sensitive_command_display(...)` removes obvious inline secret values from display strings.
+- `build_multiserver_dashboard_json(...)` emits a small JSON summary for a future UI or service endpoint.
+- `write_multiserver_supervision_files(...)` persists access-check, retry-launch and log-tail shell scripts plus JSON/TSV summaries.
+
+The CLI smoke case `particle-multiserver-supervision` exercises the complete offline path. The focused regression target is `cfd-v0115-multiserver-supervision-tests`.
+
+## v0.11.6 - Multi-server controller API scaffold
+
+New workflow APIs in `cfd/workflow/deploy.hpp` build a controller layer above the supervision artifacts:
+
+- `plan_multiserver_controller(...)` derives read and mutation routes from `MultiServerSupervisionPlan` metadata.
+- `build_multiserver_controller_status_json(...)` converts dashboard cases into a stable status payload.
+- `build_multiserver_controller_openapi_json(...)` documents the generated API surface.
+- `build_multiserver_controller_script(...)` creates a Python standard-library controller script.
+- `write_multiserver_controller_files(...)` persists the controller script, OpenAPI JSON, status JSON, routes TSV, env example, README and launch script.
+
+Study path:
+
+1. Generate a campaign and multi-server supervision plan as in v0.11.5.
+2. Configure `RemoteControllerConfig` with host, port, token env var, tail length and allowed control actions.
+3. Inspect `controller/routes.tsv` and `controller/openapi.json` before starting the service.
+4. Run the generated controller in read-only mode first, then enable token-gated mutations.
+5. Verify that POST control requests write `.cfd_control/*.directive` files rather than calling solver-specific control code directly.
+
+The CLI smoke case `particle-multiserver-controller` exercises the offline generation path. The focused regression target is `cfd-v0116-multiserver-controller-tests`.
+
+### v0.11.7 generated controller dashboard
+
+The controller scaffold now includes a generated browser dashboard:
+
+- `build_multiserver_controller_dashboard_html(...)` creates a dependency-free operator page.
+- `build_multiserver_controller_dashboard_js(...)` polls health/status, renders case rows, fetches stdout/stderr tails and posts token-authorized control actions.
+- `build_multiserver_controller_dashboard_css()` emits compact dark-mode styling for summary cards and case states.
+- `build_multiserver_controller_events_ndjson(...)` emits a newline-delimited event snapshot suitable for downstream dashboard ingestion.
+- `write_multiserver_controller_files(...)` persists the static assets alongside OpenAPI/status/routes/env artifacts.
+
+Use `particle-multiserver-dashboard` as the smoke case and `cfd-v0117-controller-dashboard-tests` as the focused regression target.
+
+### v0.11.8 server-sent controller status events
+
+The controller's live-update path remains built on the same generic status document:
+
+- `RemoteControllerConfig::expose_event_stream` controls route exposure.
+- `event_stream_heartbeat_seconds` bounds idle time between SSE frames.
+- `StreamingHandler` emits named `status` events only when the normalized JSON payload changes and sends heartbeat comments otherwise.
+- The dashboard opens an `EventSource` connection and continues periodic polling as a compatibility fallback.
+
+Inspect `/api/events/stream` in `routes.tsv` and `openapi.json`, then run `cfd-v0118-controller-sse-tests` to validate route gating, JavaScript wiring, heartbeat configuration and generated Python syntax.
+
+### v0.12.0 production controller deployment
+
+The generated controller now has an explicit production boundary:
+
+- TLS fails closed when enabled certificate/key paths are absent.
+- External token files store only SHA-256 digests with viewer/operator/admin roles.
+- Protected routes use constant-time token verification.
+- Audit and probe events are written to a bounded rotating NDJSON history.
+- Live probes reuse the generated access-check script with timeout and output limits.
+- systemd and reverse-proxy examples document persistent operation and network hardening.
+
+Run `cfd-v0120-production-controller-tests` and inspect the generated `env.example`, token template, service unit and proxy configuration before adapting them to a real host.
+
+### v0.13.0 XDMF/HDF5 output and Python bindings
+
+Start with `write_xdmf_inline(...)`: it validates a `Mesh2D`, writes triangle connectivity, XY coordinates and optional nodal scalar data. Then compare `write_hdf5_xdmf(...)`, where the XDMF document references datasets in a companion HDF5 file.
+
+The Python layer intentionally binds the stable C ABI rather than C++ classes. `cfd_solvers_capi` accepts flat coordinate/connectivity arrays, reconstructs the validated mesh and invokes the same XDMF writer. `python/cfd_solvers/bindings.py` performs Python-side shape conversion and error translation using only `ctypes`.
+
+Run `cfd-v0130-xdmf-python-tests` and `cfd-v0130-python-binding-smoke`. On a host with HDF5 development files, configure with `CFD_ENABLE_HDF5=ON` and inspect the generated datasets with `h5dump` or an HDF5 viewer.
+
+## v0.14.0 - common HPC runtime completion
+
+Study the three Phase-1 closure paths together because they meet at sparse iterative solvers:
+
+1. `cfd/core/numa.hpp` and `src/core/numa.cpp` separate topology discovery, deterministic placement planning, thread binding and first touch. Compare compact vs spread plans on a multi-socket host, and note that Linux discovery honors the process's pre-existing affinity mask.
+2. `cfd/core/sycl_sparse.hpp` and `src/sycl/sparse_linalg_sycl.cpp` keep CSR data and Krylov vectors in device USM. Trace one CG iteration: SpMV -> dot reduction -> vector update -> residual reduction -> direction update.
+3. `cfd/distributed/mpi_sparse.hpp` and `src/distributed/mpi_sparse.cpp` turn global CSR halo columns into an ownership-aware request plan. The expensive index-discovery exchange occurs once; repeated Krylov multiplies exchange values only.
+
+A useful exercise is to instrument bytes moved per distributed SpMV and compare the cached sparse exchange against an `MPI_Allgatherv` full-vector baseline. For SYCL, compare the current generic row-per-work-item SpMV with a later device-tuned segmented/warp-aware kernel while preserving the same public API.
+
+### v0.14.1 LBM advanced-model study path
+
+Read `compressed_pull.hpp`, `particles.hpp`, `free_surface.hpp` and `advanced_d2q9.hpp` as independent numerical boundaries before combining them. The focused v0.14.1 regression intentionally checks analytic/simple invariants: half-way curved-wall equivalence, particle action/reaction balance, free-surface volume conservation, Q-criterion on known gradients, compressed-vs-float error gates and Taylor-Green mass/energy behavior for LES and cumulant collision.
+
+The optional SYCL voxelizer is designed to reproduce the CPU mask contract; hardware CI is still required before treating accelerator parity as production-qualified.
+
+
+### v0.14.2 portability/autotuning study path
+
+Start with `cfd/core/autotune.hpp`: a tuning record combines a portable device key with a kernel-group name, launch/fusion parameters and an observed score. Follow `KernelTuningDatabase::autotune(...)` through save/load to see how benchmarking stays separate from kernel code.
+
+Then inspect `cfd/distributed/device_assignment.hpp`. `assign_device_group(...)` distributes visible accelerators across local ranks, `split_rank_work(...)` maps a contiguous range onto the selected ordinals, and the SYCL helper materializes one queue per selected device. This is the boundary higher solver layers use for multi-GPU submission.
+
+Finally, read `cfd/distributed/repartition.hpp`: weighted prefix load produces new contiguous ownership boundaries, migration segments describe old/new overlap, and the decision helper adds hysteresis. The focused regression is `cfd-v0142-portability-tests`.
+
+### v0.15.0 FVM second-order time integration and pressure AMG seam
+
+Start with `cfd/fvm/temporal.hpp`, then inspect `ScalarTransport::step()`. The reusable spatial matrix is combined with a scheme-specific transient diagonal and history RHS. BDF2 bootstraps with Euler; Crank-Nicolson combines the implicit new-state spatial operator with the old-state spatial residual.
+
+Next follow `CollocatedIncompressible::momentum_predictor(...)`. PISO and PIMPLE pass a frozen physical time level into every coupling/outer iteration so PIMPLE does not accidentally advance history several times in one timestep. SIMPLE deliberately bypasses the physical second-order history and retains pseudo-time Euler behavior.
+
+Finally inspect `correct_pressure(...)`: the pressure operator remains matrix-free, while CG can be replaced by PCG with Jacobi or with a supplied AMG/multigrid V-cycle. Run `cfd-v0150-fvm-temporal-pressure-tests` to exercise all three integration seams.
+
+### v0.15.1 solid heat, coupled thermal sources and FVM restart I/O
+
+Start with `SolidHeatConduction` and trace how physical `rho`, `cp`, `k` and heat generation are converted onto the existing implicit scalar-transport equation. The source-only energy-balance regression is useful because it has an exact integral result independent of spatial discretization.
+
+Next inspect `ThermalTransport::set_reactive_radiative_source(...)`. Chemistry and radiation are deliberately composed at the energy-source boundary. The radiation model is held by `shared_ptr<const RadiationSourceModel>` so a temporary or externally destroyed model cannot leave the time-step callback dangling.
+
+Finally inspect `cfd/io/fvm_checkpoint.hpp` and `src/io/fvm_checkpoint.cpp`. The public API exposes meshes, typed field arrays and metadata rather than HDF5 handles. Compare the fail-closed non-HDF5 regression with the HDF5-enabled round-trip regression, then inspect a generated file with `h5dump` to follow the `/Mesh`, `/Meta` and `/Fields` groups.
+
+### v0.15.2 transported RANS, Reynolds stress and SST-DES study path
+
+Start with `cfd/solvers/fvm/rans_transport.hpp` and the internal `advance_scalar(...)` path in `src/fvm/rans_transport.cpp`. It is the common numerical kernel for turbulence variables: implicit upwind convection, harmonic variable diffusion, semi-implicit sinks, the shared ILU0/GMRES stack and Euler/BDF2/Crank-Nicolson history.
+
+Then compare the three eddy-viscosity transports. SA builds `fv1/fv2`, modified strain, nonlinear-gradient production and wall destruction around one transported working variable. k-epsilon uses production and dissipation coupling between two equations. SST adds F1/F2 blending, cross diffusion and a viscosity limiter; enable `des_enabled` and inspect `hybrid_dissipation_factor()` to see where the modeled length scale switches toward LES behavior.
+
+Finally inspect `ReynoldsStressTransport`. Follow the velocity gradient into the exact tensor-production term, then the LRR-style pressure-strain source and the six segregated tensor equations. After the solve, trace `enforce_realizability()` to see how a numerically transported symmetric tensor is mapped back to a valid covariance tensor.
+
+Run `cfd-v0152-rans-transport-tests`; the most useful invariants are exact simple-shear strain, positivity of scalar turbulence variables, F1/F2 bounds, stronger DES dissipation on a fine grid and positive-semidefinite Reynolds stresses.

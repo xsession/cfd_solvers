@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <numbers>
 #include <stdexcept>
+#include <span>
 #include <vector>
 
 namespace cfd::lbm {
@@ -24,6 +25,7 @@ struct InPlaceLbmConfig {
     float acceleration_x{0.0F};
     float acceleration_y{0.0F};
     float acceleration_z{0.0F};
+    bool smagorinsky_les{false};
 };
 
 struct MacroscopicFields {
@@ -66,6 +68,34 @@ inline float guo_force(int q, float rho, float ux, float uy, float uz,
     const float uf = ux * fx + uy * fy + uz * fz;
     return Descriptor::weight(q) * (1.0F - 0.5F * omega) *
            (3.0F * (cf - uf) + 9.0F * cu * cf);
+}
+
+
+template<class Descriptor>
+inline float smagorinsky_relaxation_time(const std::array<float, Descriptor::q>& populations,
+                                         float rho, float ux, float uy, float uz,
+                                         float base_tau) noexcept {
+    if (!(rho > 0.0F)) return base_tau;
+    float pi[3][3]{};
+    for (int d = 0; d < Descriptor::q; ++d) {
+        const float neq = populations[static_cast<std::size_t>(d)] -
+                          equilibrium<Descriptor>(d, rho, ux, uy, uz);
+        const float e[3]{static_cast<float>(Descriptor::cx(d)),
+                         static_cast<float>(Descriptor::cy(d)),
+                         static_cast<float>(Descriptor::cz(d))};
+        for (int a = 0; a < 3; ++a) {
+            for (int b = 0; b < 3; ++b) pi[a][b] += e[a] * e[b] * neq;
+        }
+    }
+    float q = 0.0F;
+    for (const auto& row : pi) for (float value : row) q += value * value;
+    // FluidX3D documents this Smagorinsky-Lilly closure in terms of the
+    // non-equilibrium momentum-flux tensor. Keep it isolated here so the
+    // collision path can remain ordinary BGK when the option is disabled.
+    constexpr float coefficient =
+        16.0F * 1.4142135623730950488F / (3.0F * std::numbers::pi_v<float> * std::numbers::pi_v<float>);
+    return 0.5F * (base_tau +
+                   std::sqrt(base_tau * base_tau + coefficient * std::sqrt(q) / rho));
 }
 
 } // namespace detail
@@ -120,6 +150,21 @@ public:
         for (std::size_t iteration = 0; iteration < count; ++iteration) step_once();
     }
 
+    void set_local_body_acceleration(std::span<const float> ax, std::span<const float> ay, std::span<const float> az) {
+        if (ax.size() != cells_ || ay.size() != cells_ || az.size() != cells_) {
+            throw std::invalid_argument("local LBM acceleration field size mismatch");
+        }
+        local_ax_.assign(ax.begin(), ax.end());
+        local_ay_.assign(ay.begin(), ay.end());
+        local_az_.assign(az.begin(), az.end());
+    }
+
+    void clear_local_body_acceleration() noexcept {
+        local_ax_.clear(); local_ay_.clear(); local_az_.clear();
+    }
+
+    [[nodiscard]] bool has_local_body_acceleration() const noexcept { return !local_ax_.empty(); }
+
     [[nodiscard]] MacroscopicFields compute_macroscopic() const {
         MacroscopicFields fields{
             cfd::core::AlignedVector<float>(cells_, 0.0F),
@@ -135,9 +180,10 @@ public:
             float uy = 0.0F;
             float uz = 0.0F;
             accumulate_macroscopic(fin, rho, ux, uy, uz);
-            ux += 0.5F * config_.acceleration_x;
-            uy += 0.5F * config_.acceleration_y;
-            uz += 0.5F * config_.acceleration_z;
+            const bool local_force = !local_ax_.empty();
+            ux += 0.5F * (config_.acceleration_x + (local_force ? local_ax_[n] : 0.0F));
+            uy += 0.5F * (config_.acceleration_y + (local_force ? local_ay_[n] : 0.0F));
+            uz += 0.5F * (config_.acceleration_z + (local_force ? local_az_[n] : 0.0F));
             fields.rho[n] = rho;
             fields.ux[n] = ux;
             fields.uy[n] = uy;
@@ -165,9 +211,10 @@ public:
             float uy = 0.0F;
             float uz = 0.0F;
             accumulate_macroscopic(fin, rho, ux, uy, uz);
-            ux += 0.5F * config_.acceleration_x;
-            uy += 0.5F * config_.acceleration_y;
-            uz += 0.5F * config_.acceleration_z;
+            const bool local_force = !local_ax_.empty();
+            ux += 0.5F * (config_.acceleration_x + (local_force ? local_ax_[n] : 0.0F));
+            uy += 0.5F * (config_.acceleration_y + (local_force ? local_ay_[n] : 0.0F));
+            uz += 0.5F * (config_.acceleration_z + (local_force ? local_az_[n] : 0.0F));
             return static_cast<double>(rho) *
                    (static_cast<double>(ux) * ux +
                     static_cast<double>(uy) * uy +
@@ -184,9 +231,10 @@ public:
             float uy = 0.0F;
             float uz = 0.0F;
             accumulate_macroscopic(fin, rho, ux, uy, uz);
-            ux += 0.5F * config_.acceleration_x;
-            uy += 0.5F * config_.acceleration_y;
-            uz += 0.5F * config_.acceleration_z;
+            const bool local_force = !local_ax_.empty();
+            ux += 0.5F * (config_.acceleration_x + (local_force ? local_ax_[n] : 0.0F));
+            uy += 0.5F * (config_.acceleration_y + (local_force ? local_ay_[n] : 0.0F));
+            uz += 0.5F * (config_.acceleration_z + (local_force ? local_az_[n] : 0.0F));
             return std::sqrt(ux * ux + uy * uy + uz * uz);
         }));
     }
@@ -220,6 +268,9 @@ private:
     InPlaceLbmConfig config_;
     std::size_t cells_{};
     cfd::core::StaticSoA<float, static_cast<std::size_t>(q)> f_;
+    std::vector<float> local_ax_;
+    std::vector<float> local_ay_;
+    std::vector<float> local_az_;
     std::uint64_t time_step_{0};
 
     static InPlaceLbmConfig normalized_config(InPlaceLbmConfig config) {
@@ -343,7 +394,6 @@ private:
     }
 
     void step_once() {
-        const float omega = 1.0F / config_.tau;
         cfd::core::parallel_for(cells_, [&](std::size_t n) {
             const std::size_t x = n % config_.nx;
             const std::size_t yz = n / config_.nx;
@@ -359,17 +409,25 @@ private:
             float uy = 0.0F;
             float uz = 0.0F;
             accumulate_macroscopic(fout, rho, ux, uy, uz);
-            ux += 0.5F * config_.acceleration_x;
-            uy += 0.5F * config_.acceleration_y;
-            uz += 0.5F * config_.acceleration_z;
+            const bool local_force = !local_ax_.empty();
+            const float ax = config_.acceleration_x + (local_force ? local_ax_[n] : 0.0F);
+            const float ay = config_.acceleration_y + (local_force ? local_ay_[n] : 0.0F);
+            const float az = config_.acceleration_z + (local_force ? local_az_[n] : 0.0F);
+            ux += 0.5F * ax;
+            uy += 0.5F * ay;
+            uz += 0.5F * az;
 
+            const float local_tau = config_.smagorinsky_les
+                ? detail::smagorinsky_relaxation_time<Descriptor>(fout, rho, ux, uy, uz, config_.tau)
+                : config_.tau;
+            const float omega = 1.0F / local_tau;
             for (int d = 0; d < q; ++d) {
                 const std::size_t index = static_cast<std::size_t>(d);
                 const float feq = detail::equilibrium<Descriptor>(d, rho, ux, uy, uz);
                 fout[index] -= omega * (fout[index] - feq);
                 fout[index] += detail::guo_force<Descriptor>(
                     d, rho, ux, uy, uz,
-                    config_.acceleration_x, config_.acceleration_y, config_.acceleration_z, omega);
+                    ax, ay, az, omega);
             }
             store_cell(n, neighbors, fout);
         });

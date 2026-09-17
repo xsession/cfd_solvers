@@ -116,6 +116,28 @@ std::array<std::array<double, 9>, 9> inverse_moment_matrix() {
     return inverse;
 }
 
+std::array<std::array<double, 9>, 9> inverse_raw_moment_matrix() {
+    constexpr int powers[9][2]{{0,0},{1,0},{0,1},{2,0},{0,2},{1,1},{2,1},{1,2},{2,2}};
+    double a[9][18]{};
+    for(int row=0;row<9;++row){
+        for(int d=0;d<9;++d){
+            const double cx=static_cast<double>(D2Q9Descriptor::cx(d));
+            const double cy=static_cast<double>(D2Q9Descriptor::cy(d));
+            const auto ipow=[](double v,int p){return p==0?1.0:(p==1?v:v*v);};
+            a[row][d]=ipow(cx,powers[row][0])*ipow(cy,powers[row][1]);
+        }
+        a[row][9+row]=1.0;
+    }
+    for(int col=0;col<9;++col){
+        int pivot=col;for(int row=col+1;row<9;++row)if(std::abs(a[row][col])>std::abs(a[pivot][col]))pivot=row;
+        if(std::abs(a[pivot][col])<1e-14)throw std::runtime_error("singular D2Q9 raw moment transform");
+        if(pivot!=col)for(int j=0;j<18;++j)std::swap(a[pivot][j],a[col][j]);
+        const double diag=a[col][col];for(int j=0;j<18;++j)a[col][j]/=diag;
+        for(int row=0;row<9;++row)if(row!=col){const double factor=a[row][col];for(int j=0;j<18;++j)a[row][j]-=factor*a[col][j];}
+    }
+    std::array<std::array<double,9>,9> inv{};for(int d=0;d<9;++d)for(int row=0;row<9;++row)inv[static_cast<std::size_t>(d)][static_cast<std::size_t>(row)]=a[d][9+row];return inv;
+}
+
 } // namespace
 
 RegularizedD2Q9Solver::RegularizedD2Q9Solver(AdvancedD2Q9Config config)
@@ -185,6 +207,36 @@ void RegularizedD2Q9Solver::step(std::size_t count) {
 
 double RegularizedD2Q9Solver::mass() const { return mass_impl(f_, grid_.cells()); }
 double RegularizedD2Q9Solver::kinetic_energy() const { return kinetic_energy_impl(f_, grid_.cells()); }
+
+
+CumulantD2Q9Solver::CumulantD2Q9Solver(AdvancedD2Q9Config config)
+    : c_(config), grid_(config.nx, config.ny), f_(grid_.cells()), next_(grid_.cells()),
+      raw_inv_(inverse_raw_moment_matrix()) {
+    if (!(c_.tau > 0.5F) || !std::isfinite(c_.tau)) throw std::invalid_argument("invalid cumulant tau");
+    initialize_uniform();
+}
+void CumulantD2Q9Solver::initialize_uniform(float rho,float ux,float uy){initialize_populations(grid_,f_,[=](std::size_t,std::size_t){return std::array<float,3>{rho,ux,uy};});}
+void CumulantD2Q9Solver::initialize_taylor_green(float amplitude){const float two_pi=2.0F*std::numbers::pi_v<float>;initialize_populations(grid_,f_,[=,this](std::size_t x,std::size_t y){const float xf=(static_cast<float>(x)+.5F)/static_cast<float>(c_.nx),yf=(static_cast<float>(y)+.5F)/static_cast<float>(c_.ny);return std::array<float,3>{1.0F,amplitude*std::sin(two_pi*xf)*std::cos(two_pi*yf),-amplitude*std::cos(two_pi*xf)*std::sin(two_pi*yf)};});}
+void CumulantD2Q9Solver::step_once(){
+    const double omega=1.0/static_cast<double>(c_.tau);constexpr double cs2=1.0/3.0;
+    cfd::core::parallel_for(grid_.cells(),[&](std::size_t n){
+        const std::size_t x=n%c_.nx,y=n/c_.nx;std::array<float,9>fin{};for(int d=0;d<9;++d)fin[static_cast<std::size_t>(d)]=f_(static_cast<std::size_t>(d),periodic_source(grid_,x,y,d));
+        const auto state=macroscopic(fin);const double rho=state[0],ux=state[1],uy=state[2];if(!(rho>0.0)){for(int d=0;d<9;++d)next_(static_cast<std::size_t>(d),n)=fin[static_cast<std::size_t>(d)];return;}
+        double mu20=0,mu02=0,mu11=0,mu21=0,mu12=0,mu22=0;
+        for(int d=0;d<9;++d){const double dx=static_cast<double>(D2Q9Descriptor::cx(d))-ux,dy=static_cast<double>(D2Q9Descriptor::cy(d))-uy,v=fin[static_cast<std::size_t>(d)];const double dx2=dx*dx,dy2=dy*dy;mu20+=v*dx2;mu02+=v*dy2;mu11+=v*dx*dy;mu21+=v*dx2*dy;mu12+=v*dx*dy2;mu22+=v*dx2*dy2;}
+        double k20=mu20/rho,k02=mu02/rho,k11=mu11/rho,k21=mu21/rho,k12=mu12/rho,k22=mu22/rho-k20*k02-2.0*k11*k11;
+        k20-=omega*(k20-cs2);k02-=omega*(k02-cs2);k11-=omega*k11;
+        // Higher cumulants are non-hydrodynamic on D2Q9; relax them fully to
+        // the factorized isothermal equilibrium attractor.
+        k21=0.0;k12=0.0;k22=0.0;
+        mu20=rho*k20;mu02=rho*k02;mu11=rho*k11;mu21=rho*k21;mu12=rho*k12;mu22=rho*(k22+k20*k02+2.0*k11*k11);
+        std::array<double,9> raw{};raw[0]=rho;raw[1]=rho*ux;raw[2]=rho*uy;raw[3]=mu20+rho*ux*ux;raw[4]=mu02+rho*uy*uy;raw[5]=mu11+rho*ux*uy;raw[6]=mu21+2.0*ux*mu11+uy*mu20+rho*ux*ux*uy;raw[7]=mu12+2.0*uy*mu11+ux*mu02+rho*ux*uy*uy;raw[8]=mu22+2.0*uy*mu21+uy*uy*mu20+2.0*ux*mu12+4.0*ux*uy*mu11+ux*ux*mu02+rho*ux*ux*uy*uy;
+        for(int d=0;d<9;++d){double value=0;for(int row=0;row<9;++row)value+=raw_inv_[static_cast<std::size_t>(d)][static_cast<std::size_t>(row)]*raw[static_cast<std::size_t>(row)];next_(static_cast<std::size_t>(d),n)=static_cast<float>(value);}
+    });std::swap(f_,next_);
+}
+void CumulantD2Q9Solver::step(std::size_t count){for(std::size_t i=0;i<count;++i)step_once();}
+double CumulantD2Q9Solver::mass()const{return mass_impl(f_,grid_.cells());}
+double CumulantD2Q9Solver::kinetic_energy()const{return kinetic_energy_impl(f_,grid_.cells());}
 
 MrtD2Q9Solver::MrtD2Q9Solver(AdvancedD2Q9Config config)
     : c_(config), grid_(config.nx, config.ny), f_(grid_.cells()), next_(grid_.cells()),

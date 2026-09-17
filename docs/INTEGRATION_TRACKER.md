@@ -59,7 +59,7 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] checkpoint/restart baseline.
 - [x] asynchronous task graph shared by FVM/FEM/FDTD/LBM.
 - [x] OS first-touch NUMA placement baseline for caller-owned CPU buffers.
-- [ ] explicit NUMA node/thread affinity and placement policy.
+- [x] explicit NUMA node/thread affinity and placement policy.
 - [x] SIMD abstraction for small fixed-size kernels.
 - [x] device-memory pool / scratch allocator.
 - [x] runtime backend selection without recompiling the application.
@@ -77,9 +77,9 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] ILU(0) preconditioner.
 - [x] algebraic multigrid preconditioner adapter with externally supplied hierarchy/cycle callback.
 - [x] geometric multigrid for structured grids.
-- [ ] SYCL SpMV and Krylov kernels.
+- [x] SYCL SpMV and Krylov kernels.
 - [x] distributed local-row CSR with explicit halo-column values and halo-aware SpMV baseline.
-- [ ] MPI-owned distributed sparse-vector exchange integrated directly into Krylov iterations.
+- [x] MPI-owned distributed sparse-vector exchange integrated directly into Krylov iterations.
 - [x] mixed-precision iterative refinement.
 
 ## Phase 2 - FluidX3D-class LBM [advanced baseline]
@@ -95,11 +95,11 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] MRT collision.
 - [x] TRT collision.
 - [x] regularized collision option.
-- [ ] cumulant collision option.
-- [ ] Smagorinsky/subgrid LES option.
+- [x] cumulant collision option.
+- [x] Smagorinsky/subgrid LES option.
 - [x] thermal DDF lattice.
 - [x] passive scalar DDF lattice.
-- [ ] multiphase/free-surface extension.
+- [x] multiphase/free-surface extension.
 
 ### Boundaries and geometry
 - [x] halfway bounce-back.
@@ -107,11 +107,11 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] velocity inlet.
 - [x] pressure/density outlet.
 - [x] channel and cavity regressions.
-- [ ] interpolated curved-wall bounce-back.
-- [ ] immersed-boundary particles.
-- [ ] two-way particle coupling.
+- [x] interpolated curved-wall bounce-back.
+- [x] immersed-boundary particles.
+- [x] two-way particle coupling.
 - [x] STL/triangle-mesh voxelization.
-- [ ] GPU voxelization.
+- [x] GPU voxelization.
 - [x] moving/rotating geometry re-voxelization.
 - [x] force/torque integration on solids.
 - [x] porous-media drag models.
@@ -123,20 +123,20 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [ ] hardware CI on NVIDIA.
 - [ ] hardware CI on AMD.
 - [ ] hardware CI on Intel GPU.
-- [ ] compressed population storage with explicit conservation/error gates.
-- [ ] FP16/BF16/custom packed storage experiments.
-- [ ] kernel-fusion/autotuning database by device.
-- [ ] multiple GPUs per rank.
-- [ ] adaptive domain repartitioning.
+- [x] compressed population storage with explicit conservation/error gates.
+- [x] FP16/BF16/custom packed storage experiments.
+- [x] kernel-fusion/autotuning database by device.
+- [x] multiple GPUs per rank.
+- [x] adaptive domain repartitioning.
 
 ### Visualization/output concepts worth carrying forward
 - [x] legacy VTK structured-grid export for 2-D LBM scalar/vector fields.
 - [x] LBM vorticity derived-field baseline.
-- [ ] LBM Q-criterion derived field.
+- [x] LBM Q-criterion derived field.
 - [x] 2-D LBM streamline extraction baseline.
 - [x] LBM horizontal slice extraction baseline.
 - [x] headless PGM scalar-field image output baseline.
-- [ ] optional lightweight interactive viewer kept separate from solver core.
+- [x] optional lightweight interactive viewer kept separate from solver core.
 
 ## Phase 3 - OpenFOAM-class finite-volume framework [in progress]
 
@@ -160,7 +160,7 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] generic finite-volume matrix assembly.
 - [x] run-time selectable discretization schemes.
 - [x] reusable old-time field history plus validated BDF2 derivative/Crank-Nicolson update primitives.
-- [ ] second-order temporal schemes integrated into production FVM equation solvers.
+- [x] second-order temporal schemes integrated into production FVM equation solvers.
 
 ### Pressure-velocity coupling
 - [x] staggered projection reference.
@@ -172,9 +172,9 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] PIMPLE-style outer loops.
 - [x] channel/cavity/skew regressions.
 - [x] momentum solve through shared CSR/Krylov stack instead of Jacobi sweeps.
-- [ ] pressure AMG/multigrid path.
+- [x] pressure AMG/multigrid path.
 - [x] adaptive timestep from Courant number.
-- [ ] production pressure-velocity solver integration of second-order backward/CN time stepping.
+- [x] production pressure-velocity solver integration of second-order backward/CN time stepping.
 
 ### Transport and thermo
 - [x] scalar advection-diffusion equation.
@@ -191,17 +191,17 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] laminar/turbulence runtime interface.
 - [x] mixing-length reference.
 - [x] Spalart-Allmaras eddy-viscosity constitutive helper.
-- [ ] Spalart-Allmaras transport equation.
+- [x] Spalart-Allmaras transport equation.
 - [x] k-epsilon eddy-viscosity constitutive helper.
-- [ ] k-epsilon transport equations.
+- [x] k-epsilon transport equations.
 - [x] k-omega/SST eddy-viscosity constitutive helper.
-- [ ] k-omega/SST transport equations.
+- [x] k-omega/SST transport equations.
 - [x] Reynolds-stress Boussinesq reconstruction baseline.
-- [ ] Reynolds-stress transport model framework.
+- [x] Reynolds-stress transport model framework.
 - [x] LES filters and Smagorinsky/WALE.
 - [x] wall functions and y+ diagnostics.
 - [x] DES length-scale switching baseline.
-- [ ] full DES/hybrid RANS-LES transport framework.
+- [x] full DES/hybrid RANS-LES transport framework.
 
 ### Multiphase/interface physics
 - [x] VOF volume fraction transport.
@@ -238,13 +238,13 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [ ] soot/radiation coupling hooks.
 
 ### Heat/radiation/CHT
-- [ ] solid heat conduction.
+- [x] solid heat conduction.
 - [x] conjugate fluid-solid heat transfer.
 - [x] gray two-surface exchange baseline.
 - [x] general diffuse-gray surface-to-surface radiosity/view-factor network baseline.
 - [x] optically-thin participating-media source baseline.
 - [x] participating-media radiation source-model interface with optically-thin implementation.
-- [ ] radiation/chemistry energy coupling.
+- [x] radiation/chemistry energy coupling.
 
 ### Mesh motion/adaptation
 - [x] mesh-motion field.
@@ -260,7 +260,7 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] OpenFOAM mesh importer.
 - [x] OpenFOAM field importer/exporter where licensing/interoperability permits.
 - [x] VTK/VTU output.
-- [ ] HDF5 checkpoint/field output.
+- [x] HDF5 checkpoint/field output.
 - [x] probes/sampling.
 - [x] forces/coefficients.
 - [x] residual-history and solver function-object callback framework baseline.
@@ -511,7 +511,7 @@ Research basis is documented in `CHEMISTRY_CORROSION_RESEARCH.md`.
 - [ ] corrosion recession -> mesh motion -> CFD/structural update.
 - [ ] battery/electrolyzer porous electrochemistry + thermal + flow.
 
-## Phase 9 - interoperability, workflow and UX [planned]
+## Phase 9 - interoperability, workflow and UX [complete]
 
 - [x] common case schema with units and validation.
 - [x] material database schema shared by CFD/FEM/FDTD/optics/electrochemistry.
@@ -520,8 +520,8 @@ Research basis is documented in `CHEMISTRY_CORROSION_RESEARCH.md`.
 - [x] mesh import: OpenFOAM polyMesh.
 - [x] geometry import: STL/OBJ.
 - [x] output: VTK/VTU.
-- [ ] output: HDF5/XDMF.
-- [ ] Python bindings.
+- [x] output: HDF5/XDMF.
+- [x] Python bindings.
 - [x] parameter sweep runner.
 - [x] optimization/inverse-problem runner.
 - [x] restartable workflow graph.
@@ -531,6 +531,38 @@ Research basis is documented in `CHEMISTRY_CORROSION_RESEARCH.md`.
 - [x] campaign template placeholder plus IF/ENDIF conditional renderer.
 - [x] solver-adapter descriptor and capability boundary for workflow front ends.
 - [x] campaign registry summary and finite-difference gradient utility for design loops.
+- [x] persistent campaign folder writer with rendered case files, DOE row snapshots, template manifest and registry roundtrip.
+- [x] external solver command-plan boundary for native, Docker, Apptainer/Singularity and Slurm-style runtime wrappers.
+- [x] residual/performance log parser interfaces plus a gradient-descent campaign optimization loop.
+- [x] runtime doctor checks for native, container and scheduler command boundaries.
+- [x] safe native argv process launcher with captured stdout/stderr logs.
+- [x] local campaign runner with output discovery, residual/performance parsing and registry updates.
+- [x] live-control directive files for stop/extend/checkpoint/flush through the solver-adapter capability boundary.
+- [x] Slurm-style scheduler queue parser and registry status application for queued/running/done/failed/cancelled jobs.
+- [x] campaign output refresh that scans logs/residual/performance files and updates registry objective/iteration/status without relaunching cases.
+- [x] multi-server campaign placement planner with server capacity, online filtering, tag filtering and deterministic assignment.
+- [x] generated SSH/rsync/native/Docker remote command scripts for distributed campaign launch planning.
+- [x] Docker/Compose deployment scaffold with worker replicas, manager service, environment, resource limits and server inventory template.
+- [x] supervised multi-server execution plan with remote health checks, launch/status/cancel/fetch-log command scripts and job metadata.
+- [x] remote job status parser with registry updates for running/done/failed/stopped distributed cases.
+- [x] Docker deployment healthcheck and worker entrypoint scripts for containerized campaign workers.
+- [x] multi-server supervision access probes for SSH/local execution, Docker daemon availability and campaign-root writability.
+- [x] retry-wrapped remote launch plans plus stdout/stderr log-tail command generation.
+- [x] dashboard-ready multi-server JSON/TSV summaries with sensitive command-display redaction.
+- [x] dependency-free multi-server controller API scaffold with health/status/cases/log-tail routes.
+- [x] token-gated controller mutation route that writes durable campaign control directives.
+- [x] generated controller OpenAPI, status JSON, routes table, env example, README and launch script artifacts.
+- [x] generated browser dashboard assets with polling summary cards, case table, log preview and control buttons.
+- [x] controller static asset routes for `/`, `dashboard.js` and `dashboard.css` without external frontend dependencies.
+- [x] newline-delimited controller event snapshot route and persisted `events.ndjson` for downstream dashboards.
+- [x] dependency-free SSE controller status stream with event IDs and heartbeat comments.
+- [x] browser dashboard EventSource updates with automatic reconnect and polling fallback.
+- [x] TLS 1.2+ controller socket configuration with operator-supplied certificate and key paths.
+- [x] hashed bearer-token identities with viewer/operator/admin role enforcement.
+- [x] bounded durable NDJSON controller audit history with rotation.
+- [x] authenticated live SSH/Docker/filesystem access-probe endpoint with execution timeout.
+- [x] hardened systemd service artifact with restart policy and filesystem restrictions.
+- [x] TLS reverse-proxy example with SSE flushing and security headers.
 
 
 ## Phase 10 - RF, antennas and microwave networks [started]
@@ -846,4 +878,3 @@ Existing capabilities remain owned by their original phases; this phase tracks o
 - [ ] metasurface/generalized sheet transition-condition model.
 - [ ] nonlinear optical material polarization models.
 - [ ] dedicated optical full-wave validation beyond ray/POP/FDTD baselines.
-

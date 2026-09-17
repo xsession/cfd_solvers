@@ -4,14 +4,18 @@
 #include "cfd/core/iterative_solvers.hpp"
 #include "cfd/fvm/pressure_velocity.hpp"
 #include "cfd/fvm/schemes.hpp"
+#include "cfd/fvm/temporal.hpp"
 
 #include <array>
 #include <cstddef>
 #include <functional>
+#include <span>
 #include <string_view>
 #include <vector>
 
 namespace cfd::fvm {
+
+enum class PressurePreconditionerKind { none, jacobi, external_amg };
 
 struct CollocatedIncompressibleConfig {
     double density{1.0};
@@ -30,6 +34,9 @@ struct CollocatedIncompressibleConfig {
     double pressure_relaxation{0.3};
     FaceInterpolationScheme convection_scheme{FaceInterpolationScheme::upwind};
     bool include_convection{true};
+    TemporalScheme temporal_scheme{TemporalScheme::euler};
+    double crank_nicolson_off_centering{1.0};
+    PressurePreconditionerKind pressure_preconditioner{PressurePreconditionerKind::none};
 };
 
 struct CollocatedIterationInfo {
@@ -58,6 +65,10 @@ public:
     void initialize_uniform(Vec3 velocity = {}, double pressure = 0.0);
     void initialize_fields(const std::function<Vec3(Vec3)>& velocity,
                            const std::function<double(Vec3)>& pressure);
+
+    // Installs one external AMG V-cycle (or equivalent SPD preconditioner) for
+    // the matrix-free pressure correction equation. The callback must map r->z.
+    void set_pressure_amg_cycle(std::function<void(std::span<const double>, std::span<double>)> apply);
 
     // One pseudo-time SIMPLE iteration (one pressure solve sequence, relaxed).
     CollocatedIterationInfo iterate_simple();
@@ -98,6 +109,8 @@ private:
     std::vector<double> pressure_rhs_;
     std::vector<double> pressure_face_coefficient_;
     cfd::core::ConjugateGradientWorkspace pressure_workspace_;
+    cfd::core::KrylovWorkspace pressure_krylov_workspace_;
+    std::function<void(std::span<const double>, std::span<double>)> pressure_amg_cycle_;
     std::array<cfd::core::KrylovWorkspace, 3> momentum_workspace_;
     std::array<cfd::core::IterativeSolverResult, 3> momentum_results_{};
     cfd::core::ConjugateGradientResult pressure_result_{};
@@ -106,7 +119,7 @@ private:
 
     [[nodiscard]] bool has_fixed_pressure_boundary() const noexcept;
     void rebuild_flux_from_velocity();
-    void momentum_predictor(std::span<const Vec3> time_source);
+    void momentum_predictor(std::span<const Vec3> time_source, bool use_physical_time_scheme);
     cfd::core::ConjugateGradientResult correct_pressure(double pressure_relaxation);
     [[nodiscard]] std::vector<double> predicted_flux() const;
     void update_pressure_coefficients();
@@ -115,7 +128,8 @@ private:
     [[nodiscard]] double velocity_rms_change(std::span<const Vec3> before) const;
     CollocatedIterationInfo coupled_sequence(std::span<const Vec3> time_source,
                                              std::size_t pressure_correctors,
-                                             double pressure_relaxation);
+                                             double pressure_relaxation,
+                                             bool use_physical_time_scheme);
 };
 
 } // namespace cfd::fvm

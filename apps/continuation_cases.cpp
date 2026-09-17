@@ -26,10 +26,14 @@
 #include "cfd/solvers/optics/gaussian_beam.hpp"
 #include "cfd/multiphysics/electro_thermal.hpp"
 #include "cfd/workflow/campaign.hpp"
+#include "cfd/workflow/campaign_control.hpp"
+#include "cfd/workflow/deploy.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <vector>
 
@@ -570,6 +574,303 @@ int particle_campaign_doe(){
     return factorial.size()==4U&&latin.size()==6U&&solver_has_capability(adapter,SolverCapability::restart)&&objective(next)<objective(x)&&summary.done==1U&&summary.running==1U?0:1;
 }
 
+
+int particle_campaign_execution(){
+    using namespace cfd::workflow;
+    const auto start=Clock::now();
+    const auto root=std::filesystem::temp_directory_path()/"cfd_solvers_v0110_cli_campaign";
+    std::filesystem::remove_all(root);
+    const std::vector<CampaignParameter> factors{{"mach",CampaignParameterKind::discrete,0.0,0.0,{"0.3","0.6"}},{"aoa",CampaignParameterKind::discrete,0.0,0.0,{"0","4"}}};
+    const auto cases=generate_factorial_campaign(factors);
+    const std::vector<CampaignTemplateFile> templates{{"DATA/setup.cfg","mach={mach}\n<!-- IF aoa=4 -->\nangle={aoa}\n<!-- ENDIF -->"},{"run.cfg","case={mach}\n"}};
+    CampaignWriteOptions options;options.overwrite=true;
+    const auto persisted=write_campaign_case_folders(root,cases,templates,options);
+    auto registry=load_campaign_registry(root/"registry.tsv");
+    SolverAdapterDescriptor adapter{"external-stub","stub-solver","stub-solver",{SolverCapability::residuals,SolverCapability::performance,SolverCapability::control},{"stop","checkpoint"}};
+    SolverRunRequest request{adapter,root/"case0001",SolverRuntime::native,2U,1U,{"--dry-run"},{},{},{}};
+    const auto plan=build_solver_command_plan(request);
+    const std::string log="iter=1 residual=1e-2 equation=flow\niter=2 residual=1e-4 equation=flow\nperf.wall_s=0.25 s\nDONE\n";
+    const auto residuals=parse_residual_history(log);const auto metrics=parse_performance_metrics(log);
+    registry[0].status=detect_solver_outcome_from_log(log);registry[0].objective=residuals.back().residual;registry[0].iterations=residuals.back().iteration;registry[0].message="parsed external solver log";
+    save_campaign_registry(root/"registry.tsv",registry);
+    auto objective=[](std::span<const double> x){return (x[0]-0.75)*(x[0]-0.75)+(x[1]-0.1)*(x[1]-0.1);};
+    CampaignOptimizationConfig opt;opt.max_iterations=40U;opt.step_size=0.25;const auto opt_result=run_gradient_descent_campaign(objective,{0.0,1.0},opt);
+    const auto summary=summarize_campaign_registry(load_campaign_registry(root/"registry.tsv"));
+    std::cout<<"case=particle-campaign-execution seconds="<<elapsed(start)
+             <<" cases="<<persisted.cases_written
+             <<" files="<<persisted.files_written
+             <<" command='"<<plan.display_command<<"'"
+             <<" residuals="<<residuals.size()
+             <<" metrics="<<metrics.size()
+             <<" best_case="<<summary.best_case_id
+             <<" optimized_objective="<<opt_result.objective<<'\n';
+    std::filesystem::remove_all(root);
+    return persisted.cases_written==4U&&persisted.files_written==12U&&registry[0].status==CampaignCaseStatus::done&&residuals.size()==2U&&metrics.size()==1U&&opt_result.objective<1.0e-4?0:1;
+}
+
+
+int particle_campaign_local_runner(){
+    using namespace cfd::workflow;
+    const auto start=Clock::now();
+    const auto root=std::filesystem::temp_directory_path()/"cfd_solvers_v0111_cli_campaign";
+    std::filesystem::remove_all(root);
+    const std::vector<CampaignParameter> factors{{"mach",CampaignParameterKind::discrete,0.0,0.0,{"0.25","0.5"}}};
+    const auto cases=generate_factorial_campaign(factors);
+    const std::vector<CampaignTemplateFile> templates{{"DATA/setup.cfg","mach={mach}\n"}};
+    CampaignWriteOptions write;write.overwrite=true;
+    const auto persisted=write_campaign_case_folders(root,cases,templates,write);
+    const auto script=root/"stub_solver.sh";
+    {std::ofstream out(script);out<<"#!/bin/sh\n"
+        <<"echo 'iter=1 residual=2e-2 equation=flow'\n"
+        <<"echo 'iter=2 residual=2e-4 equation=flow'\n"
+        <<"echo 'perf.wall_time 0.01 s'\n"
+        <<"echo 'DONE'\n"
+        <<"echo 'ITER 3 RESIDUAL 2e-5 FIELD flow' > residual_history.log\n"
+        <<"echo 'perf.cells_per_s 500 cells/s' > timing.log\n"
+        <<"exit 0\n";}
+    std::filesystem::permissions(script,std::filesystem::perms::owner_exec|std::filesystem::perms::group_exec|std::filesystem::perms::others_exec,std::filesystem::perm_options::add);
+    SolverAdapterDescriptor adapter{"stub",script.string(),"stub",{SolverCapability::residuals,SolverCapability::performance},{"stop"}};
+    SolverRunRequest request{adapter,root/"case0001",SolverRuntime::native,1U,1U,{},{},{},{}};
+    const auto doctor=doctor_solver_runtime(request);
+    LocalCampaignRunOptions run_options;run_options.adapter=adapter;run_options.runtime=SolverRuntime::native;run_options.mpi_ranks=1U;run_options.threads=1U;
+    const auto run=run_local_campaign(root,run_options);
+    const auto registry=load_campaign_registry(root/"registry.tsv");
+    std::size_t residuals=0U,performance=0U;for(const auto& item:run.case_results){residuals+=item.residuals.size();performance+=item.performance.size();}
+    std::cout<<"case=particle-campaign-local-runner seconds="<<elapsed(start)
+             <<" cases="<<persisted.cases_written
+             <<" doctor_ok="<<doctor.ok
+             <<" launched="<<run.launched
+             <<" done="<<run.summary.done
+             <<" residuals="<<residuals
+             <<" performance="<<performance
+             <<" first_status="<<campaign_status_name(registry.front().status)<<'\n';
+    std::filesystem::remove_all(root);
+    return doctor.ok&&persisted.cases_written==2U&&run.launched==2U&&run.summary.done==2U&&residuals>=6U&&performance>=4U?0:1;
+}
+
+int particle_campaign_control(){
+    using namespace cfd::workflow;
+    const auto start=Clock::now();
+    const auto root=std::filesystem::temp_directory_path()/"cfd_solvers_v0112_cli_campaign";
+    std::filesystem::remove_all(root);
+    const std::vector<CampaignParameter> factors{{"case_param",CampaignParameterKind::discrete,0.0,0.0,{"A","B"}}};
+    const auto cases=generate_factorial_campaign(factors);
+    const std::vector<CampaignTemplateFile> templates{{"DATA/setup.cfg","case={case_param}\n"}};
+    CampaignWriteOptions write;write.overwrite=true;
+    const auto persisted=write_campaign_case_folders(root,cases,templates,write);
+    SolverAdapterDescriptor adapter{"stub","/bin/echo","stub",{SolverCapability::control,SolverCapability::residuals,SolverCapability::performance},{"stop","extend","checkpoint","flush"}};
+    const auto directive=write_campaign_control_directive(root,adapter,{"case0001",CampaignControlAction::checkpoint,"after-iteration=10","smoke test"});
+    const auto directives=discover_campaign_control_directives(root/"case0001");
+    auto registry=load_campaign_registry(root/"registry.tsv");
+    const auto jobs=parse_slurm_queue_table("JOBID CASE STATE ELAPSED\n17 case0001 RUNNING 4\n18 case0002 COMPLETED 9\n");
+    const auto scheduler_summary=apply_scheduler_records_to_registry(registry,jobs);
+    {std::ofstream out(root/"case0001"/"solver.stdout.log");out<<"ITER 4 RESIDUAL 3e-4 FIELD flow\nperf.wall_time 0.2 s\nDONE\n";}
+    const auto refreshed=refresh_campaign_status_from_outputs(root,registry);
+    save_campaign_registry(root/"registry.tsv",registry);
+    const bool ok=std::filesystem::exists(directive.path)&&persisted.cases_written==2U&&directives.size()>=2U&&jobs.size()==2U&&refreshed.done==2U&&registry.front().iterations==4U;
+    std::cout<<"case=particle-campaign-control seconds="<<elapsed(start)
+             <<" directive_exists="<<std::filesystem::exists(directive.path)
+             <<" directives="<<directives.size()
+             <<" scheduler_jobs="<<jobs.size()
+             <<" scheduler_running="<<scheduler_summary.running
+             <<" refreshed_done="<<refreshed.done
+             <<" first_status="<<campaign_status_name(registry.front().status)
+             <<" first_iterations="<<registry.front().iterations<<'\n';
+    std::filesystem::remove_all(root);
+    return ok?0:1;
+}
+
+
+int particle_multiserver_deploy(){
+    using namespace cfd::workflow;
+    const auto start=Clock::now();
+    const auto root=std::filesystem::temp_directory_path()/"cfd_solvers_v0113_cli_campaign";
+    std::filesystem::remove_all(root);
+    const std::vector<CampaignParameter> factors{{"mach",CampaignParameterKind::discrete,0.0,0.0,{"0.2","0.4","0.6"}}};
+    const auto cases=generate_factorial_campaign(factors);
+    const std::vector<CampaignTemplateFile> templates{{"DATA/setup.cfg","mach={mach}\n"}};
+    CampaignWriteOptions write;write.overwrite=true;
+    const auto persisted=write_campaign_case_folders(root,cases,templates,write);
+    const auto registry=load_campaign_registry(root/"registry.tsv");
+    SolverAdapterDescriptor adapter{"stub","cfd-solve","cfd-solve",{SolverCapability::residuals,SolverCapability::performance,SolverCapability::control},{"stop","checkpoint"}};
+    const std::vector<CampaignServerDescriptor> servers{
+        {"gpu-a","10.0.0.11","cfd","/srv/cfd/campaigns",CampaignServerRuntime::docker,2U,{"gpu","linux"},"cfd-solvers:local",true},
+        {"cpu-a","localhost","","/tmp/cfd_remote",CampaignServerRuntime::native,2U,{"cpu","linux"},"",true}
+    };
+    const auto plan=plan_multi_server_campaign(root,registry,adapter,servers);
+    const auto written=write_multiserver_plan_files(root,plan);
+    DockerDeployConfig deploy;deploy.image_name="cfd-solvers:local";deploy.worker_replicas=2U;deploy.worker_cpus=2U;deploy.worker_memory="2g";
+    const auto deploy_result=write_docker_deploy_system(root/"docker",deploy,true);
+    const bool compose_exists=std::filesystem::exists(root/"docker"/"compose.yaml");
+    std::cout<<"case=particle-multiserver-deploy seconds="<<elapsed(start)
+             <<" cases="<<persisted.cases_written
+             <<" assignments="<<plan.assignments.size()
+             <<" commands="<<plan.commands.size()
+             <<" active_servers="<<plan.active_servers
+             <<" deploy_files="<<deploy_result.files_written
+             <<" compose_exists="<<compose_exists
+             <<" commands_file="<<written.commands_path.filename().string()<<'\n';
+    std::filesystem::remove_all(root);
+    return persisted.cases_written==3U&&plan.assignments.size()==3U&&plan.commands.size()==9U&&deploy_result.files_written>=6U&&compose_exists?0:1;
+}
+
+
+int particle_multiserver_execution(){
+    using namespace cfd::workflow;
+    const auto start=Clock::now();
+    const auto root=std::filesystem::temp_directory_path()/"cfd_solvers_v0114_cli_campaign";
+    std::filesystem::remove_all(root);
+    const std::vector<CampaignParameter> factors{{"mach",CampaignParameterKind::discrete,0.0,0.0,{"0.2","0.4","0.6","0.8"}}};
+    const auto cases=generate_factorial_campaign(factors);
+    const std::vector<CampaignTemplateFile> templates{{"DATA/setup.cfg","mach={mach}\n"}};
+    CampaignWriteOptions write;write.overwrite=true;
+    const auto persisted=write_campaign_case_folders(root,cases,templates,write);
+    auto registry=load_campaign_registry(root/"registry.tsv");
+    SolverAdapterDescriptor adapter{"stub","cfd-solve","cfd-solve",{SolverCapability::residuals,SolverCapability::performance,SolverCapability::control},{"stop","checkpoint"}};
+    const std::vector<CampaignServerDescriptor> servers{
+        {"gpu-a","10.0.0.11","cfd","/srv/cfd/campaigns",CampaignServerRuntime::docker,2U,{"gpu","linux"},"cfd-solvers:local",true},
+        {"cpu-a","localhost","","/tmp/cfd_remote",CampaignServerRuntime::native,2U,{"cpu","linux"},"",true}
+    };
+    const auto campaign_plan=plan_multi_server_campaign(root,registry,adapter,servers);
+    const auto execution_plan=plan_multiserver_execution(campaign_plan,servers);
+    const auto written=write_multiserver_execution_files(root,execution_plan);
+    const auto statuses=parse_remote_job_status_table("case_id\tserver\tstate\texit_code\ncase0001\tcpu-a\trunning\t0\ncase0002\tgpu-a\tdone\t0\ncase0003\tgpu-a\tfailed\t2\ncase0004\tcpu-a\tcancelled\t0\n");
+    const auto summary=apply_remote_job_status_to_registry(registry,statuses);
+    save_campaign_registry(root/"registry.tsv",registry);
+    const bool health_exists=std::filesystem::exists(written.health_script_path);
+    const bool launch_exists=std::filesystem::exists(written.launch_script_path);
+    std::cout<<"case=particle-multiserver-execution seconds="<<elapsed(start)
+             <<" cases="<<persisted.cases_written
+             <<" jobs="<<execution_plan.jobs.size()
+             <<" health_checks="<<execution_plan.health_checks.size()
+             <<" docker_jobs="<<execution_plan.docker_jobs
+             <<" native_jobs="<<execution_plan.native_jobs
+             <<" remote_jobs="<<execution_plan.remote_jobs
+             <<" summary_done="<<summary.done
+             <<" summary_failed="<<summary.failed
+             <<" health_script="<<health_exists
+             <<" launch_script="<<launch_exists<<'\n';
+    std::filesystem::remove_all(root);
+    return persisted.cases_written==4U&&execution_plan.jobs.size()==4U&&execution_plan.health_checks.size()==6U&&summary.done==1U&&summary.failed==1U&&health_exists&&launch_exists?0:1;
+}
+
+
+int particle_multiserver_supervision(){
+    using namespace cfd::workflow;
+    const auto start=Clock::now();
+    const auto root=std::filesystem::temp_directory_path()/"cfd_solvers_v0115_cli_campaign";
+    std::filesystem::remove_all(root);
+    const std::vector<CampaignParameter> factors{{"mach",CampaignParameterKind::discrete,0.0,0.0,{"0.2","0.4","0.6","0.8"}}};
+    const auto cases=generate_factorial_campaign(factors);
+    const std::vector<CampaignTemplateFile> templates{{"DATA/setup.cfg","mach={mach}\n"}};
+    CampaignWriteOptions write;write.overwrite=true;
+    const auto persisted=write_campaign_case_folders(root,cases,templates,write);
+    const auto registry=load_campaign_registry(root/"registry.tsv");
+    SolverAdapterDescriptor adapter{"stub","cfd-solve","cfd-solve",{SolverCapability::residuals,SolverCapability::performance,SolverCapability::control},{"stop","checkpoint"}};
+    const std::vector<CampaignServerDescriptor> servers{
+        {"gpu-a","10.0.0.11","cfd","/srv/cfd/campaigns",CampaignServerRuntime::docker,2U,{"gpu","linux"},"cfd-solvers:local",true},
+        {"cpu-a","localhost","","/tmp/cfd_remote",CampaignServerRuntime::native,2U,{"cpu","linux"},"",true}
+    };
+    const auto campaign_plan=plan_multi_server_campaign(root,registry,adapter,servers);
+    const auto execution_plan=plan_multiserver_execution(campaign_plan,servers);
+    RemoteSupervisionOptions options;options.max_attempts=3U;options.retry_delay_seconds=1U;options.log_tail_lines=32U;
+    const auto supervision=plan_multiserver_supervision(execution_plan,servers,options);
+    const auto written=write_multiserver_supervision_files(root,supervision);
+    const auto secret=redact_sensitive_command_display("docker run -e TOKEN=abcd -e PASSWORD=hunter2 cfd",options.sensitive_markers);
+    const bool access_exists=std::filesystem::exists(written.access_script_path);
+    const bool retry_exists=std::filesystem::exists(written.retry_launch_script_path);
+    const bool dashboard_exists=std::filesystem::exists(written.dashboard_json_path);
+    std::cout<<"case=particle-multiserver-supervision seconds="<<elapsed(start)
+             <<" cases="<<persisted.cases_written
+             <<" probes="<<supervision.access_probes.size()
+             <<" retry_launches="<<supervision.retry_launches.size()
+             <<" tail_pairs="<<supervision.log_tails.size()
+             <<" dashboard_cases="<<supervision.dashboard_cases.size()
+             <<" access_script="<<access_exists
+             <<" retry_script="<<retry_exists
+             <<" dashboard="<<dashboard_exists
+             <<" redacted="<<(secret.find("hunter2")==std::string::npos)<<'\n';
+    std::filesystem::remove_all(root);
+    return persisted.cases_written==4U&&supervision.retry_launches.size()==4U&&supervision.log_tails.size()==4U&&supervision.dashboard_cases.size()==4U&&access_exists&&retry_exists&&dashboard_exists&&secret.find("hunter2")==std::string::npos?0:1;
+}
+
+
+int particle_multiserver_controller(){
+    using namespace cfd::workflow;
+    const auto start=Clock::now();
+    const auto root=std::filesystem::temp_directory_path()/"cfd_solvers_v0116_cli_campaign";
+    std::filesystem::remove_all(root);
+    const std::vector<CampaignParameter> factors{{"mach",CampaignParameterKind::discrete,0.0,0.0,{"0.2","0.4","0.6","0.8"}}};
+    const auto cases=generate_factorial_campaign(factors);
+    const std::vector<CampaignTemplateFile> templates{{"DATA/setup.cfg","mach={mach}\n"}};
+    CampaignWriteOptions write;write.overwrite=true;
+    const auto persisted=write_campaign_case_folders(root,cases,templates,write);
+    const auto registry=load_campaign_registry(root/"registry.tsv");
+    SolverAdapterDescriptor adapter{"stub","cfd-solve","cfd-solve",{SolverCapability::residuals,SolverCapability::performance,SolverCapability::control},{"stop","checkpoint","flush"}};
+    const std::vector<CampaignServerDescriptor> servers{
+        {"gpu-a","10.0.0.11","cfd","/srv/cfd/campaigns",CampaignServerRuntime::docker,2U,{"gpu","linux"},"cfd-solvers:local",true},
+        {"cpu-a","localhost","","/tmp/cfd_remote",CampaignServerRuntime::native,2U,{"cpu","linux"},"",true}
+    };
+    const auto campaign_plan=plan_multi_server_campaign(root,registry,adapter,servers);
+    const auto execution_plan=plan_multiserver_execution(campaign_plan,servers);
+    RemoteSupervisionOptions sup_options;sup_options.log_tail_lines=32U;
+    const auto supervision=plan_multiserver_supervision(execution_plan,servers,sup_options);
+    RemoteControllerConfig controller;controller.port=9090U;controller.log_tail_lines=32U;controller.control_actions={"stop","checkpoint","flush"};
+    const auto plan=plan_multiserver_controller(supervision,controller);
+    const auto written=write_multiserver_controller_files(root,plan);
+    const bool api_exists=std::filesystem::exists(written.openapi_path);
+    const bool script_exists=std::filesystem::exists(written.controller_script_path);
+    const bool status_exists=std::filesystem::exists(written.status_path);
+    std::cout<<"case=particle-multiserver-controller seconds="<<elapsed(start)
+             <<" cases="<<persisted.cases_written
+             <<" routes="<<plan.routes.size()
+             <<" controller_cases="<<plan.cases.size()
+             <<" api="<<api_exists
+             <<" script="<<script_exists
+             <<" status="<<status_exists
+             <<" token_route="<<(plan.openapi_json.find("requires-token")!=std::string::npos)<<'\n';
+    std::filesystem::remove_all(root);
+    return persisted.cases_written==4U&&plan.routes.size()==12U&&plan.cases.size()==4U&&api_exists&&script_exists&&status_exists?0:1;
+}
+
+int particle_multiserver_dashboard(){
+    using namespace cfd::workflow;
+    const auto start=Clock::now();
+    const auto root=std::filesystem::temp_directory_path()/"cfd_solvers_v0117_cli_campaign";
+    std::filesystem::remove_all(root);
+    const std::vector<CampaignParameter> factors{{"angle",CampaignParameterKind::discrete,0.0,0.0,{"0","5","10"}}};
+    const auto cases=generate_factorial_campaign(factors);
+    const std::vector<CampaignTemplateFile> templates{{"DATA/setup.cfg","angle={angle}\n"}};
+    CampaignWriteOptions write;write.overwrite=true;
+    const auto persisted=write_campaign_case_folders(root,cases,templates,write);
+    const auto registry=load_campaign_registry(root/"registry.tsv");
+    SolverAdapterDescriptor adapter{"stub","cfd-solve","cfd-solve",{SolverCapability::residuals,SolverCapability::performance,SolverCapability::control},{"stop","extend","checkpoint"}};
+    const std::vector<CampaignServerDescriptor> servers{
+        {"gpu-dashboard","10.0.0.42","cfd","/srv/cfd/campaigns",CampaignServerRuntime::docker,2U,{"gpu","linux"},"cfd-solvers:dash",true},
+        {"local-dashboard","localhost","","/tmp/cfd_dashboard",CampaignServerRuntime::native,1U,{"cpu","linux"},"",true}
+    };
+    const auto campaign_plan=plan_multi_server_campaign(root,registry,adapter,servers);
+    const auto execution_plan=plan_multiserver_execution(campaign_plan,servers);
+    const auto supervision=plan_multiserver_supervision(execution_plan,servers);
+    RemoteControllerConfig controller;controller.port=9191U;controller.dashboard_title="CFD campaign dashboard";controller.dashboard_refresh_seconds=7U;controller.control_actions={"stop","extend","checkpoint"};
+    const auto plan=plan_multiserver_controller(supervision,controller);
+    const auto written=write_multiserver_controller_files(root,plan);
+    const bool html_exists=std::filesystem::exists(written.index_path);
+    const bool js_exists=std::filesystem::exists(written.dashboard_js_path);
+    const bool css_exists=std::filesystem::exists(written.dashboard_css_path);
+    const bool events_exists=std::filesystem::exists(written.events_path);
+    std::cout<<"case=particle-multiserver-dashboard seconds="<<elapsed(start)
+             <<" cases="<<persisted.cases_written
+             <<" routes="<<plan.routes.size()
+             <<" assets="<<written.static_assets_written
+             <<" html="<<html_exists
+             <<" js="<<js_exists
+             <<" css="<<css_exists
+             <<" events="<<events_exists<<'\n';
+    std::filesystem::remove_all(root);
+    return persisted.cases_written==3U&&plan.routes.size()==12U&&written.static_assets_written==7U&&html_exists&&js_exists&&css_exists&&events_exists?0:1;
+}
+
 int particle_plasma_chemistry(){
     using namespace cfd::particle;
     constexpr double qe=1.602176634e-19;
@@ -728,6 +1029,14 @@ int run_continuation_case(std::string_view name){
     if(name=="particle-geant4-transport")return particle_geant4_transport();
     if(name=="particle-transport-dose-bvh")return particle_transport_dose_bvh();
     if(name=="particle-campaign-doe")return particle_campaign_doe();
+    if(name=="particle-campaign-execution")return particle_campaign_execution();
+    if(name=="particle-campaign-local-runner")return particle_campaign_local_runner();
+    if(name=="particle-campaign-control")return particle_campaign_control();
+    if(name=="particle-multiserver-deploy")return particle_multiserver_deploy();
+    if(name=="particle-multiserver-execution")return particle_multiserver_execution();
+    if(name=="particle-multiserver-supervision")return particle_multiserver_supervision();
+    if(name=="particle-multiserver-controller")return particle_multiserver_controller();
+    if(name=="particle-multiserver-dashboard")return particle_multiserver_dashboard();
     if(name=="particle-plasma-chemistry")return particle_plasma_chemistry();
     if(name=="particle-breakdown-threshold")return particle_breakdown_threshold();
     if(name=="bioheat-sar")return bioheat_sar();
