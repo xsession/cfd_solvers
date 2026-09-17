@@ -100,3 +100,15 @@ Palace (Apache-2.0), OpenSEMBA FDTD (MIT) and OpenNEC (MIT) are capability/valid
 ## SPICE references -> Phase 11
 
 ngspice is the primary permissive behavioral reference for MNA analyses and compact-model workflows. Xyce and QucsatorRF are clean-room feature/architecture references. OpenVAF/OSDI defines the planned dynamic compact-model boundary. v0.8.0 implements an independent MNA engine and parser plus OSDI library discovery; no ngspice/Xyce/QucsatorRF/OpenVAF simulator source is copied or mechanically translated.
+
+## CST-class system workflows -> Phase 12
+
+The CST-style expansion is clean-room framework code rather than a port of CST or any commercial solver. v0.9.0 introduced frequency-domain Maxwell references, electrostatic PIC and SAR-to-Pennes coupling. v0.9.1 added complex sparse algebra, 3-D Tet4 Nedelec Maxwell, rectangular wave-port normalization, resonator Q, adaptive RF refinement, multiconductor cable/harness propagation, relativistic Boris particles/wakes and nonlinear low-frequency magnetics. v0.9.2 adds system-level SI/PI/EMC utilities, a Vay pusher, Monte-Carlo neutral collisions and heterogeneous voxel SAR transfer into the Pennes bioheat solver.
+
+Relevant files:
+
+- `include/cfd/em/system.hpp`, `src/em/system.cpp`: eye/BER metrics, PDN impedance/IR-drop/decoupling and EMC waveform/probe helpers.
+- `include/cfd/particle/electromagnetic.hpp`, `src/particle/electromagnetic.cpp`: Boris/Vay pushers, particle-wall interactions, secondary emission, Monte-Carlo collisions and electrostatic PIC.
+- `include/cfd/multiphysics/bioheat.hpp`, `src/multiphysics/bioheat.cpp`: SAR conversion, heterogeneous voxel tissues, mass-averaged SAR, voxel-to-Pennes projection and implicit Pennes stepping.
+
+Remaining Phase-12 gaps are still explicit in `docs/INTEGRATION_TRACKER.md`: RWG/MLFMM/SBR, transient machine A-phi, EM-PIC, plasma chemistry/breakdown, temperature-dependent bio-EM feedback and full-wave photonic band/mode solvers.

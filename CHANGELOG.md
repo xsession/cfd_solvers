@@ -1,5 +1,180 @@
 # Changelog
 
+## 0.10.9 - stochastic transport, dose scoring and SU2/csauto campaign workflow
+
+- Extended the Geant4-inspired particle-through-matter seam with stochastic sampled interaction lengths, physics-list bundles, production-cut overrides, region BVH lookup, sensitive-detector hit collection, dose-grid scoring and SAR projection into the Pennes bioheat solver.
+- Added SU2/csauto-inspired workflow utilities: factorial and Latin-hypercube campaign generation, template placeholders and IF/ENDIF conditional rendering, solver-adapter descriptors/capabilities, campaign registry summaries, and finite-difference gradient/descent helpers for design studies.
+- Added CLI smoke cases `particle-transport-dose-bvh` and `particle-campaign-doe` plus focused target `cfd-v0109-transport-campaign-tests`.
+- Updated clean-room notes, learning resources, CST/SU2/csauto audit material, release notes and the integration tracker.
+
+## 0.10.8 - Geant4-inspired particle-through-matter transport
+
+- Added a clean-room Geant4-inspired track/step/process transport baseline for particle-through-matter workflows.
+- Added `TransportTrack`, `TransportStep`, `TransportProcess`, `TransportRegion`, `TransportMaterial`, `TransportWorld` and scoring diagnostics.
+- Added geometry/user/process step arbitration, continuous stopping-power losses, discrete secondary-producing interactions, production cuts and energy cuts.
+- Added the `particle-geant4-transport` CLI smoke case and `cfd-v0108-geant4-transport-tests` focused regression target.
+- Added Geant4 clean-room notes plus study-guide and learning-resource updates.
+
+## 0.10.7 - distributed staggered PIC timestep bridge
+
+- Added `run_serialized_distributed_staggered_pic_step_3d`, a rank-local distributed 3-D EM-PIC timestep bridge that pushes particles with domain-local electromagnetic fields, migrates ownership through the serialized exchange contract and returns six-component EM guard fields for the next local update.
+- Added `DistributedStaggeredPicStep3DConfig` / `DistributedStaggeredPicStep3D` diagnostics for particle counts, displacement, serialized exchange accounting and guarded fields.
+- Added the `particle-distributed-step3d` CLI smoke case and `cfd-v0107-distributed-step-tests` regression target.
+- Updated the CST audit, study guide and learning resources with the distributed timestep ordering.
+
+## 0.10.6 - distributed PIC exchange round and EM field guard vectors
+
+- Added six-component electromagnetic field-vector guard exchange for Ex/Ey/Ez/Bx/By/Bz domain blocks.
+- Added an end-to-end serialized rank-local distributed PIC exchange round that packs particle migration and scalar guard payloads, addresses logical ranks, serializes/deserializes envelopes and applies the reconstructed payloads.
+- Added `particle-distributed-round3d` and `particle-field-guards3d` CLI smoke cases.
+- Added `cfd-v0106-distributed-round-tests` focused regression/sanitizer coverage.
+- Updated the CST/PIC roadmap, study guide and learning resources around field guard exchange and distributed exchange-round orchestration.
+
+## 0.10.5 - serialized PIC transport and MPI bridge contract
+
+- Added ABI-local serialized particle/guard transport envelopes for 3-D PIC domain exchange.
+- Added deterministic serialization/deserialization, destination-rank exchange planning, payload diagnostics and malformed-envelope rejection tests.
+- Added a guarded MPI allgather transport wrapper for the serialized envelope contract (`CFD_HAS_MPI` builds); real MPI runtime validation remains a hardware/CI item.
+- Added `particle-serialized-transport3d` CLI smoke coverage and focused regression/sanitizer coverage.
+- Added multi-species plasma mass-action chemistry utilities with charge-density diagnostics.
+- Added Paschen gas-breakdown and parallel-plate multipactor threshold estimators with CLI/regression coverage.
+- Updated CST/PIC roadmap documentation and study resources around transport contracts, MPI readiness and remaining production gaps.
+
+## 0.10.4 - in-memory PIC transport contract for future MPI
+
+- Added deterministic rank-topology mapping from PIC subdomains to logical communicator ranks.
+- Added rank-addressed transport envelopes for particle-migration and scalar guard-cell messages.
+- Added `InMemoryPicTransport3D` and a complete exchange helper that reproduces the serial migration/guard result through a send/receive-like contract.
+- Added `particle-transport3d` CLI smoke case and `cfd-v0104-transport-tests` focused regression target.
+- Expanded Phase 12 from 58/78 to 61/81 validated capabilities and the whole tracker to 527/669 (78.8%).
+- Expanded the debug/CI-speed CPU validation matrix to 80 CTest targets; all pass. A focused v0.10.4 ASan+UBSan run with leak detection passes for the new in-memory transport slice.
+
+## 0.10.3 - communicator-ready PIC migration and guard-message packets
+
+- Added communicator-ready particle migration messages with retained-domain buckets, source-domain/source-index tracking, periodic wrapping and nonperiodic outside-particle records.
+- Added communicator-ready scalar guard-cell messages that carry destination padded coordinates and reproduce the serial ghost-padded guard exchange when applied.
+- Added `particle-comm-exchange3d` CLI smoke case and `cfd-v0103-comm-exchange-tests` focused regression target.
+- Expanded Phase 12 from 58/78 to 61/81 validated capabilities and the whole tracker to 527/669 (78.8%).
+- Expanded the debug/CI-speed CPU validation matrix to 78 CTest targets; all pass. A focused v0.10.3 ASan+UBSan run with leak detection passes for the new communicator-message slice.
+
+## 0.10.2 - PIC domain decomposition and scalar guard exchange foundation
+
+- Added Cartesian 3-D PIC domain descriptors with uneven global-cell block coverage and physical extents.
+- Added serial particle migration bucketing between PIC subdomains, including periodic wrapping and nonperiodic outside-particle reporting.
+- Added serial scalar guard-cell exchange that builds ghost-padded local blocks from neighbouring subdomains, with deterministic periodic and nonperiodic exterior handling.
+- Added `particle-domain-exchange3d` CLI smoke case and `cfd-v0102-domain-exchange-tests` focused regression target.
+- Expanded Phase 12 from 55/75 to 58/78 validated capabilities and the whole tracker to 524/666 (78.7%).
+- Expanded the debug/CI-speed CPU validation matrix to 76 CTest targets; all pass. A focused v0.10.2 ASan+UBSan run with leak detection passes for the new domain-exchange/guard-cell slice.
+
+## 0.10.1 - PIC particle sorting and guard-halo decomposition foundation
+
+- Added stable 3-D PIC particle sorting by cell with cell offsets, original-index recovery and occupied-cell diagnostics.
+- Added reusable 3-D guard-halo classification for future MPI/GPU particle-domain exchange; edge/corner particles can appear in multiple face lists.
+- Added optional particle sorting inside `StaggeredElectromagneticPic3D` with configurable interval and diagnostics.
+- Added `particle-sort-halo3d` CLI smoke case and `cfd-v0101-particle-sorting-tests` focused regression target.
+- Expanded Phase 12 from 52/72 to 55/75 validated capabilities and the whole tracker to 521/663 (78.6%).
+- Expanded the debug/CI-speed CPU validation matrix to 74 CTest targets; all pass. A focused v0.10.1 ASan+UBSan run with leak detection passes for the new particle sorting/guard-halo slice.
+
+## 0.10.0 - local finite-volume 3-D EM-PIC current deposition
+
+- Added `deposit_charge_conserving_current_3d_local`, a finite-volume local current reconstruction that satisfies periodic backward-difference continuity from old/new trilinear CIC charge densities.
+- Added a `CurrentDeposition3DMode` selector to `StaggeredElectromagneticPic3DConfig`, allowing the staggered 3-D EM-PIC path to use either spectral continuity reconstruction or the new local finite-volume current path.
+- Added configurable polynomial order for the 3-D absorbing sponge boundary profile.
+- Added `particle-local-current3d` CLI smoke case and `cfd-v0100-local-current-tests`.
+- Expanded Phase 12 from 49/69 to 52/72 validated capabilities and the whole tracker to 518/660 (78.5%).
+- Expanded the debug/CI-speed CPU validation matrix to 72 CTest targets; all pass. A focused v0.10.0 ASan+UBSan run with leak detection passes for the new local-current slice.
+
+## 0.9.9 - staggered 3-D Yee electromagnetic PIC foundation
+
+- Added `StaggeredElectromagneticPic3D`, a true 3-D/3-V Yee-style EM-PIC reference with component-specific Ex/Ey/Ez and Bx/By/Bz staggered field locations.
+- Added 3-D Yee CFL checking, staggered curl updates, trilinear staggered E/B gather and spectral Jx/Jy/Jz continuity-current coupling.
+- Added reusable 3-D electric-wall and absorbing-sponge field-boundary primitives plus absorbing/specular particle-wall handling with secondary-yield reporting.
+- Added `particle-staggered-em-pic3d` CLI smoke case and `cfd-v099-staggered-pic3d-tests` regression target.
+- Expanded Phase 12 from 45/65 to 49/69 validated capabilities and the whole tracker to 515/657 (78.4%).
+- Expanded the debug/CI-speed CPU validation matrix to 70 CTest targets; all pass. A focused v0.9.9 ASan+UBSan run with leak detection passes for the new staggered 3-D EM-PIC slice.
+
+## 0.9.8 - periodic 3-D/3-V electromagnetic PIC baseline
+
+- Added `ElectromagneticPic3D`, a compact periodic 3-D/3-V electromagnetic PIC baseline with full Ex/Ey/Ez and Bx/By/Bz nodal field storage.
+- Added centered periodic Maxwell curl updates, a compact 3-D CFL guard, trilinear E/B gather and Vay particle pushing for 3-D macro-particles.
+- Reused the v0.9.7 spectral 3-D charge-conserving current reconstruction as Jx/Jy/Jz source coupling into the electromagnetic field update.
+- Coupled Monte-Carlo neutral collisions into the 3-D EM-PIC step and preserved secondary macro-particles through the 3-D particle representation.
+- Added `particle-em-pic3d` CLI/CTest smoke coverage and focused regressions for bounded vacuum wave energy, current continuity, Poisson correction, field gather, collision coupling and CFL rejection.
+- Expanded Phase 12 from 42/62 to 45/65 validated capabilities and the whole tracker to 511/653 (78.3%).
+- Expanded the CPU test matrix to 68 CTest targets; all pass in the debug/CI-speed validation build. A focused v0.9.8 ASan+UBSan run with leak detection passes for the new 3-D EM-PIC slice.
+
+## 0.9.7 - 3-D electrostatic PIC foundation
+
+- Added `PicParticle3D` and `ElectrostaticPic3D`, a periodic 3-D electrostatic PIC baseline with trilinear CIC charge deposition, spectral Poisson Ex/Ey/Ez reconstruction, trilinear field gather and particle stepping.
+- Added 3-D spectral charge-conserving current reconstruction from old/new particle charge density to validate continuity before full 3-D Yee EM-PIC.
+- Added `particle-pic3d` CLI/CTest smoke coverage and focused regressions for 3-D charge conservation, manufactured periodic Poisson fields, current continuity and PIC stepping.
+- Expanded Phase 12 from 39/59 to 42/62 validated capabilities and the whole tracker to 508/650 (78.2%).
+- Expanded the CPU test matrix to 66 CTest targets; all pass in the debug/CI-speed validation build. A focused v0.9.7 ASan+UBSan run with leak detection passes for the new 3-D PIC slice.
+
+## 0.9.6 - staggered Yee EM-PIC and self-study documentation
+
+- Added `StaggeredElectromagneticPic2D`, a true Yee-style 2-D/3-V electromagnetic PIC baseline with component-specific Ex/Ey/Ez/Bx/By/Bz locations and a 2-D CFL guard.
+- Integrated electric-wall and absorbing-sponge field boundaries directly into the staggered EM-PIC update.
+- Integrated non-periodic absorbing/specular particle walls with secondary-yield macro-weight reporting into the staggered EM-PIC step.
+- Reused the Vay pusher, charge-conserving in-plane current reconstruction, transverse `Jz` deposition and MCC collision coupling inside the staggered solver.
+- Added `particle-staggered-em-pic2d` CLI/CTest smoke coverage and focused regressions for bounded vacuum TM energy, tangential-E wall enforcement, sponge damping, particle absorption/reflection, `Jz -> Ez` coupling and MCC coupling.
+- Added `docs/IMPLEMENTED_SOLVER_STUDY_GUIDE.md` and `docs/LEARNING_RESOURCES.md` to teach the implemented solver families through local source files, tests, CLI cases and curated external resources.
+- Expanded Phase 12 from 36/56 to 39/59 validated capabilities and the whole tracker to 505/647 (78.1%).
+- Expanded the CPU test matrix to 64 CTest targets; all pass in the debug/CI-speed validation build. A focused v0.9.6 ASan+UBSan run with leak detection passes for the new staggered EM-PIC slice.
+
+## 0.9.5 - periodic 2-D/3-V electromagnetic PIC baseline
+
+- Added `ElectromagneticPic2D`, a periodic 2-D/3-V electromagnetic PIC solver with centered curl field updates, bilinear field gather, Vay particle push and optional periodic Poisson in-plane correction.
+- Reused the v0.9.4 spectral charge-conserving 2-D current reconstruction for in-plane `Jx/Jy` and added CIC transverse `Jz` deposition coupled to the `Ez` update.
+- Coupled Monte-Carlo neutral collisions into the 2-D EM-PIC step, including secondary macro-particles mapped back into the 2-D population.
+- Added `particle-em-pic2d` CLI/CTest smoke coverage and focused regressions for vacuum TM-wave bounded energy, continuity residuals, `Jz -> Ez` coupling, field gather and collision coupling.
+- Expanded Phase 12 from 34/54 to 36/56 validated capabilities and the whole tracker to 502/644 (78.0%).
+- Expanded the CPU test matrix to 62 CTest targets; the focused v0.9.5 regression target and `particle-em-pic2d` smoke case pass.
+
+## 0.9.4 - 2-D electrostatic PIC foundation and boundary primitives
+
+- Added periodic 2-D electrostatic PIC with bilinear CIC charge deposition, spectral Poisson electric fields, bilinear field gather and particle stepping.
+- Added 2-D spectral charge-conserving current reconstruction from old/new CIC charge density, providing a validated bridge toward full 2-D/3-V EM-PIC deposition.
+- Added reusable 2-D particle wall handling plus electric-wall and absorbing-sponge field-boundary primitives for future metallic/absorbing PIC and FDTD boundaries.
+- Added `particle-pic2d` CLI/CTest smoke coverage and a focused regression target for manufactured 2-D Poisson fields, continuity residuals, field gather and boundary behavior.
+- Expanded Phase 12 from 31/51 to 34/54 validated capabilities and the whole tracker to 500/642 (77.9%).
+- Expanded the CPU test matrix to 60 CTest targets; the focused v0.9.4 regression target passes in the normal build.
+
+## 0.9.3 - self-consistent electromagnetic PIC baseline
+
+- Added periodic 1-D/3V self-consistent electromagnetic PIC with Yee-style transverse field update, optional longitudinal Poisson field, Vay particle push, field gather and source deposition.
+- Added spectral charge-conserving longitudinal current reconstruction from old/new CIC charge density plus transverse CIC current deposition for particle velocities.
+- Coupled deterministic Monte-Carlo elastic/ionization collisions into EM-PIC stepping so secondary macro-particles continue in subsequent self-consistent field updates.
+- Added `particle-em-pic1d` CLI/CTest smoke coverage and a focused regression target for continuity residuals, source-free wave energy, beam-current Ampere response and ionization source coupling.
+- Expanded Phase 12 from 29/50 to 31/51 validated capabilities and the whole tracker to 497/639 (77.8%).
+- Expanded the CPU test matrix to 58 CTest targets; all pass in the debug/CI-speed validation build. A focused v0.9.3 ASan+UBSan run with leak detection passes for the new EM-PIC slice.
+
+## 0.9.2 - SI/PI/EMC workflows, Vay/MCC particles and heterogeneous bioheat
+
+- Added NRZ eye-diagram post-processing with one/zero level statistics, eye height, eye width and Gaussian BER estimate.
+- Added PDN impedance, greedy decoupling-capacitor selection and loaded resistive-grid IR-drop solving.
+- Added normalized double-exponential and damped-sine EMC waveform sources plus probe peak/RMS/impulse/energy metrics.
+- Added a Vay relativistic particle pusher for high-gamma crossed-field regimes.
+- Added deterministic Monte-Carlo neutral collision handling with elastic scattering, ionization loss and secondary macro-particle emission.
+- Added heterogeneous voxel tissue materials, voxel SAR conversion, local mass-averaged SAR and mass-weighted SAR projection into Pennes bioheat meshes.
+- Expanded Phase 12 from 22/50 to 29/50 validated capabilities and the whole tracker to 495/638 (77.6%).
+- Expanded the CPU test matrix to 56 CTest targets; all pass. A focused v0.9.2 ASan+UBSan run with leak detection passes for the new workflow slice.
+
+## 0.9.1 - 3-D edge FEM, adaptive RF, cables, relativistic particles and nonlinear magnetics
+
+- Added reusable complex sparse systems through real-block CSR + ILU(0)-GMRES with a sparse GMRES fallback for indefinite harmonic systems.
+- Added lowest-order first-kind Tet4 Nedelec/Whitney geometry, basis and curl operators.
+- Added a sparse driven 3-D frequency-domain Maxwell FEM with PEC boundary edges, volumetric impressed current and directed edge-current/lumped excitation.
+- Added reconstructed 3-D E/H fields and resonator electric/magnetic energy, dielectric loss, conductor-wall loss and Q extraction.
+- Added rectangular PEC TE/TM wave-port mode extraction with cutoff, propagation constant, modal impedance and 1 W power normalization.
+- Added face-jump RF indicators, Dorfler marking and conforming longest-edge edge-star Tet4 refinement.
+- Added stable common-pole rational N-port MOR fitting on top of the adaptive RF sweep.
+- Added multiconductor cable/harness frequency-domain RLCG propagation with full matrix terminations, shield transfer impedance and effective-height field coupling.
+- Added relativistic Boris particle advance, absorbing/specular wall models, secondary-emission yield, resonator wake generation, bunch-wake convolution and wake impedance.
+- Added nonlinear piecewise B-H magnetostatic iteration, stranded-coil flux-linkage/inductance coupling helpers and Maxwell-stress force/torque integration.
+- Expanded Phase 12 from 8/47 to 22/50 validated capabilities and the whole tracker to 488/638 (76.5%).
+- Expanded the CPU test matrix to 55 CTest targets; all pass. A focused v0.9.1 ASan+UBSan run with leak detection also passes.
+
 ## 0.9.0 - CST-class frequency-domain EM, particles/PIC and bioheat
 
 - Added a driven complex 1-D frequency-domain Maxwell/Helmholtz reference solver with PEC boundaries, conductive loss and manufactured-solution validation.

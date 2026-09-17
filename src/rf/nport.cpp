@@ -542,6 +542,29 @@ BroadbandCausality check_broadband_causality(std::span<const NPortPoint> points,
     return {ratio,ratio<=tolerance,spectrum_size};
 }
 
+
+namespace {
+std::vector<Complex> solve_small_complex_system(std::vector<Complex> a,std::vector<Complex> b,std::size_t n){
+    if(a.size()!=n*n||b.size()!=n)throw std::invalid_argument("rational fit linear-system size mismatch");
+    for(std::size_t k=0;k<n;++k){std::size_t pivot=k;double best=std::abs(a[k*n+k]);for(std::size_t row=k+1U;row<n;++row){const double candidate=std::abs(a[row*n+k]);if(candidate>best){best=candidate;pivot=row;}}if(!(best>1.0e-24))throw std::runtime_error("singular rational network fit");if(pivot!=k){for(std::size_t column=k;column<n;++column)std::swap(a[k*n+column],a[pivot*n+column]);std::swap(b[k],b[pivot]);}for(std::size_t row=k+1U;row<n;++row){const Complex factor=a[row*n+k]/a[k*n+k];if(std::abs(factor)==0.0)continue;a[row*n+k]={};for(std::size_t column=k+1U;column<n;++column)a[row*n+column]-=factor*a[k*n+column];b[row]-=factor*b[k];}}
+    std::vector<Complex> x(n);for(std::size_t ii=n;ii-- >0U;){Complex value=b[ii];for(std::size_t column=ii+1U;column<n;++column)value-=a[ii*n+column]*x[column];x[ii]=value/a[ii*n+ii];}return x;
+}
+}
+
+ComplexMatrix RationalNetworkModel::evaluate(double frequency_hz) const {
+    if(!(frequency_hz>=0.0)||residues.size()!=poles_rad_per_s.size()||direct.size()==0U)throw std::invalid_argument("invalid rational network model/evaluation frequency");
+    ComplexMatrix value=direct;const Complex s_value{0.0,2.0*std::numbers::pi*frequency_hz};for(std::size_t k=0;k<poles_rad_per_s.size();++k){if(residues[k].size()!=direct.size())throw std::runtime_error("rational network residue dimension mismatch");const Complex scale=(-poles_rad_per_s[k])/(s_value-poles_rad_per_s[k]);for(std::size_t r=0;r<value.size();++r)for(std::size_t c=0;c<value.size();++c)value(r,c)+=residues[k](r,c)*scale;}return value;
+}
+
+RationalNetworkModel fit_rational_network(std::span<const NPortPoint> points,std::size_t pole_count){
+    if(points.size()<3U||pole_count==0U||pole_count+1U>points.size())throw std::invalid_argument("invalid rational network fit controls");const std::size_t ports=points.front().s.size();if(ports==0U||points.front().reference_impedance.size()!=ports)throw std::invalid_argument("invalid rational network sweep");
+    double fmin=points.front().frequency_hz,fmax=points.front().frequency_hz;for(const auto& point:points){if(point.s.size()!=ports||point.reference_impedance!=points.front().reference_impedance||!(point.frequency_hz>0.0))throw std::invalid_argument("inconsistent rational network sweep");fmin=std::min(fmin,point.frequency_hz);fmax=std::max(fmax,point.frequency_hz);}if(!(fmax>fmin))throw std::invalid_argument("rational network fit requires a frequency band");
+    RationalNetworkModel model;model.direct=ComplexMatrix(ports);model.reference_impedance=points.front().reference_impedance;model.poles_rad_per_s.resize(pole_count);model.residues.assign(pole_count,ComplexMatrix(ports));const double ratio=std::pow(fmax/fmin,1.0/static_cast<double>(std::max<std::size_t>(1U,pole_count-1U)));for(std::size_t k=0;k<pole_count;++k)model.poles_rad_per_s[k]=-2.0*std::numbers::pi*fmin*std::pow(ratio,static_cast<double>(k));
+    const std::size_t columns=pole_count+1U;std::vector<std::vector<Complex>> design(points.size(),std::vector<Complex>(columns));for(std::size_t i=0;i<points.size();++i){design[i][0]=1.0;const Complex s_value{0.0,2.0*std::numbers::pi*points[i].frequency_hz};for(std::size_t k=0;k<pole_count;++k)design[i][k+1U]=(-model.poles_rad_per_s[k])/(s_value-model.poles_rad_per_s[k]);}
+    for(std::size_t row=0;row<ports;++row)for(std::size_t column=0;column<ports;++column){std::vector<Complex> normal(columns*columns),rhs(columns);for(std::size_t i=0;i<points.size();++i)for(std::size_t a=0;a<columns;++a){rhs[a]+=std::conj(design[i][a])*points[i].s(row,column);for(std::size_t b=0;b<columns;++b)normal[a*columns+b]+=std::conj(design[i][a])*design[i][b];}const auto coefficients=solve_small_complex_system(std::move(normal),std::move(rhs),columns);model.direct(row,column)=coefficients[0];for(std::size_t k=0;k<pole_count;++k)model.residues[k](row,column)=coefficients[k+1U];}
+    return model;
+}
+
 AdaptiveNetworkSweepResult adaptive_network_sweep(double start,double stop,
                                                          std::span<const double> references,
                                                          NetworkSampler sampler,

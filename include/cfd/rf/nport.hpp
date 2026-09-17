@@ -162,6 +162,22 @@ using NetworkSampler = std::function<ComplexMatrix(double frequency_hz)>;
     double start_hz,double stop_hz,std::span<const double> reference_impedance,
     NetworkSampler sampler,const AdaptiveNetworkSweepConfig& config = {});
 
+
+struct RationalNetworkModel {
+    // Stable real poles p_k < 0 in rad/s and H(s)=D+sum R_k*(-p_k)/(s-p_k).
+    std::vector<double> poles_rad_per_s;
+    std::vector<ComplexMatrix> residues;
+    ComplexMatrix direct;
+    std::vector<double> reference_impedance;
+    [[nodiscard]] ComplexMatrix evaluate(double frequency_hz) const;
+};
+
+// Fixed-pole stable rational MOR fit for an adaptive/broadband N-port sweep.
+// Poles are negative real and logarithmically cover the sampled band. Each
+// matrix entry is fitted by complex least squares using the common pole set.
+[[nodiscard]] RationalNetworkModel fit_rational_network(
+    std::span<const NPortPoint> points,std::size_t pole_count=6U);
+
 // 4-port single-ended -> [differential pair 1, differential pair 2,
 // common pair 1, common pair 2] mixed-mode transform for port pairs (1,2),(3,4).
 [[nodiscard]] ComplexMatrix single_ended_to_mixed_mode(const ComplexMatrix& four_port_s);

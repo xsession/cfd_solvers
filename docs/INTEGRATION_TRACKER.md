@@ -72,6 +72,7 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] preconditioned conjugate gradient.
 - [x] BiCGStab for nonsymmetric systems.
 - [x] restarted GMRES.
+- [x] complex sparse systems through real-block CSR + ILU(0)-GMRES with sparse fallback.
 - [x] block CSR / vector-valued matrices.
 - [x] ILU(0) preconditioner.
 - [x] algebraic multigrid preconditioner adapter with externally supplied hierarchy/cycle callback.
@@ -526,6 +527,10 @@ Research basis is documented in `CHEMISTRY_CORROSION_RESEARCH.md`.
 - [x] restartable workflow graph.
 - [x] provenance metadata in every result file.
 - [x] benchmark/validation catalog CLI.
+- [x] factorial and Latin-hypercube DOE case generation with deterministic seed support.
+- [x] campaign template placeholder plus IF/ENDIF conditional renderer.
+- [x] solver-adapter descriptor and capability boundary for workflow front ends.
+- [x] campaign registry summary and finite-difference gradient utility for design loops.
 
 
 ## Phase 10 - RF, antennas and microwave networks [started]
@@ -737,12 +742,12 @@ Existing capabilities remain owned by their original phases; this phase tracks o
 - [x] driven 1-D complex frequency-domain Maxwell/Helmholtz PEC reference solver with conductive loss.
 - [x] generalized 1-D PEC cavity electromagnetic eigenmode solver with spatial dielectric loading.
 - [x] 2-D Tri3 curl-conforming Nedelec edge-element Maxwell assembly.
-- [ ] 3-D tetrahedral curl-conforming Nedelec/Whitney Maxwell assembly.
-- [ ] driven 3-D frequency-domain sparse complex Maxwell solve.
-- [ ] wave-port eigenmode extraction and modal normalization.
-- [ ] cavity/resonator Q extraction including dielectric and conductor loss.
-- [ ] adaptive RF frequency sweep + rational reduced-order model.
-- [ ] RF FEM adaptive mesh refinement driven by field/error indicators.
+- [x] 3-D tetrahedral curl-conforming Nedelec/Whitney Maxwell assembly.
+- [x] driven 3-D frequency-domain sparse complex Maxwell solve.
+- [x] rectangular PEC wave-port eigenmode extraction and 1 W modal normalization baseline.
+- [x] cavity/resonator Q extraction including dielectric and conductor loss.
+- [x] adaptive RF frequency sweep + stable common-pole rational reduced-order model.
+- [x] RF FEM adaptive mesh refinement driven by face-jump indicators, Dorfler marking and conforming longest-edge star bisection.
 
 ### Integral-equation and asymptotic electromagnetics
 - [ ] RWG surface-current MoM for PEC surfaces.
@@ -754,36 +759,84 @@ Existing capabilities remain owned by their original phases; this phase tracks o
 
 ### Low-frequency machines and conductors
 - [ ] transient magneto-quasistatic A-phi formulation.
-- [ ] nonlinear B-H curve material integration in magnetostatic/eddy-current FEM.
-- [ ] stranded/solid coil excitation and circuit coupling.
+- [x] nonlinear B-H curve material integration in magnetostatic FEM.
+- [ ] nonlinear B-H curve material integration in harmonic eddy-current FEM.
+- [x] stranded-coil excitation with flux-linkage/inductance export for circuit coupling.
+- [ ] solid-conductor coil excitation with external circuit coupling.
 - [ ] moving-band/sliding-interface electrical-machine formulation.
-- [ ] force/torque extraction from Maxwell stress/virtual work.
+- [x] force/torque extraction from Maxwell-stress boundary integration.
 
 ### Signal/power integrity, cables and EMC
-- [ ] multiconductor transmission-line cable/harness solver with frequency-dependent RLCG.
-- [ ] cable shield/transfer-impedance model and field-to-cable coupling.
-- [ ] eye-diagram/BER-oriented signal-integrity post-processing.
-- [ ] PDN impedance/IR-drop/decoupling optimization workflow.
-- [ ] ESD/BCI/lightning waveform source library and standardized EMC probes.
+- [x] multiconductor transmission-line cable/harness solver with frequency-dependent RLCG and full matrix loads.
+- [x] cable shield/transfer-impedance model and effective-height field-to-cable coupling.
+- [x] eye-diagram/BER-oriented signal-integrity post-processing.
+- [x] PDN impedance/IR-drop/decoupling optimization workflow.
+- [x] ESD/BCI/lightning waveform source library and standardized EMC probes.
 - [ ] installed-antenna/co-site hybrid coupling workflow.
 
 ### Charged particles, PIC, plasma and wakefields
 - [x] non-relativistic 3-D Lorentz-force charged-particle tracker using the Boris pusher.
 - [x] periodic 1-D electrostatic PIC baseline with CIC deposition and spectral Poisson field solve.
-- [ ] relativistic Boris/Vay particle pusher.
-- [ ] self-consistent electromagnetic Yee-grid PIC.
-- [ ] particle boundary interaction/absorption/reflection/secondary-emission models.
-- [ ] Monte-Carlo collision model for neutral gas/plasma interactions.
-- [ ] plasma chemistry/ionization source coupling.
-- [ ] beam wake-potential and wake-impedance solver.
-- [ ] multipactor and gas-breakdown threshold workflow.
+- [x] periodic 2-D electrostatic PIC baseline with bilinear CIC deposition, spectral Poisson field solve and field gather.
+- [x] periodic 3-D electrostatic PIC baseline with trilinear CIC deposition, spectral Poisson field solve and field gather.
+- [x] 2-D spectral charge-conserving current reconstruction from old/new particle charge density.
+- [x] 3-D spectral charge-conserving current reconstruction from old/new particle charge density.
+- [x] local finite-volume 3-D current reconstruction satisfying periodic discrete continuity.
+- [x] 3-D particle geometry/deposition validation foundation for future full Yee EM-PIC.
+- [x] relativistic Boris particle pusher using proper velocity.
+- [x] Vay pusher for ultra-relativistic crossed-field regimes.
+- [x] periodic 1-D/3V self-consistent electromagnetic Yee-grid PIC baseline.
+- [x] periodic 2-D/3-V electromagnetic PIC baseline with centered Maxwell curl update and Vay particle push.
+- [x] periodic 3-D/3-V electromagnetic PIC baseline with centered Maxwell curl update and Vay particle push.
+- [x] true staggered 2-D Yee electromagnetic PIC baseline with CFL guard and component-specific field locations.
+- [x] integrated electric-wall and absorbing-sponge field boundaries in the staggered EM-PIC update.
+- [x] integrated absorbing/specular particle walls with secondary-yield reporting in the staggered EM-PIC step.
+- [x] transverse 2-D/3-V current deposition (`Jz`) coupled into the electromagnetic field update.
+- [x] full 3-D spectral current coupling (`Jx/Jy/Jz`) into the electromagnetic field update.
+- [x] selectable local finite-volume current coupling in the staggered 3-D EM-PIC update.
+- [x] stable 3-D PIC particle sorting by cell with cell offsets and original-index recovery.
+- [x] 3-D particle guard-halo classification for face/edge/corner domain exchange.
+- [x] optional sorted particle storage in the staggered 3-D EM-PIC update with diagnostics.
+- [x] Cartesian 3-D PIC domain decomposition descriptors with uneven block coverage.
+- [x] serial particle migration bucketing between PIC subdomains.
+- [x] serial scalar guard-cell exchange producing ghost-padded decomposed blocks.
+- [x] logical-rank topology mapping for PIC subdomains before MPI transport.
+- [x] rank-addressed particle/guard transport envelopes with diagnostics.
+- [x] deterministic in-memory PIC transport reproducing migration and guard exchange through send/receive-style inboxes.
+- [x] serialized rank-addressed PIC transport envelope contract with deterministic roundtrip and payload diagnostics.
+- [x] destination-rank serialized exchange planning for particle/guard messages.
+- [x] six-component electromagnetic field-vector guard exchange for Ex/Ey/Ez/Bx/By/Bz blocks.
+- [x] serialized rank-local distributed PIC exchange round combining particle migration and scalar field guards.
+- [x] distributed PIC exchange-round and EM field-guard CLI/regression coverage.
+- [x] rank-local distributed staggered 3-D PIC timestep bridge combining local field push, serialized migration and EM guard exchange.
+- [x] Geant4-inspired track/step/process transport baseline with geometry-limited steps and process-limited GPIL selection.
+- [x] continuous energy-loss and discrete secondary-production process hooks with per-step scoring.
+- [x] slab-region material lookup, boundary crossing and production-cut handling for particle-through-matter smoke tests.
+- [x] stochastic sampled physical interaction lengths for discrete transport processes.
+- [x] physics-list bundle with clean production-cut override.
+- [x] BVH-accelerated region lookup for axis-aligned transport regions.
+- [x] sensitive-detector hit collection and dose-grid/SAR/Pennes projection coupling.
+- [ ] real MPI PIC envelope send/receive validation across ranks.
+- [x] trilinear 3-D E/B gather with Monte-Carlo collision coupling inside the 3-D EM-PIC step.
+- [x] true staggered 3-D Yee electromagnetic PIC baseline with CFL guard and component-specific Ex/Ey/Ez/Bx/By/Bz locations.
+- [x] component-offset trilinear 3-D E/B gather for staggered Yee particles.
+- [x] reusable 3-D electric-wall and absorbing-sponge EM-PIC field-boundary primitives.
+- [x] configurable polynomial-order 3-D absorbing-sponge profile.
+- [x] integrated 3-D absorbing/specular particle walls with secondary-yield reporting in the staggered EM-PIC step.
+- [x] particle boundary interaction with absorption, specular reflection and secondary-emission yield baseline.
+- [x] reusable 2-D electric-wall and absorbing-sponge PIC field-boundary primitives.
+- [x] Monte-Carlo collision model for neutral gas/plasma interactions.
+- [x] MCC ionization source coupling into the PIC particle population.
+- [x] multi-species plasma chemistry reaction-network coupling baseline with charge-conservation diagnostics.
+- [x] causal beam wake-potential convolution and wake-impedance solver.
+- [x] Paschen gas-breakdown and parallel-plate multipactor threshold workflow baseline.
 
 ### Bioelectromagnetics
 - [x] RMS electric-field -> local SAR material conversion helper.
 - [x] implicit 2-D Pennes bioheat solver with perfusion, metabolic heat and spatial SAR source.
 - [x] SAR -> bioheat coupling baseline with periodic/fixed-temperature thermal boundaries.
-- [ ] heterogeneous anatomical voxel material ingestion.
-- [ ] 1 g / 10 g SAR map -> Pennes mesh transfer on heterogeneous tissues.
+- [x] heterogeneous anatomical voxel material ingestion.
+- [x] 1 g / 10 g SAR map -> Pennes mesh transfer on heterogeneous tissues.
 - [ ] temperature-dependent dielectric/perfusion feedback to the EM solve.
 - [ ] implant/wearable exposure validation cases.
 

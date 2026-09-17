@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "verified_at": "2026-09-16",
+  "verified_at": "2026-09-17",
   "policy": "Capability/reference manifest. No upstream source is vendored. Restrictive or copyleft projects are clean-room references unless an explicit adapter is added.",
   "upstreams": [
     {
@@ -170,6 +170,39 @@
       "license_source": "COPYING/GitHub license metadata",
       "tracker_phase": 11,
       "integration": "clean-room RF network/microwave component capability reference"
+    },
+    {
+      "name": "Geant4",
+      "repository": "https://github.com/Geant4/geant4",
+      "branch": "master",
+      "commit": "f3d5293d384757b8a228a099898b2b87cfa4023c",
+      "license": "Geant4 Software License 1.0",
+      "license_source": "LICENSE",
+      "license_blob_sha": "3926c4ef6815a78bec1bc3c1a012e1596ef74394",
+      "tracker_phase": 12,
+      "integration": "clean-room particle-through-matter, track/process/step, geometry navigation and scoring architecture reference; no source translation"
+    },
+    {
+      "name": "SU2",
+      "repository": "https://github.com/su2code/SU2",
+      "branch": "master",
+      "commit": null,
+      "license": "LGPL-2.1",
+      "license_source": "LICENSE.md",
+      "license_blob_sha": "bce3315e4c4dc93b6643d0daf1dbf25a6ba4b545",
+      "tracker_phase": 9,
+      "integration": "clean-room PDE-constrained optimization, solver/iteration organization and workflow reference; no source translation"
+    },
+    {
+      "name": "csauto",
+      "repository": "https://github.com/simvia-tech/csauto",
+      "branch": "main",
+      "commit": null,
+      "license": "GPL-3.0",
+      "license_source": "LICENSE",
+      "license_blob_sha": "f288702d2fa16d3cdf0035b15a9fcbc552cd88e7",
+      "tracker_phase": 9,
+      "integration": "clean-room campaign automation, DOE/template and solver-adapter boundary reference; no source translation"
     }
   ]
 }

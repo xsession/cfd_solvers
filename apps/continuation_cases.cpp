@@ -2,7 +2,12 @@
 #include <numbers>
 #include "cfd/em/frequency_domain.hpp"
 #include "cfd/em/edge_fem2d.hpp"
+#include "cfd/em/edge_fem3d.hpp"
+#include "cfd/em/wave_port.hpp"
+#include "cfd/fem/mesh3d.hpp"
 #include "cfd/particle/electromagnetic.hpp"
+#include "cfd/particle/plasma.hpp"
+#include "cfd/particle/transport.hpp"
 #include "cfd/multiphysics/bioheat.hpp"
 #include "cfd/fem/mesh2d.hpp"
 #include "cfd/circuit/analysis.hpp"
@@ -20,6 +25,7 @@
 #include "cfd/solvers/lbm/one_step_pull.hpp"
 #include "cfd/solvers/optics/gaussian_beam.hpp"
 #include "cfd/multiphysics/electro_thermal.hpp"
+#include "cfd/workflow/campaign.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -145,12 +151,453 @@ int em_edge2d(){
     double error2=0.0,reference2=0.0;for(std::size_t e=0;e<mesh.triangles.size();++e){double x=0.0;for(auto n:mesh.triangles[e].node)x+=mesh.nodes[n].x/3.0;const Complex exact{std::sin(std::numbers::pi*x),0.0};error2+=std::norm(result.electric_centroid_v_per_m[e][0])+std::norm(result.electric_centroid_v_per_m[e][1]-exact);reference2+=std::norm(exact);}
     const double relative=std::sqrt(error2/reference2);std::cout<<"case=em-edge2d seconds="<<elapsed(start)<<" edges="<<result.edges.size()<<" relative_rms_error="<<relative<<'\n';return relative<0.15?0:1;
 }
+
+int em_edge3d(){
+    using namespace cfd::em;
+    const auto mesh=cfd::fem::make_box_tet_mesh(2U,2U,2U,1.0,0.8,1.0);
+    EdgeMaxwell3DConfig config;config.frequency_hz=8.0e7;config.linear.relative_tolerance=1.0e-8;config.linear.gmres_restart=300U;
+    constexpr double mu0=1.25663706212e-6,epsilon0=8.8541878128e-12;
+    const double omega=2.0*std::numbers::pi*config.frequency_hz,lambda=2.0*std::numbers::pi*std::numbers::pi;
+    const double coefficient=lambda/mu0-omega*omega*epsilon0;
+    const auto start=Clock::now();const auto result=solve_driven_edge_maxwell_3d(mesh,config,[=](cfd::fem::Point3 p)->ComplexVec3{
+        return {Complex{},Complex{0.0,coefficient*std::sin(std::numbers::pi*p.x)*std::sin(std::numbers::pi*p.z)/omega},Complex{}};
+    });
+    double q=0.0;const auto quality=resonator_quality_3d(mesh,config,result,5.8e7);q=quality.quality_factor;
+    std::cout<<"case=em-edge3d seconds="<<elapsed(start)<<" edges="<<result.edges.size()
+             <<" gmres_iterations="<<result.linear_result.iterations<<" q_wall="<<q<<'\n';
+    return result.linear_result.converged&&std::isfinite(q)&&q>0.0?0:1;
+}
+int em_waveport(){
+    using namespace cfd::em;const double a=22.86e-3,b=10.16e-3;const auto start=Clock::now();
+    const auto modes=rectangular_waveguide_modes(a,b,10.0e9,1.0,1.0,4U);const auto& fundamental=modes.front();
+    const double power=rectangular_mode_power_w(fundamental,a,b,96U,64U);
+    std::cout<<"case=em-waveport seconds="<<elapsed(start)<<" m="<<fundamental.m<<" n="<<fundamental.n
+             <<" cutoff_hz="<<fundamental.cutoff_frequency_hz<<" beta="<<fundamental.propagation_constant_rad_per_m.real()
+             <<" normalized_power_w="<<power<<'\n';
+    return fundamental.m==1U&&fundamental.n==0U&&fundamental.propagating&&std::abs(power-1.0)<1.0e-10?0:1;
+}
+
 int particle_pic1d(){
     using namespace cfd::particle;ChargedParticle charged;charged.velocity_m_per_s={1.0,0.2,0.0};charged.charge_c=1.0;charged.mass_kg=1.0;const double initial=std::hypot(charged.velocity_m_per_s.x,charged.velocity_m_per_s.y);
     const auto start=Clock::now();for(std::size_t i=0;i<5000U;++i)boris_push(charged,{{0,0,0},{0,0,1}},1.0e-3);
     ElectrostaticPic1DConfig config;config.grid_points=32U;config.dt_s=1.0e-3;ElectrostaticPic1D pic(config);std::vector<PicParticle1D> particles;for(std::size_t i=0;i<config.grid_points;++i)particles.push_back({static_cast<double>(i)/static_cast<double>(config.grid_points),0.1,1.0e-12,1.0,1.0});pic.set_particles(std::move(particles));pic.step(2U);double peak=0.0;for(double e:pic.electric_field())peak=std::max(peak,std::abs(e));const double speed_error=std::abs(std::hypot(charged.velocity_m_per_s.x,charged.velocity_m_per_s.y)-initial);
     std::cout<<"case=particle-pic1d seconds="<<elapsed(start)<<" boris_speed_error="<<speed_error<<" neutralized_peak_field="<<peak<<'\n';return speed_error<1.0e-12&&peak<1.0e-8?0:1;
 }
+
+int particle_em_pic1d(){
+    using namespace cfd::particle;
+    ElectromagneticPic1DConfig config;config.grid_points=32U;config.length_m=1.0;config.solve_longitudinal_poisson=false;config.dt_s=0.25*(config.length_m/static_cast<double>(config.grid_points))/299792458.0;
+    ElectromagneticPic1D solver(config);solver.initialize_right_traveling_mode(1.0,1U);const double energy0=solver.diagnostics().field_energy_j;
+    std::vector<ChargedParticle> beam(config.grid_points);
+    for(std::size_t i=0;i<beam.size();++i){beam[i].mass_kg=1.0e-10;beam[i].charge_c=1.0e-16;beam[i].position_m={static_cast<double>(i)/static_cast<double>(config.grid_points),0.0,0.0};beam[i].velocity_m_per_s={0.0,1.0e5,0.0};}
+    solver.set_particles(std::move(beam));const auto start=Clock::now();solver.step(4U);const auto diag=solver.diagnostics();
+    double jy=0.0;for(double value:solver.current_y())jy+=value;jy/=static_cast<double>(solver.current_y().size());
+    std::cout<<"case=particle-em-pic1d seconds="<<elapsed(start)<<" particles="<<diag.particle_count
+             <<" field_energy_j="<<diag.field_energy_j<<" mean_jy="<<jy
+             <<" continuity_linf="<<diag.charge_continuity_linf_residual<<'\n';
+    return diag.particle_count==config.grid_points&&diag.field_energy_j>0.5*energy0&&diag.charge_continuity_linf_residual<1.0e-9?0:1;
+}
+
+
+int particle_pic2d(){
+    using namespace cfd::particle;
+    ElectrostaticPic2DConfig config;config.nx=18U;config.ny=14U;config.length_x_m=1.0;config.length_y_m=0.8;config.dt_s=1.0e-5;
+    ElectrostaticPic2D solver(config);std::vector<PicParticle2D> particles;
+    for(std::size_t i=0;i<config.nx;++i){
+        PicParticle2D p;p.mass_kg=1.0;p.charge_c=(i%2U==0U?1.0:-1.0)*1.0e-15;p.position_m={config.length_x_m*(static_cast<double>(i)+0.3)/static_cast<double>(config.nx),0.31+0.02*static_cast<double>(i%config.ny)};particles.push_back(p);
+    }
+    solver.set_particles(std::move(particles));const auto start=Clock::now();solver.deposit_and_solve();double peak=0.0;
+    for(double value:solver.electric_x())peak=std::max(peak,std::abs(value));for(double value:solver.electric_y())peak=std::max(peak,std::abs(value));
+    std::vector<PicParticle2D> old_particles=solver.particles(),new_particles=old_particles;
+    for(std::size_t i=0;i<new_particles.size();++i){new_particles[i].position_m.x+=0.01;new_particles[i].position_m.y-=0.005;}
+    const auto current=deposit_charge_conserving_current_2d(old_particles,new_particles,config.nx,config.ny,config.length_x_m,config.length_y_m,1.0e-9);
+    solver.step(1U);std::cout<<"case=particle-pic2d seconds="<<elapsed(start)<<" particles="<<solver.particles().size()
+        <<" peak_field="<<peak<<" continuity_linf="<<current.continuity_linf_residual<<" time_s="<<solver.time_s()<<'\n';
+    return peak>0.0&&current.continuity_linf_residual<1.0e-8&&std::abs(solver.time_s()-config.dt_s)<1.0e-15?0:1;
+}
+
+
+int particle_pic3d(){
+    using namespace cfd::particle;
+    ElectrostaticPic3DConfig config;config.nx=8U;config.ny=7U;config.nz=6U;config.length_x_m=1.0;config.length_y_m=0.8;config.length_z_m=0.6;config.dt_s=1.0e-6;
+    ElectrostaticPic3D solver(config);std::vector<PicParticle3D> particles;
+    for(std::size_t i=0;i<10U;++i){PicParticle3D p;p.mass_kg=1.0;p.charge_c=(i%2U==0U?1.0:-1.0)*1.0e-15;p.position_m={0.07+0.083*static_cast<double>(i),0.11+0.057*static_cast<double>(i),0.05+0.041*static_cast<double>(i)};p.velocity_m_per_s={10.0,-4.0,2.0};particles.push_back(p);} 
+    solver.set_particles(std::move(particles));const auto start=Clock::now();solver.deposit_and_solve();double peak=0.0;for(double value:solver.electric_x())peak=std::max(peak,std::abs(value));for(double value:solver.electric_y())peak=std::max(peak,std::abs(value));for(double value:solver.electric_z())peak=std::max(peak,std::abs(value));
+    auto old_particles=solver.particles();auto new_particles=old_particles;for(auto& particle:new_particles){particle.position_m.x+=0.006;particle.position_m.y-=0.004;particle.position_m.z+=0.003;}
+    const auto current=deposit_charge_conserving_current_3d(old_particles,new_particles,config.nx,config.ny,config.nz,config.length_x_m,config.length_y_m,config.length_z_m,1.0e-9);
+    solver.step(1U);std::cout<<"case=particle-pic3d seconds="<<elapsed(start)<<" particles="<<solver.particles().size()
+        <<" peak_field="<<peak<<" continuity_linf="<<current.continuity_linf_residual<<" time_s="<<solver.time_s()<<'\n';
+    return peak>0.0&&current.continuity_linf_residual<1.0e-8&&std::abs(solver.time_s()-config.dt_s)<1.0e-15?0:1;
+}
+
+
+
+int particle_em_pic3d(){
+    using namespace cfd::particle;
+    ElectromagneticPic3DConfig config;config.nx=7U;config.ny=6U;config.nz=5U;config.length_x_m=1.0;config.length_y_m=0.8;config.length_z_m=0.6;config.solve_longitudinal_poisson=false;
+    const double dx=config.length_x_m/static_cast<double>(config.nx);const double dy=config.length_y_m/static_cast<double>(config.ny);const double dz=config.length_z_m/static_cast<double>(config.nz);
+    config.dt_s=0.03/(299792458.0*std::sqrt(1.0/(dx*dx)+1.0/(dy*dy)+1.0/(dz*dz)));
+    ElectromagneticPic3D solver(config);solver.initialize_z_polarized_mode(0.5,1U,0U,0U);const double energy0=solver.diagnostics().field_energy_j;
+    std::vector<PicParticle3D> particles;for(std::size_t i=0;i<6U;++i){PicParticle3D p;p.mass_kg=1.0e-6;p.charge_c=(i%2U==0U?1.0:-1.0)*1.0e-15;p.position_m={0.08+0.11*static_cast<double>(i),0.10+0.06*static_cast<double>(i),0.07+0.04*static_cast<double>(i)};p.velocity_m_per_s={1.0e4,-6.0e3,2.0e4};particles.push_back(p);} 
+    solver.set_particles(std::move(particles));const auto start=Clock::now();solver.step(3U);const auto diag=solver.diagnostics();double max_current=0.0;for(double value:solver.current_x())max_current=std::max(max_current,std::abs(value));for(double value:solver.current_y())max_current=std::max(max_current,std::abs(value));for(double value:solver.current_z())max_current=std::max(max_current,std::abs(value));
+    std::cout<<"case=particle-em-pic3d seconds="<<elapsed(start)<<" particles="<<diag.particle_count
+             <<" field_energy_j="<<diag.field_energy_j<<" max_current="<<max_current
+             <<" continuity_linf="<<diag.charge_continuity_linf_residual<<'\n';
+    return diag.particle_count==6U&&diag.field_energy_j>0.0&&diag.field_energy_j<energy0*4.0&&max_current>0.0&&diag.charge_continuity_linf_residual<1.0e-6?0:1;
+}
+
+int particle_em_pic2d(){
+    using namespace cfd::particle;
+    ElectromagneticPic2DConfig config;config.nx=18U;config.ny=14U;config.length_x_m=1.0;config.length_y_m=0.8;config.solve_longitudinal_poisson=false;
+    const double dx=config.length_x_m/static_cast<double>(config.nx);const double dy=config.length_y_m/static_cast<double>(config.ny);config.dt_s=0.04*std::min(dx,dy)/299792458.0;
+    ElectromagneticPic2D solver(config);solver.initialize_tm_z_mode(0.75,1U,1U);const double energy0=solver.diagnostics().field_energy_j;
+    std::vector<PicParticle2D> particles;
+    for(std::size_t i=0;i<8U;++i){PicParticle2D p;p.mass_kg=1.0e-6;p.charge_c=(i%2U==0U?1.0:-1.0)*1.0e-15;p.position_m={0.08+0.1*static_cast<double>(i),0.11+0.045*static_cast<double>(i)};p.velocity_m_per_s={1.0e4,-5.0e3,2.0e4};particles.push_back(p);} 
+    solver.set_particles(std::move(particles));const auto start=Clock::now();solver.step(3U);const auto diag=solver.diagnostics();
+    double jz=0.0;for(double value:solver.current_z())jz=std::max(jz,std::abs(value));
+    std::cout<<"case=particle-em-pic2d seconds="<<elapsed(start)<<" particles="<<diag.particle_count
+             <<" field_energy_j="<<diag.field_energy_j<<" max_jz="<<jz
+             <<" continuity_linf="<<diag.charge_continuity_linf_residual<<'\n';
+    return diag.particle_count==8U&&diag.field_energy_j>0.5*energy0&&jz>0.0&&diag.charge_continuity_linf_residual<1.0e-7?0:1;
+}
+
+
+int particle_staggered_em_pic2d(){
+    using namespace cfd::particle;
+    StaggeredElectromagneticPic2DConfig config;config.nx=20U;config.ny=16U;config.length_x_m=1.0;config.length_y_m=0.8;
+    const double dx=config.length_x_m/static_cast<double>(config.nx);const double dy=config.length_y_m/static_cast<double>(config.ny);
+    config.dt_s=0.035/(299792458.0*std::sqrt(1.0/(dx*dx)+1.0/(dy*dy)));
+    config.field_boundary.mode=GridBoundaryMode2D::absorbing_sponge;config.field_boundary.sponge_cells=3U;config.field_boundary.sponge_strength=1.2;config.periodic_particles=false;config.particle_boundary=ParticleWallMode::specular_reflect;
+    StaggeredElectromagneticPic2D solver(config);solver.initialize_tm_z_mode(0.5,1U,1U);const double energy0=solver.diagnostics().field_energy_j;
+    std::vector<PicParticle2D> particles;for(std::size_t i=0;i<6U;++i){PicParticle2D p;p.mass_kg=1.0e-6;p.charge_c=(i%2U==0U?1.0:-1.0)*1.0e-15;p.position_m={0.18+0.09*static_cast<double>(i),0.18+0.05*static_cast<double>(i)};p.velocity_m_per_s={8.0e3,-4.0e3,1.0e4};particles.push_back(p);}solver.set_particles(std::move(particles));const auto start=Clock::now();solver.step(3U);const auto diag=solver.diagnostics();double jz=0.0;for(double value:solver.current_z())jz=std::max(jz,std::abs(value));
+    std::cout<<"case=particle-staggered-em-pic2d seconds="<<elapsed(start)<<" particles="<<diag.particle_count
+             <<" field_energy_j="<<diag.field_energy_j<<" max_jz="<<jz
+             <<" continuity_linf="<<diag.charge_continuity_linf_residual<<" absorbed="<<diag.absorbed_particles<<'\n';
+    return diag.particle_count==6U&&diag.field_energy_j>0.0&&diag.field_energy_j<energy0*1.2&&jz>0.0&&diag.charge_continuity_linf_residual<1.0e-7?0:1;
+}
+
+
+int particle_staggered_em_pic3d(){
+    using namespace cfd::particle;
+    StaggeredElectromagneticPic3DConfig config;config.nx=7U;config.ny=6U;config.nz=5U;config.length_x_m=1.0;config.length_y_m=0.8;config.length_z_m=0.6;
+    const double dx=config.length_x_m/static_cast<double>(config.nx);const double dy=config.length_y_m/static_cast<double>(config.ny);const double dz=config.length_z_m/static_cast<double>(config.nz);
+    config.dt_s=0.035/(299792458.0*std::sqrt(1.0/(dx*dx)+1.0/(dy*dy)+1.0/(dz*dz)));
+    config.field_boundary.mode=GridBoundaryMode3D::absorbing_sponge;config.field_boundary.sponge_cells=2U;config.field_boundary.sponge_strength=1.0;config.periodic_particles=false;config.particle_boundary=ParticleWallMode::specular_reflect;
+    StaggeredElectromagneticPic3D solver(config);solver.initialize_z_polarized_mode(0.45,1U,0U,0U);const double energy0=solver.diagnostics().field_energy_j;
+    std::vector<PicParticle3D> particles;for(std::size_t i=0;i<5U;++i){PicParticle3D p;p.mass_kg=1.0e-6;p.charge_c=(i%2U==0U?1.0:-1.0)*1.0e-15;p.position_m={0.16+0.09*static_cast<double>(i),0.16+0.055*static_cast<double>(i),0.13+0.04*static_cast<double>(i)};p.velocity_m_per_s={8.0e3,-4.0e3,1.0e4};particles.push_back(p);}solver.set_particles(std::move(particles));
+    const auto start=Clock::now();solver.step(3U);const auto diag=solver.diagnostics();double max_current=0.0;for(double value:solver.current_x())max_current=std::max(max_current,std::abs(value));for(double value:solver.current_y())max_current=std::max(max_current,std::abs(value));for(double value:solver.current_z())max_current=std::max(max_current,std::abs(value));
+    std::cout<<"case=particle-staggered-em-pic3d seconds="<<elapsed(start)<<" particles="<<diag.particle_count
+             <<" field_energy_j="<<diag.field_energy_j<<" max_current="<<max_current
+             <<" continuity_linf="<<diag.charge_continuity_linf_residual<<" absorbed="<<diag.absorbed_particles<<'\n';
+    return diag.particle_count==5U&&diag.field_energy_j>0.0&&diag.field_energy_j<energy0*2.0&&max_current>0.0&&diag.charge_continuity_linf_residual<1.0e-6?0:1;
+}
+
+
+int particle_local_current3d(){
+    using namespace cfd::particle;
+    StaggeredElectromagneticPic3DConfig config;config.nx=7U;config.ny=6U;config.nz=5U;config.length_x_m=1.0;config.length_y_m=0.8;config.length_z_m=0.6;config.current_deposition=CurrentDeposition3DMode::local_finite_volume;
+    const double dx=config.length_x_m/static_cast<double>(config.nx);const double dy=config.length_y_m/static_cast<double>(config.ny);const double dz=config.length_z_m/static_cast<double>(config.nz);
+    config.dt_s=0.025/(299792458.0*std::sqrt(1.0/(dx*dx)+1.0/(dy*dy)+1.0/(dz*dz)));
+    StaggeredElectromagneticPic3D solver(config);std::vector<PicParticle3D> particles;
+    for(std::size_t i=0;i<6U;++i){PicParticle3D p;p.mass_kg=1.0e-6;p.charge_c=(i%2U==0U?1.0:-1.0)*1.0e-15;p.position_m={0.11+0.08*static_cast<double>(i),0.13+0.05*static_cast<double>(i),0.09+0.035*static_cast<double>(i)};p.velocity_m_per_s={7.0e3,-3.5e3,5.0e3};particles.push_back(p);}solver.set_particles(std::move(particles));
+    const auto start=Clock::now();solver.step(2U);const auto diag=solver.diagnostics();double max_current=0.0;for(double value:solver.current_x())max_current=std::max(max_current,std::abs(value));for(double value:solver.current_y())max_current=std::max(max_current,std::abs(value));for(double value:solver.current_z())max_current=std::max(max_current,std::abs(value));
+    std::cout<<"case=particle-local-current3d seconds="<<elapsed(start)<<" particles="<<diag.particle_count
+             <<" max_current="<<max_current<<" continuity_linf="<<diag.charge_continuity_linf_residual<<'\n';
+    return diag.particle_count==6U&&max_current>0.0&&diag.charge_continuity_linf_residual<1.0e-6?0:1;
+}
+
+
+int particle_sort_halo3d(){
+    using namespace cfd::particle;
+    std::vector<PicParticle3D> particles;
+    for(std::size_t i=0;i<10U;++i){
+        PicParticle3D p;p.mass_kg=1.0e-6;p.charge_c=(i%2U==0U?1.0:-1.0)*1.0e-15;p.weight=1.0+0.02*static_cast<double>(i);
+        p.position_m={0.03+0.087*static_cast<double>(i),0.04+0.069*static_cast<double>((i*3U)%8U),0.02+0.061*static_cast<double>((i*5U)%9U)};
+        p.velocity_m_per_s={3.0e3,-2.0e3,1.0e3};particles.push_back(p);
+    }
+    particles[0].position_m.x=0.01;particles[1].position_m.x=0.99;particles[2].position_m.y=0.01;particles[3].position_m.z=0.99;
+    const auto start=Clock::now();
+    const auto sorted=sort_particles_by_cell_3d(particles,8U,6U,5U,1.0,0.75,0.5);
+    ParticleGuardHalo3DConfig halo_config;halo_config.nx=8U;halo_config.ny=6U;halo_config.nz=5U;halo_config.length_x_m=1.0;halo_config.length_y_m=0.75;halo_config.length_z_m=0.5;halo_config.guard_cells=1U;
+    const auto halo=classify_particle_guard_halos_3d(particles,halo_config);
+    std::cout<<"case=particle-sort-halo3d seconds="<<elapsed(start)
+             <<" particles="<<sorted.sorted_particles.size()
+             <<" occupied_cells="<<sorted.occupied_cells
+             <<" x_minus="<<halo.x_minus.size()<<" x_plus="<<halo.x_plus.size()
+             <<" y_minus="<<halo.y_minus.size()<<" z_plus="<<halo.z_plus.size()<<'\n';
+    return sorted.sorted_particles.size()==particles.size()&&sorted.occupied_cells>0U&&(!halo.x_minus.empty())&&(!halo.x_plus.empty())&&(!halo.y_minus.empty())&&(!halo.z_plus.empty())?0:1;
+}
+
+
+int particle_domain_exchange3d(){
+    using namespace cfd::particle;
+    PicDomainGrid3DConfig config;config.global_nx=5U;config.global_ny=4U;config.global_nz=3U;config.domains_x=2U;config.domains_y=2U;config.domains_z=1U;config.length_x_m=5.0;config.length_y_m=4.0;config.length_z_m=3.0;
+    const auto start=Clock::now();
+    const auto domains=make_pic_domain_grid_3d(config);
+    std::vector<std::vector<double>> values(domains.size());
+    for(const auto& domain:domains){
+        values[domain.domain_id].resize(domain.cells_x*domain.cells_y*domain.cells_z);
+        for(std::size_t iz=0;iz<domain.cells_z;++iz)for(std::size_t iy=0;iy<domain.cells_y;++iy)for(std::size_t ix=0;ix<domain.cells_x;++ix){
+            values[domain.domain_id][(iz*domain.cells_y+iy)*domain.cells_x+ix]=100.0*static_cast<double>(domain.first_x+ix)+10.0*static_cast<double>(domain.first_y+iy)+static_cast<double>(domain.first_z+iz);
+        }
+    }
+    const auto guarded=exchange_scalar_guard_cells_3d(values,domains,config,1U,-1.0);
+    std::vector<PicParticle3D> particles(3U);particles[0].position_m={0.2,0.2,0.2};particles[1].position_m={3.7,2.5,1.0};particles[2].position_m={5.05,0.2,0.2};
+    for(auto& p:particles){p.mass_kg=1.0e-6;p.charge_c=1.0e-15;p.weight=1.0;}
+    const auto migration=plan_particle_domain_migration_3d(particles,config);
+    double checksum=0.0;for(const auto& block:guarded){checksum+=block.values.front()+block.values.back();}
+    std::size_t bucketed=0U;for(const auto& bucket:migration.particles_by_domain)bucketed+=bucket.size();
+    std::cout<<"case=particle-domain-exchange3d seconds="<<elapsed(start)
+             <<" domains="<<domains.size()<<" guarded_blocks="<<guarded.size()
+             <<" bucketed="<<bucketed<<" checksum="<<checksum<<'\n';
+    return domains.size()==4U&&guarded.size()==domains.size()&&bucketed==particles.size()&&checksum>0.0?0:1;
+}
+
+
+int particle_comm_exchange3d(){
+    using namespace cfd::particle;
+    PicDomainGrid3DConfig config;config.global_nx=6U;config.global_ny=4U;config.global_nz=3U;config.domains_x=3U;config.domains_y=2U;config.domains_z=1U;config.length_x_m=6.0;config.length_y_m=4.0;config.length_z_m=3.0;
+    const auto start=Clock::now();
+    const auto domains=make_pic_domain_grid_3d(config);
+    std::vector<std::vector<double>> values(domains.size());
+    for(const auto& domain:domains){
+        values[domain.domain_id].resize(domain.cells_x*domain.cells_y*domain.cells_z);
+        for(std::size_t iz=0;iz<domain.cells_z;++iz)for(std::size_t iy=0;iy<domain.cells_y;++iy)for(std::size_t ix=0;ix<domain.cells_x;++ix){
+            values[domain.domain_id][(iz*domain.cells_y+iy)*domain.cells_x+ix]=100.0*static_cast<double>(domain.first_x+ix)+10.0*static_cast<double>(domain.first_y+iy)+static_cast<double>(domain.first_z+iz);
+        }
+    }
+    const auto guard_messages=pack_scalar_guard_cell_messages_3d(values,domains,config,1U);
+    const auto guarded=apply_scalar_guard_cell_messages_3d(values,domains,1U,-1.0,guard_messages);
+    std::vector<std::vector<PicParticle3D>> particles_by_domain(domains.size());
+    auto add_particle=[&](std::size_t source,double x,double y,double z){PicParticle3D p;p.position_m={x,y,z};p.velocity_m_per_s={1.0e3,0.0,0.0};p.mass_kg=1.0e-6;p.charge_c=1.0e-15;p.weight=1.0;particles_by_domain[source].push_back(p);};
+    add_particle(0U,0.25,0.25,0.25);
+    add_particle(0U,2.25,0.25,0.25);
+    add_particle(domains.back().domain_id,6.05,0.25,0.25);
+    const auto migration=pack_particle_migration_messages_3d(particles_by_domain,domains,config);
+    const auto migrated=apply_particle_migration_messages_3d(migration.retained_by_domain,migration.messages);
+    std::size_t particle_count=0U;for(const auto& bucket:migrated)particle_count+=bucket.size();
+    std::size_t guard_entries=0U;for(const auto& message:guard_messages)guard_entries+=message.values.size();
+    double checksum=0.0;for(const auto& block:guarded)checksum+=block.values.front()+block.values.back();
+    std::cout<<"case=particle-comm-exchange3d seconds="<<elapsed(start)
+             <<" domains="<<domains.size()<<" guard_messages="<<guard_messages.size()
+             <<" guard_entries="<<guard_entries<<" particle_messages="<<migration.messages.size()
+             <<" particles="<<particle_count<<" checksum="<<checksum<<'\n';
+    return domains.size()==6U&&(!guard_messages.empty())&&guard_entries>0U&&(!migration.messages.empty())&&particle_count==3U&&checksum>0.0?0:1;
+}
+
+
+int particle_transport3d(){
+    using namespace cfd::particle;
+    PicDomainGrid3DConfig config;config.global_nx=6U;config.global_ny=4U;config.global_nz=3U;config.domains_x=3U;config.domains_y=2U;config.domains_z=1U;config.length_x_m=6.0;config.length_y_m=4.0;config.length_z_m=3.0;
+    const auto start=Clock::now();
+    const auto domains=make_pic_domain_grid_3d(config);
+    std::vector<std::vector<double>> values(domains.size());
+    for(const auto& domain:domains){
+        values[domain.domain_id].resize(domain.cells_x*domain.cells_y*domain.cells_z);
+        for(std::size_t iz=0;iz<domain.cells_z;++iz)for(std::size_t iy=0;iy<domain.cells_y;++iy)for(std::size_t ix=0;ix<domain.cells_x;++ix){
+            values[domain.domain_id][(iz*domain.cells_y+iy)*domain.cells_x+ix]=100.0*static_cast<double>(domain.first_x+ix)+10.0*static_cast<double>(domain.first_y+iy)+static_cast<double>(domain.first_z+iz);
+        }
+    }
+    std::vector<std::vector<PicParticle3D>> particles_by_domain(domains.size());
+    auto add_particle=[&](std::size_t source,double x,double y,double z){PicParticle3D p;p.position_m={x,y,z};p.velocity_m_per_s={1.0e3,2.0e3,3.0e3};p.mass_kg=1.0e-6;p.charge_c=1.0e-15;p.weight=1.0;particles_by_domain[source].push_back(p);};
+    add_particle(0U,0.25,0.25,0.25);add_particle(0U,2.25,0.25,0.25);add_particle(1U,4.25,2.25,1.25);add_particle(domains.back().domain_id,6.05,0.25,0.25);
+    const auto migration=pack_particle_migration_messages_3d(particles_by_domain,domains,config);
+    const auto guard_messages=pack_scalar_guard_cell_messages_3d(values,domains,config,1U);
+    const auto topology=make_pic_rank_topology_3d(domains,3U,1U,1U);
+    const auto exchanged=exchange_pic_messages_in_memory_3d(migration.retained_by_domain,migration.messages,values,guard_messages,domains,1U,-1.0,topology);
+    std::size_t particles=0U;for(const auto& bucket:exchanged.particles_by_domain)particles+=bucket.size();
+    double checksum=0.0;for(const auto& block:exchanged.guarded_blocks)checksum+=block.values.front()+block.values.back();
+    std::cout<<"case=particle-transport3d seconds="<<elapsed(start)
+             <<" ranks="<<topology.rank_count<<" envelopes="<<exchanged.diagnostics.envelopes
+             <<" remote="<<exchanged.diagnostics.remote_rank_messages
+             <<" particles="<<particles<<" guard_values="<<exchanged.diagnostics.scalar_guard_value_count
+             <<" checksum="<<checksum<<'\n';
+    return topology.rank_count==3U&&exchanged.diagnostics.envelopes>0U&&exchanged.diagnostics.remote_rank_messages>0U&&particles==4U&&checksum>0.0?0:1;
+}
+
+int particle_serialized_transport3d(){
+    using namespace cfd::particle;
+    PicDomainGrid3DConfig config;config.global_nx=6U;config.global_ny=4U;config.global_nz=3U;config.domains_x=3U;config.domains_y=2U;config.domains_z=1U;config.length_x_m=6.0;config.length_y_m=4.0;config.length_z_m=3.0;
+    const auto start=Clock::now();
+    const auto domains=make_pic_domain_grid_3d(config);
+    std::vector<std::vector<double>> values(domains.size());
+    for(const auto& domain:domains){
+        values[domain.domain_id].resize(domain.cells_x*domain.cells_y*domain.cells_z);
+        for(std::size_t iz=0;iz<domain.cells_z;++iz)for(std::size_t iy=0;iy<domain.cells_y;++iy)for(std::size_t ix=0;ix<domain.cells_x;++ix){
+            values[domain.domain_id][(iz*domain.cells_y+iy)*domain.cells_x+ix]=100.0*static_cast<double>(domain.first_x+ix)+10.0*static_cast<double>(domain.first_y+iy)+static_cast<double>(domain.first_z+iz);
+        }
+    }
+    std::vector<std::vector<PicParticle3D>> particles_by_domain(domains.size());
+    auto add_particle=[&](std::size_t source,double x,double y,double z){PicParticle3D p;p.position_m={x,y,z};p.velocity_m_per_s={2.0e3,1.0e3,0.5e3};p.mass_kg=1.0e-6;p.charge_c=1.0e-15;p.weight=1.0;particles_by_domain[source].push_back(p);};
+    add_particle(0U,0.25,0.25,0.25);add_particle(0U,2.25,0.25,0.25);add_particle(1U,4.25,2.25,1.25);add_particle(domains.back().domain_id,6.05,0.25,0.25);
+    const auto migration=pack_particle_migration_messages_3d(particles_by_domain,domains,config);
+    const auto guard_messages=pack_scalar_guard_cell_messages_3d(values,domains,config,1U);
+    const auto topology=make_pic_rank_topology_3d(domains,3U,1U,1U);
+    const auto envelopes=make_pic_transport_envelopes_3d(migration.messages,guard_messages,topology);
+    const auto serialized=serialize_pic_transport_envelopes_3d(envelopes);
+    const auto plan=plan_serialized_pic_exchange_3d(envelopes,topology.rank_count);
+    const auto decoded=deserialize_pic_transport_envelopes_3d(serialized);
+    std::vector<ParticleMigrationMessage3D> particle_messages;std::vector<ScalarGuardCellMessage3D> scalar_messages;
+    for(const auto& envelope:decoded){if(envelope.kind==PicTransportPayloadKind3D::particle_migration)particle_messages.push_back(envelope.particle_migration);else scalar_messages.push_back(envelope.scalar_guard);}
+    const auto migrated=apply_particle_migration_messages_3d(migration.retained_by_domain,particle_messages);
+    const auto guarded=apply_scalar_guard_cell_messages_3d(values,domains,1U,-1.0,scalar_messages);
+    std::size_t particles=0U,planned_messages=0U,planned_bytes=0U;for(const auto& bucket:migrated)particles+=bucket.size();for(std::size_t rank=0;rank<plan.rank_count;++rank){planned_messages+=plan.message_count_by_destination_rank[rank];planned_bytes+=plan.byte_count_by_destination_rank[rank];}
+    double checksum=0.0;for(const auto& block:guarded)checksum+=block.values.front()+block.values.back();
+    const auto diag=summarize_pic_serialized_transport_3d(serialized);
+    std::cout<<"case=particle-serialized-transport3d seconds="<<elapsed(start)
+             <<" ranks="<<topology.rank_count<<" serialized="<<serialized.size()
+             <<" planned_messages="<<planned_messages<<" planned_bytes="<<planned_bytes
+             <<" particles="<<particles<<" guard_values="<<diag.scalar_guard_value_count
+             <<" checksum="<<checksum<<'\n';
+    return topology.rank_count==3U&&serialized.size()==envelopes.size()&&planned_messages==envelopes.size()&&planned_bytes>0U&&particles==4U&&checksum>0.0?0:1;
+}
+
+
+int particle_distributed_round3d(){
+    using namespace cfd::particle;
+    PicDomainGrid3DConfig config;config.global_nx=6U;config.global_ny=4U;config.global_nz=3U;config.domains_x=3U;config.domains_y=2U;config.domains_z=1U;config.length_x_m=6.0;config.length_y_m=4.0;config.length_z_m=3.0;
+    const auto start=Clock::now();
+    const auto domains=make_pic_domain_grid_3d(config);
+    std::vector<std::vector<double>> values(domains.size());
+    for(const auto& domain:domains){
+        values[domain.domain_id].resize(domain.cells_x*domain.cells_y*domain.cells_z);
+        for(std::size_t iz=0;iz<domain.cells_z;++iz)for(std::size_t iy=0;iy<domain.cells_y;++iy)for(std::size_t ix=0;ix<domain.cells_x;++ix){
+            values[domain.domain_id][(iz*domain.cells_y+iy)*domain.cells_x+ix]=100.0*static_cast<double>(domain.first_x+ix)+10.0*static_cast<double>(domain.first_y+iy)+static_cast<double>(domain.first_z+iz);
+        }
+    }
+    std::vector<std::vector<PicParticle3D>> particles_by_domain(domains.size());
+    auto add_particle=[&](std::size_t source,double x,double y,double z){PicParticle3D p;p.position_m={x,y,z};p.velocity_m_per_s={2.0e3,1.0e3,0.5e3};p.mass_kg=1.0e-6;p.charge_c=1.0e-15;p.weight=1.0;particles_by_domain[source].push_back(p);};
+    add_particle(0U,0.25,0.25,0.25);add_particle(0U,2.25,0.25,0.25);add_particle(1U,4.25,2.25,1.25);add_particle(domains.back().domain_id,6.05,0.25,0.25);
+    const auto topology=make_pic_rank_topology_3d(domains,3U,1U,1U);
+    const auto round=run_serialized_distributed_pic_exchange_round_3d(particles_by_domain,values,domains,config,1U,-1.0,topology);
+    std::size_t particles=0U;for(const auto& bucket:round.particles_by_domain)particles+=bucket.size();
+    double checksum=0.0;for(const auto& block:round.scalar_guarded_blocks)checksum+=block.values.front()+block.values.back();
+    std::cout<<"case=particle-distributed-round3d seconds="<<elapsed(start)
+             <<" ranks="<<topology.rank_count<<" serialized_messages="<<round.serialized_message_count
+             <<" serialized_bytes="<<round.serialized_byte_count
+             <<" remote="<<round.transport_diagnostics.remote_rank_messages
+             <<" particles="<<particles<<" checksum="<<checksum<<'\n';
+    return round.serialized_message_count==round.transport_diagnostics.envelopes&&round.serialized_byte_count>0U&&round.transport_diagnostics.remote_rank_messages>0U&&particles==4U&&checksum>0.0?0:1;
+}
+
+int particle_field_guards3d(){
+    using namespace cfd::particle;
+    PicDomainGrid3DConfig config;config.global_nx=6U;config.global_ny=4U;config.global_nz=3U;config.domains_x=3U;config.domains_y=2U;config.domains_z=1U;config.length_x_m=6.0;config.length_y_m=4.0;config.length_z_m=3.0;
+    const auto start=Clock::now();
+    const auto domains=make_pic_domain_grid_3d(config);
+    auto make_component=[&](double offset){std::vector<std::vector<double>> values(domains.size());for(const auto& domain:domains){auto& block=values[domain.domain_id];block.resize(domain.cells_x*domain.cells_y*domain.cells_z);for(std::size_t iz=0;iz<domain.cells_z;++iz)for(std::size_t iy=0;iy<domain.cells_y;++iy)for(std::size_t ix=0;ix<domain.cells_x;++ix){block[(iz*domain.cells_y+iy)*domain.cells_x+ix]=offset+100.0*static_cast<double>(domain.first_x+ix)+10.0*static_cast<double>(domain.first_y+iy)+static_cast<double>(domain.first_z+iz);}}return values;};
+    ElectromagneticFieldBlocks3D fields;fields.electric_x_by_domain=make_component(1000.0);fields.electric_y_by_domain=make_component(2000.0);fields.electric_z_by_domain=make_component(3000.0);fields.magnetic_x_by_domain=make_component(4000.0);fields.magnetic_y_by_domain=make_component(5000.0);fields.magnetic_z_by_domain=make_component(6000.0);
+    const auto guarded=exchange_electromagnetic_field_guard_cells_3d(fields,domains,config,1U,-99.0);
+    std::size_t guarded_values=0U;double checksum=0.0;
+    for(const auto& block:guarded.electric_x){guarded_values+=block.values.size();checksum+=block.values.front()+block.values.back();}
+    for(const auto& block:guarded.magnetic_z){guarded_values+=block.values.size();checksum+=block.values.front()+block.values.back();}
+    std::cout<<"case=particle-field-guards3d seconds="<<elapsed(start)
+             <<" domains="<<domains.size()<<" guarded_values="<<guarded_values
+             <<" checksum="<<checksum<<'\n';
+    return guarded.electric_x.size()==domains.size()&&guarded.magnetic_z.size()==domains.size()&&guarded_values>0U&&checksum>0.0?0:1;
+}
+
+
+int particle_distributed_step3d(){
+    using namespace cfd::particle;
+    PicDomainGrid3DConfig config;config.global_nx=4U;config.global_ny=2U;config.global_nz=2U;config.domains_x=2U;config.domains_y=1U;config.domains_z=1U;config.length_x_m=4.0;config.length_y_m=2.0;config.length_z_m=2.0;config.periodic=true;
+    const auto start=Clock::now();
+    const auto domains=make_pic_domain_grid_3d(config);
+    auto make_component=[&](double base){std::vector<std::vector<double>> values(domains.size());for(const auto& domain:domains){auto& block=values[domain.domain_id];block.assign(domain.cells_x*domain.cells_y*domain.cells_z,base);for(std::size_t iz=0;iz<domain.cells_z;++iz)for(std::size_t iy=0;iy<domain.cells_y;++iy)for(std::size_t ix=0;ix<domain.cells_x;++ix){block[(iz*domain.cells_y+iy)*domain.cells_x+ix]+=0.01*(100.0*static_cast<double>(domain.first_x+ix)+10.0*static_cast<double>(domain.first_y+iy)+static_cast<double>(domain.first_z+iz));}}return values;};
+    ElectromagneticFieldBlocks3D fields;fields.electric_x_by_domain=make_component(0.0);fields.electric_y_by_domain=make_component(0.0);fields.electric_z_by_domain=make_component(0.0);fields.magnetic_x_by_domain=make_component(0.0);fields.magnetic_y_by_domain=make_component(0.0);fields.magnetic_z_by_domain=make_component(0.0);
+    std::vector<std::vector<PicParticle3D>> particles(domains.size());
+    PicParticle3D p;p.position_m={1.75,0.6,0.6};p.velocity_m_per_s={0.5,0.0,0.0};p.mass_kg=1.0;p.charge_c=0.0;p.weight=1.0;particles[0].push_back(p);
+    p.position_m={3.85,0.5,0.5};p.velocity_m_per_s={0.4,0.0,0.0};particles[1].push_back(p);
+    DistributedStaggeredPicStep3DConfig step;step.dt_s=1.0;step.guard_cells=1U;step.exterior_value=-9.0;
+    const auto topology=make_pic_rank_topology_3d(domains,2U,1U,1U);
+    const auto result=run_serialized_distributed_staggered_pic_step_3d(particles,fields,domains,config,step,topology);
+    std::cout<<"case=particle-distributed-step3d seconds="<<elapsed(start)
+             <<" particles_before="<<result.particle_count_before
+             <<" particles_after="<<result.particle_count_after_migration
+             <<" max_displacement_m="<<result.max_particle_displacement_m
+             <<" transport_messages="<<result.exchange_round.transport_diagnostics.envelopes
+             <<" serialized_bytes="<<result.exchange_round.serialized_byte_count
+             <<" guarded_domains="<<result.guarded_fields.electric_x.size()<<'\n';
+    return result.particle_count_before==2U&&result.particle_count_after_migration==2U&&result.max_particle_displacement_m>0.0&&result.exchange_round.transport_diagnostics.envelopes>0U&&result.guarded_fields.electric_x.size()==domains.size()?0:1;
+}
+
+
+int particle_geant4_transport(){
+    using namespace cfd::particle;
+    TransportWorld world;
+    world.particles.push_back({"electron",-1.602176634e-19,9.1093837e-31});
+    world.materials.push_back({"argon-gas",1.6,5.0});
+    world.materials.push_back({"detector",2500.0,10.0});
+    world.regions.push_back({"drift-region",{{0.0,0.0,0.0},{1.0,1.0,1.0}},0U});
+    world.regions.push_back({"scoring-region",{{1.0,0.0,0.0},{1.5,1.0,1.0}},1U});
+    world.processes.push_back({"continuous-ionization-loss",TransportProcessKind::continuous_energy_loss,0U,0U,150.0,0.0,0.0,0.0,0.0});
+    world.processes.push_back({"hard-scatter-secondary",TransportProcessKind::discrete_interaction,0U,0U,0.0,0.32,0.15,0.2,0.0});
+    TransportTrack track;track.position_m={0.08,0.5,0.5};track.direction={1.0,0.0,0.0};track.kinetic_energy_ev=1200.0;track.particle_index=0U;
+    TransportConfig config;config.max_step_m=0.8;config.energy_cut_ev=2.0;
+    const auto start=Clock::now();const auto result=transport_track(world,track,config,8U);
+    std::cout<<"case=particle-geant4-transport seconds="<<elapsed(start)
+             <<" steps="<<result.scoring.steps
+             <<" energy_deposit_ev="<<result.scoring.total_energy_deposit_ev
+             <<" track_length_m="<<result.scoring.total_track_length_m
+             <<" secondaries="<<result.scoring.secondaries
+             <<" final_energy_ev="<<result.primary.kinetic_energy_ev<<'\n';
+    return result.scoring.steps>0U&&result.scoring.total_energy_deposit_ev>0.0&&result.scoring.total_track_length_m>0.0&&result.scoring.secondaries>0U?0:1;
+}
+
+
+int particle_transport_dose_bvh(){
+    using namespace cfd::particle;using namespace cfd::multiphysics;
+    TransportWorld world;world.particles.push_back({"electron",-1.602176634e-19,9.1093837e-31});world.materials.push_back({"gas",1.2,2.0});world.sensitive_detectors.push_back({"dose",0.0,false});
+    for(std::size_t i=0;i<4U;++i)world.regions.push_back({"slab",{{0.25*static_cast<double>(i),0.0,0.0},{0.25*static_cast<double>(i+1U),1.0,1.0}},0U,0U});
+    const auto bvh=build_region_bvh(world,2U);
+    TransportPhysicsList physics;physics.name="em-standard-lite";physics.production_cut_energy_ev=1.0;physics.processes.push_back({"dEdx",TransportProcessKind::continuous_energy_loss,0U,0U,300.0,0.0,0.0,0.0,0.0});physics.processes.push_back({"ionization",TransportProcessKind::discrete_interaction,0U,0U,0.0,0.03,0.12,0.1,0.0});world=apply_physics_list(std::move(world),physics);
+    TransportTrack track;track.position_m={0.05,0.5,0.5};track.direction={1.0,0.0,0.0};track.kinetic_energy_ev=2000.0;TransportConfig config;config.max_step_m=0.18;TransportRandom rng; rng.state=77U;
+    const auto start=Clock::now();const auto result=transport_track_stochastic(world,track,config,rng,16U);const auto hits=collect_transport_hits(world,result.steps);auto grid=make_transport_dose_grid(4U,4U,4U,{{0.0,0.0,0.0},{1.0,1.0,1.0}},1000.0);score_hits_to_dose_grid(hits,grid);const auto sar=project_dose_grid_to_pennes2d_sar(grid,1.0,6U,6U);PennesBioheat2DConfig bio;bio.nx=6U;bio.ny=6U;bio.dt_s=0.01;bio.blood_temperature_k=310.0;PennesBioheat2D solver(bio);solver.initialize(310.0);solver.set_sar(sar);solver.step();
+    const std::size_t lookup=locate_region_bvh(world,bvh,{0.62,0.5,0.5});double max_sar=0.0;for(double value:sar)max_sar=std::max(max_sar,value);
+    std::cout<<"case=particle-transport-dose-bvh seconds="<<elapsed(start)<<" steps="<<result.scoring.steps<<" hits="<<hits.hits.size()<<" bvh_lookup="<<lookup<<" max_sar_w_per_kg="<<max_sar<<" bioheat_iterations="<<solver.linear_result().iterations<<'\n';
+    return result.scoring.steps>0U&&!hits.hits.empty()&&lookup==2U&&max_sar>0.0&&solver.linear_result().converged?0:1;
+}
+
+int particle_campaign_doe(){
+    using namespace cfd::workflow;
+    const auto start=Clock::now();std::vector<CampaignParameter> factors{{"mach",CampaignParameterKind::discrete,0.0,0.0,{"0.2","0.4"}},{"aoa",CampaignParameterKind::discrete,0.0,0.0,{"0","2"}}};const auto factorial=generate_factorial_campaign(factors);
+    std::vector<CampaignParameter> lhs{{"re",CampaignParameterKind::continuous,1.0e5,2.0e5,{}},{"turbulence",CampaignParameterKind::discrete,0.0,0.0,{"sa","sst"}}};const auto latin=generate_latin_hypercube_campaign(lhs,6U,{123U});
+    const auto rendered=render_campaign_template("MACH={mach}\n<!-- IF aoa=2 -->ANGLE=high\n<!-- ENDIF -->",factorial.back());
+    SolverAdapterDescriptor adapter{"cfd_solvers","cfd-solve","cfd-solve",{SolverCapability::residuals,SolverCapability::performance,SolverCapability::restart},{"stop","checkpoint"}};validate_solver_adapter_descriptor(adapter);
+    auto objective=[](std::span<const double> x){return (x[0]-1.0)*(x[0]-1.0)+0.25*(x[1]+2.0)*(x[1]+2.0);};std::vector<double> x{0.0,-1.0};const auto gradient=finite_difference_gradient(objective,x);const auto next=gradient_descent_update(x,gradient,0.2);
+    std::vector<CampaignRegistryEntry> registry;update_case_status(registry,{factorial[0].case_id,CampaignCaseStatus::done,1.0,10U,"ok"});update_case_status(registry,{factorial[1].case_id,CampaignCaseStatus::running,0.0,3U,"running"});const auto summary=summarize_campaign_registry(registry);
+    std::cout<<"case=particle-campaign-doe seconds="<<elapsed(start)<<" factorial_cases="<<factorial.size()<<" lhs_cases="<<latin.size()<<" rendered_bytes="<<rendered.size()<<" gradient0="<<gradient[0]<<" best="<<summary.best_case_id<<'\n';
+    return factorial.size()==4U&&latin.size()==6U&&solver_has_capability(adapter,SolverCapability::restart)&&objective(next)<objective(x)&&summary.done==1U&&summary.running==1U?0:1;
+}
+
+int particle_plasma_chemistry(){
+    using namespace cfd::particle;
+    constexpr double qe=1.602176634e-19;
+    PlasmaState state;state.species={{"e",-qe,9.1093837015e-31},{"Ar",0.0,6.6335209e-26},{"Ar+",qe,6.6335209e-26}};state.number_density_m3={1.0e15,1.0e20,1.0e15};state.electron_temperature_ev=8.0;
+    PlasmaReaction ionization;ionization.reactants={{0U,1.0},{1U,1.0}};ionization.products={{0U,2.0},{2U,1.0}};ionization.rate_coefficient=1.0e-20;
+    const auto start=Clock::now();const auto diagnostics=advance_plasma_chemistry(state,std::span<const PlasmaReaction>(&ionization,1U),1.0e-7,10U);
+    std::cout<<"case=particle-plasma-chemistry seconds="<<elapsed(start)
+             <<" ne="<<state.number_density_m3[0]<<" ni="<<state.number_density_m3[2]
+             <<" charge_before="<<diagnostics.charge_density_before_c_m3
+             <<" charge_after="<<diagnostics.charge_density_after_c_m3
+             <<" max_relative_change="<<diagnostics.max_relative_density_change<<'\n';
+    return state.number_density_m3[0]>1.0e15&&std::abs(diagnostics.charge_density_after_c_m3-diagnostics.charge_density_before_c_m3)<1.0e-12?0:1;
+}
+
+int particle_breakdown_threshold(){
+    using namespace cfd::particle;
+    PaschenGas air;air.townsend_a_per_m_pa=112.5;air.townsend_b_v_per_m_pa=2737.0;air.secondary_emission_yield=0.01;
+    const auto start=Clock::now();const auto gas=estimate_gas_breakdown_threshold(air,101325.0,1.0e-3,4.0e6);
+    const auto multipactor=estimate_parallel_plate_multipactor(2.0e9,1.0e-3,1U,9.1093837015e-31,-1.602176634e-19,1.4);
+    std::cout<<"case=particle-breakdown-threshold seconds="<<elapsed(start)
+             <<" paschen_voltage_v="<<gas.breakdown_voltage_v
+             <<" paschen_field_v_m="<<gas.breakdown_field_v_m
+             <<" multipactor_field_v_m="<<multipactor.resonant_field_v_m
+             <<" multipactor_impact_ev="<<multipactor.impact_energy_ev
+             <<" multipactor_sustains="<<multipactor.secondary_yield_sustains<<'\n';
+    return gas.breakdown_voltage_v>0.0&&multipactor.resonant_field_v_m>0.0&&multipactor.secondary_yield_sustains?0:1;
+}
+
 int bioheat_sar(){
     using namespace cfd::multiphysics;PennesBioheat2DConfig config;config.nx=8U;config.ny=8U;config.dt_s=1.0;config.blood_perfusion_per_s=0.01;config.blood_temperature_k=310.0;PennesBioheat2D solver(config);solver.initialize(300.0);const double sar=sar_from_rms_electric_field(1.0,1000.0,100.0);solver.set_sar(sar);const auto start=Clock::now();solver.step();double min_t=solver.temperature_k().front(),max_t=min_t;for(double t:solver.temperature_k()){min_t=std::min(min_t,t);max_t=std::max(max_t,t);}std::cout<<"case=bioheat-sar seconds="<<elapsed(start)<<" sar_w_per_kg="<<sar<<" temperature_min_k="<<min_t<<" temperature_max_k="<<max_t<<" cg_iterations="<<solver.linear_result().iterations<<'\n';return solver.linear_result().converged&&max_t>300.0?0:1;
 }
@@ -259,7 +706,30 @@ int run_continuation_case(std::string_view name){
     if(name=="fvm-workspace")return fvm_workspace();
     if(name=="em-frequency1d")return em_frequency1d();
     if(name=="em-edge2d")return em_edge2d();
+    if(name=="em-edge3d")return em_edge3d();
+    if(name=="em-waveport")return em_waveport();
     if(name=="particle-pic1d")return particle_pic1d();
+    if(name=="particle-em-pic1d")return particle_em_pic1d();
+    if(name=="particle-pic2d")return particle_pic2d();
+    if(name=="particle-em-pic2d")return particle_em_pic2d();
+    if(name=="particle-staggered-em-pic2d")return particle_staggered_em_pic2d();
+    if(name=="particle-pic3d")return particle_pic3d();
+    if(name=="particle-em-pic3d")return particle_em_pic3d();
+    if(name=="particle-staggered-em-pic3d")return particle_staggered_em_pic3d();
+    if(name=="particle-local-current3d")return particle_local_current3d();
+    if(name=="particle-sort-halo3d")return particle_sort_halo3d();
+    if(name=="particle-domain-exchange3d")return particle_domain_exchange3d();
+    if(name=="particle-comm-exchange3d")return particle_comm_exchange3d();
+    if(name=="particle-transport3d")return particle_transport3d();
+    if(name=="particle-serialized-transport3d")return particle_serialized_transport3d();
+    if(name=="particle-distributed-round3d")return particle_distributed_round3d();
+    if(name=="particle-field-guards3d")return particle_field_guards3d();
+    if(name=="particle-distributed-step3d")return particle_distributed_step3d();
+    if(name=="particle-geant4-transport")return particle_geant4_transport();
+    if(name=="particle-transport-dose-bvh")return particle_transport_dose_bvh();
+    if(name=="particle-campaign-doe")return particle_campaign_doe();
+    if(name=="particle-plasma-chemistry")return particle_plasma_chemistry();
+    if(name=="particle-breakdown-threshold")return particle_breakdown_threshold();
     if(name=="bioheat-sar")return bioheat_sar();
     if(name=="rf-dipole")return rf_dipole();
     if(name=="rf-microstrip")return rf_microstrip();

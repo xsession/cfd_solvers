@@ -6,20 +6,22 @@ The long-term goal is a readable solver collection covering CFD, FEM multiphysic
 
 The project is inspired by the capabilities and engineering lessons of OpenFOAM, FluidX3D, Elmer FEM, openEMS FDTD and Optiland. It is **not** a source-code merge or mechanical translation. The source projects have different licenses, and FluidX3D has additional restrictions, so performance techniques are independently implemented from publications and public descriptions.
 
-## v0.9.0 status - CST-class EM, particle and bioelectromagnetic expansion
+## v0.10.9 status - stochastic transport, dose scoring and campaign workflow
 
-The machine-checkable integration program now reports **473/634 capabilities (74.6%)** complete. Phase 10 RF/antenna/microwave is **46/70 (65.7%)**, Phase 11 SPICE/circuit/compact-model simulation is **80/98 (81.6%)**, and the new Phase 12 CST-class expansion is **8/47 (17.0%)**. The CPU validation matrix now contains **52 CTest targets**.
+The machine-checkable integration program now reports **546/687 capabilities (79.5%)** complete. Phase 9 workflow/UX is **16/18 (88.9%)**, Phase 10 RF/antenna/microwave is **46/70 (65.7%)**, Phase 11 SPICE/circuit/compact-model simulation is **80/98 (81.6%)**, and Phase 12 CST-class expansion is **76/95 (80.0%)**. The CPU validation matrix contains **95 CTest targets**.
 
-This checkpoint adds or consolidates:
+This checkpoint deepens the Geant4-inspired transport seam and adds SU2/csauto-inspired workflow infrastructure:
 
-- a driven complex 1-D frequency-domain Maxwell/Helmholtz solver with PEC boundaries, conductive loss and staggered magnetic-field reconstruction;
-- dielectric-loaded 1-D PEC cavity electromagnetic eigenmodes with analytical frequency validation;
-- reusable lowest-order first-kind Nedelec Tri3 basis functions and a driven 2-D curl-conforming edge-element Maxwell FEM baseline with global edge orientation and PEC tangential constraints;
-- non-relativistic 3-D charged-particle tracking through a Boris pusher plus a periodic 1-D electrostatic PIC baseline with cloud-in-cell deposition and spectral Poisson fields;
-- RMS electric-field to SAR conversion and an implicit 2-D Pennes bioheat solver with conduction, perfusion, metabolic heat and spatial SAR loading;
-- CLI smoke cases for the new EM, PIC and bioheat families;
-- `docs/CST_COVERAGE_AUDIT.md`, which maps the actual implementation against the wider EM/thermal/structural/particle/plasma/bioelectromagnetic domains and explicitly identifies remaining gaps;
-- tracker reconciliation for RF/SPICE capabilities that were already implemented and tested but still marked incomplete, including complex power-wave renormalization, passivity/causality tools, PEEC capacitance, connected-wire MoM, sparse MNA, DAE devices, B-sources, RAW I/O, noise/distortion and self-heating.
+- stochastic sampled physical interaction lengths for discrete particle-through-matter events;
+- physics-list process bundles with production-cut override;
+- BVH-accelerated region lookup for axis-aligned transport regions;
+- sensitive-detector hit collection, dose-grid scoring and dose-rate/SAR projection into the Pennes bioheat solver;
+- factorial and Latin-hypercube DOE campaign generation;
+- template placeholder and `<!-- IF ... -->` / `<!-- ENDIF -->` rendering;
+- solver-adapter descriptors/capability checks, campaign registry summaries and finite-difference gradient/descent utilities;
+- CLI smoke cases `particle-transport-dose-bvh` and `particle-campaign-doe`.
+
+This is still a **clean-room reference layer**, not a Geant4, SU2, code_saturne or csauto adapter. It does not copy or translate Geant4, SU2 or csauto source code. It extracts portable architecture lessons: track/step/process transport, PDE-constrained campaign/gradient loops, and adapter-bounded solver automation.
 
 The clean-room rule remains unchanged: upstream projects and commercial-product capability descriptions are architecture/research references only; incompatible source code is not translated or copied into the MIT core.
 
@@ -65,6 +67,20 @@ Examples:
 ./build/cfd-solve electrochem-pnp1d
 ./build/cfd-solve electrochem-pnp-poly
 ./build/cfd-solve electrochem-galvanic
+./build/cfd-solve em-edge3d
+./build/cfd-solve em-waveport
+./build/cfd-solve particle-em-pic1d
+./build/cfd-solve particle-pic2d
+./build/cfd-solve particle-em-pic2d
+./build/cfd-solve particle-staggered-em-pic2d
+./build/cfd-solve particle-pic3d
+./build/cfd-solve particle-em-pic3d
+./build/cfd-solve particle-distributed-round3d
+./build/cfd-solve particle-field-guards3d
+./build/cfd-solve particle-distributed-step3d
+./build/cfd-solve particle-geant4-transport
+./build/cfd-solve particle-transport-dose-bvh
+./build/cfd-solve particle-campaign-doe
 ./scripts/integration_status.py
 ```
 
@@ -144,6 +160,9 @@ A normal GCC/Clang CPU build has no SYCL dependency.
 | Elmer FEM | multiphysics FEM, sparse systems, adaptive methods, coupled physics | clean-room implementation; no GPLv2 source copied |
 | openEMS FDTD | Yee/FDTD EM, dispersive materials, ports, PML/NF2FF capability map | clean-room implementation; no GPLv3 source copied |
 | Optiland | optical-system/ray abstractions, analysis and backend separation | MIT-compatible reference; independent C++ implementation preferred |
+| Geant4 | particle-through-matter track/step/process architecture, geometry navigation and scoring | clean-room architecture reference only; no Geant4 source copied |
+| SU2 | PDE-constrained optimization, solver/iteration organization, adjoint/finite-difference workflows | clean-room workflow/numerics reference only; no LGPL source copied |
+| csauto | DOE campaign automation, solver-adapter boundary, registry/status/dashboard concepts | clean-room workflow reference only; no GPLv3 source copied |
 
 See `docs/PHASE4A_FVM.md`, `docs/PHASE4B_INCOMPRESSIBLE.md`, `docs/PHASE4C_COLLOCATED.md`, `docs/DISTRIBUTED_RUNTIME.md`, `docs/PHASE3B_RESULTS.md`, `docs/LBM_BOUNDARIES.md`, `docs/SOURCE_MAP.md`, `docs/PERFORMANCE.md` and `THIRD_PARTY.md`.
 

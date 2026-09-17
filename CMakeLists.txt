@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(cfd_solvers VERSION 0.9.0 LANGUAGES CXX)
+project(cfd_solvers VERSION 0.10.9 LANGUAGES CXX)
 
 option(CFD_ENABLE_OPENMP "Enable multicore CPU execution through OpenMP" ON)
 option(CFD_ENABLE_SYCL "Enable AdaptiveCpp/SYCL accelerator backend" OFF)
@@ -13,9 +13,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(cfd_solvers
+    src/core/complex_sparse.cpp
     src/em/frequency_domain.cpp
     src/em/edge_fem2d.cpp
+    src/em/edge_fem3d.cpp
+    src/em/adaptivity3d.cpp
+    src/em/wave_port.cpp
+    src/em/cable.cpp
+    src/em/system.cpp
     src/particle/electromagnetic.cpp
+    src/particle/transport.cpp
+    src/particle/plasma.cpp
+    src/particle/wakefield.cpp
     src/rf/network.cpp
     src/rf/nport.cpp
     src/rf/peec.cpp
@@ -35,6 +44,7 @@ add_library(cfd_solvers
     src/workflow/provenance.cpp
     src/workflow/validation_catalog.cpp
     src/workflow/runner.cpp
+    src/workflow/campaign.cpp
     src/fvm/derived_fields.cpp
     src/fvm/reordering.cpp
     src/fvm/fv_matrix.cpp
@@ -245,6 +255,66 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     add_executable(cfd-cst-expansion-tests tests/test_cst_expansion.cpp)
     target_link_libraries(cfd-cst-expansion-tests PRIVATE cfd::solvers)
     add_test(NAME cfd-cst-expansion-tests COMMAND cfd-cst-expansion-tests)
+    add_executable(cfd-v091-sanitize-smoke tests/test_v091_sanitize.cpp)
+    target_link_libraries(cfd-v091-sanitize-smoke PRIVATE cfd::solvers)
+    add_test(NAME cfd-v091-sanitize-smoke COMMAND cfd-v091-sanitize-smoke)
+    add_executable(cfd-v092-expansion-tests tests/test_v092_expansion.cpp)
+    target_link_libraries(cfd-v092-expansion-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v092-expansion-tests COMMAND cfd-v092-expansion-tests)
+    add_executable(cfd-v093-em-pic-tests tests/test_v093_em_pic.cpp)
+    target_link_libraries(cfd-v093-em-pic-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v093-em-pic-tests COMMAND cfd-v093-em-pic-tests)
+    add_executable(cfd-v094-pic2d-tests tests/test_v094_pic2d.cpp)
+    target_link_libraries(cfd-v094-pic2d-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v094-pic2d-tests COMMAND cfd-v094-pic2d-tests)
+    add_executable(cfd-v095-em-pic2d-tests tests/test_v095_em_pic2d.cpp)
+    target_link_libraries(cfd-v095-em-pic2d-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v095-em-pic2d-tests COMMAND cfd-v095-em-pic2d-tests)
+    add_executable(cfd-v096-staggered-pic2d-tests tests/test_v096_staggered_pic2d.cpp)
+    target_link_libraries(cfd-v096-staggered-pic2d-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v096-staggered-pic2d-tests COMMAND cfd-v096-staggered-pic2d-tests)
+    add_executable(cfd-v097-pic3d-tests tests/test_v097_pic3d.cpp)
+    target_link_libraries(cfd-v097-pic3d-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v097-pic3d-tests COMMAND cfd-v097-pic3d-tests)
+    add_executable(cfd-v098-em-pic3d-tests tests/test_v098_em_pic3d.cpp)
+    target_link_libraries(cfd-v098-em-pic3d-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v098-em-pic3d-tests COMMAND cfd-v098-em-pic3d-tests)
+    add_executable(cfd-v099-staggered-pic3d-tests tests/test_v099_staggered_pic3d.cpp)
+    target_link_libraries(cfd-v099-staggered-pic3d-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v099-staggered-pic3d-tests COMMAND cfd-v099-staggered-pic3d-tests)
+    add_executable(cfd-v0100-local-current-tests tests/test_v0100_local_current.cpp)
+    target_link_libraries(cfd-v0100-local-current-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0100-local-current-tests COMMAND cfd-v0100-local-current-tests)
+    add_executable(cfd-v0101-particle-sorting-tests tests/test_v0101_particle_sorting.cpp)
+    target_link_libraries(cfd-v0101-particle-sorting-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0101-particle-sorting-tests COMMAND cfd-v0101-particle-sorting-tests)
+    add_executable(cfd-v0102-domain-exchange-tests tests/test_v0102_domain_exchange.cpp)
+    target_link_libraries(cfd-v0102-domain-exchange-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0102-domain-exchange-tests COMMAND cfd-v0102-domain-exchange-tests)
+    add_executable(cfd-v0103-comm-exchange-tests tests/test_v0103_comm_exchange.cpp)
+    target_link_libraries(cfd-v0103-comm-exchange-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0103-comm-exchange-tests COMMAND cfd-v0103-comm-exchange-tests)
+    add_executable(cfd-v0104-transport-tests tests/test_v0104_transport.cpp)
+    target_link_libraries(cfd-v0104-transport-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0104-transport-tests COMMAND cfd-v0104-transport-tests)
+    add_executable(cfd-v0105-serialized-transport-tests tests/test_v0105_serialized_transport.cpp)
+    target_link_libraries(cfd-v0105-serialized-transport-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0105-serialized-transport-tests COMMAND cfd-v0105-serialized-transport-tests)
+    add_executable(cfd-v0105-plasma-tests tests/test_v0105_plasma.cpp)
+    target_link_libraries(cfd-v0105-plasma-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0105-plasma-tests COMMAND cfd-v0105-plasma-tests)
+    add_executable(cfd-v0106-distributed-round-tests tests/test_v0106_distributed_round.cpp)
+    target_link_libraries(cfd-v0106-distributed-round-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0106-distributed-round-tests COMMAND cfd-v0106-distributed-round-tests)
+    add_executable(cfd-v0107-distributed-step-tests tests/test_v0107_distributed_step.cpp)
+    target_link_libraries(cfd-v0107-distributed-step-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0107-distributed-step-tests COMMAND cfd-v0107-distributed-step-tests)
+    add_executable(cfd-v0108-geant4-transport-tests tests/test_v0108_geant4_transport.cpp)
+    target_link_libraries(cfd-v0108-geant4-transport-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0108-geant4-transport-tests COMMAND cfd-v0108-geant4-transport-tests)
+    add_executable(cfd-v0109-transport-campaign-tests tests/test_v0109_transport_campaign.cpp)
+    target_link_libraries(cfd-v0109-transport-campaign-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0109-transport-campaign-tests COMMAND cfd-v0109-transport-campaign-tests)
     add_library(cfd-osdi-fixture SHARED tests/osdi_fixture.cpp)
     add_executable(cfd-osdi-tests tests/test_osdi.cpp)
     target_link_libraries(cfd-osdi-tests PRIVATE cfd::solvers)
@@ -269,7 +339,7 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     add_test(NAME cfd-bench-json-smoke COMMAND cfd-bench --lattice d3q19 --nx 8 --ny 8 --nz 8 --warmup 1 --steps 2 --threads 1 --json)
     add_test(NAME cfd-halo-plan-smoke COMMAND cfd-halo-plan --lattice d3q27 --nx 8 --ny 8 --nz 8)
     add_test(NAME cfd-validation-catalog-smoke COMMAND cfd-validate)
-    foreach(case_name lbm-trt fvm-workspace fdtd-pml1d chemistry-reactor chemistry-equilibrium optics-gaussian multiphysics-thermoelastic em-frequency1d em-edge2d particle-pic1d bioheat-sar rf-dipole rf-microstrip rf-multiwire spice-rc spice-diode spice-adaptive spice-pss-pz)
+    foreach(case_name lbm-trt fvm-workspace fdtd-pml1d chemistry-reactor chemistry-equilibrium optics-gaussian multiphysics-thermoelastic em-frequency1d em-edge2d em-edge3d em-waveport particle-pic1d particle-em-pic1d particle-pic2d particle-em-pic2d particle-staggered-em-pic2d particle-pic3d particle-em-pic3d particle-staggered-em-pic3d particle-local-current3d particle-sort-halo3d particle-domain-exchange3d particle-comm-exchange3d particle-transport3d particle-serialized-transport3d particle-distributed-round3d particle-field-guards3d particle-distributed-step3d particle-geant4-transport particle-transport-dose-bvh particle-campaign-doe particle-plasma-chemistry particle-breakdown-threshold bioheat-sar rf-dipole rf-microstrip rf-multiwire spice-rc spice-diode spice-adaptive spice-pss-pz)
         add_test(NAME cfd-${case_name}-smoke COMMAND cfd-solve ${case_name})
     endforeach()
     add_test(NAME cfd-fvm-operators-smoke COMMAND cfd-solve fvm-operators3d)

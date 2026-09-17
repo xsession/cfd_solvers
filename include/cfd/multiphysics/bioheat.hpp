@@ -12,6 +12,33 @@ namespace cfd::multiphysics {
                                                   double tissue_density_kg_per_m3,
                                                   double electric_rms_v_per_m);
 
+struct VoxelTissueMaterial {
+    double density_kg_per_m3{1000.0};
+    double specific_heat_j_per_kg_k{3600.0};
+    double thermal_conductivity_w_per_m_k{0.5};
+    double electrical_conductivity_s_per_m{1.0};
+    double blood_perfusion_per_s{};
+    double metabolic_heat_w_per_m3{};
+};
+
+struct VoxelTissueGrid3D {
+    std::size_t nx{},ny{},nz{};
+    double dx_m{},dy_m{},dz_m{};
+    std::vector<VoxelTissueMaterial> materials;
+    std::vector<std::size_t> material_index;
+    std::vector<double> electric_rms_v_per_m;
+    void validate() const;
+};
+
+[[nodiscard]] std::vector<double> voxel_sar_w_per_kg(const VoxelTissueGrid3D& grid);
+[[nodiscard]] double max_mass_averaged_sar_w_per_kg(const VoxelTissueGrid3D& grid,
+                                                     std::span<const double> sar_w_per_kg,
+                                                     double averaging_mass_kg);
+[[nodiscard]] std::vector<double> project_voxel_sar_to_pennes2d(const VoxelTissueGrid3D& grid,
+                                                                 std::span<const double> sar_w_per_kg,
+                                                                 std::size_t nx,std::size_t ny);
+
+
 enum class BioheatBoundary { periodic, fixed_temperature };
 
 struct PennesBioheat2DConfig {
