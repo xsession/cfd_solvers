@@ -314,7 +314,8 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] DC conduction.
 - [x] 2-D magnetostatics through out-of-plane vector potential A_z and reconstructed B field.
 - [x] eddy-current harmonic formulation.
-- [ ] frequency-domain Maxwell with appropriate vector elements.
+- [x] 2-D driven frequency-domain Maxwell baseline with lowest-order Nedelec edge elements.
+- [ ] 3-D frequency-domain Maxwell with curl-conforming vector elements.
 - [x] electro-thermal coupling.
 
 ### Multiphysics/HPC
@@ -541,22 +542,23 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] generic N-port matrix representation.
 - [x] Touchstone SnP v2 import/export.
 - [x] arbitrary positive-real per-port impedance renormalization.
-- [ ] complex-reference power-wave impedance renormalization.
+- [x] complex-reference power-wave impedance renormalization.
 - [x] de-embedding and reference-plane shifts.
 - [x] mixed-mode/differential S-parameters.
 - [x] N-port passivity and reciprocity checking baseline.
-- [ ] passivity enforcement and broadband causality checking.
+- [x] passivity enforcement and broadband causality checking.
 - [x] two-port Rollett K and mu stability metrics.
 - [x] source/load gain and stability circles.
 - [x] low-pass L-match synthesis utility baseline.
-- [ ] adaptive broadband network sweep/model-order reduction.
+- [x] adaptive broadband network sweep with midpoint interpolation-error refinement.
+- [ ] rational/vector-fitting model-order reduction.
 - [x] transducer-gain and load-pull sampling baseline.
 
 ### Quasi-static conductor extraction
 - [x] slender-filament PEEC DC resistance extraction.
 - [x] PEEC self/mutual partial-inductance matrix with numerical Neumann integration.
 - [x] complex PEEC branch-impedance/current solve.
-- [ ] PEEC coefficient-of-potential/capacitance extraction.
+- [x] PEEC coefficient-of-potential/capacitance extraction.
 - [x] round-wire PEEC skin-effect resistance baseline.
 - [ ] proximity-effect conductor models.
 - [ ] surface/volume PEEC discretization for PCB/package conductors.
@@ -569,22 +571,26 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] coupled parallel-wire MoM baseline with independent segmentation, delta-gap feeds and lumped series loads.
 - [x] arbitrary-orientation disjoint straight-wire MoM with dyadic free-space Green kernel and rotational-invariance validation.
 - [ ] NEC-grade thin-wire MoM accuracy/convergence across canonical antenna benchmarks.
-- [ ] arbitrary connected wire geometry/junctions.
-- [ ] wire loads and transmission-line sections.
+- [x] endpoint-connected arbitrary wire geometry with explicit junction KCL constraints.
+- [ ] general interior wire junctions/meshed conductor junction topology.
+- [x] wire lumped loads and lossy two-port transmission-line sections.
+- [x] infinite PEC ground-plane image-kernel baseline.
 - [ ] finite/conductive ground models.
-- [ ] feed impedance/reactance and VSWR/return-loss extraction.
-- [ ] radiation efficiency including conductor/dielectric loss.
+- [x] feed impedance/reactance and VSWR/return-loss extraction.
+- [x] radiation efficiency including round-wire skin loss and equivalent distributed dielectric loss.
 - [x] polarization/axial-ratio analysis.
 - [x] phased-array/array-factor framework.
-- [ ] mutual impedance/coupling between antennas.
-- [ ] antenna optimization driver.
+- [x] multi-feed impedance/S-matrix extraction for mutual impedance/coupling.
+- [x] bounded derivative-free antenna optimization driver.
 
 ### Full-wave RF / antenna bridge
 - [x] reuse 3-D Cartesian FDTD full-wave engine from Phase 5.
 - [x] reuse TEM-like port/S-parameter extraction from Phase 5.
 - [x] reuse NF2FF and SAR post-processing from Phase 5.
-- [ ] driven frequency-domain edge-element FEM Maxwell solver.
-- [ ] Nedelec/Whitney edge-element basis.
+- [x] 2-D driven frequency-domain edge-element FEM Maxwell solver baseline.
+- [ ] production 3-D driven edge-element RF FEM solver.
+- [x] lowest-order first-kind Nedelec Tri3 edge-element basis with global edge orientation.
+- [ ] tetrahedral Nedelec/Whitney edge-element basis for 3-D RF FEM.
 - [ ] wave-port eigenmode solver.
 - [ ] lumped-port frequency-domain excitation/termination.
 - [ ] resonance/eigenmode/Q solver for RF cavities/antennas.
@@ -601,7 +607,8 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [ ] Huygens/equivalent surface excitation.
 - [ ] Hertzian dipole field source.
 - [ ] thin-slot and impedance-sheet models.
-- [ ] shielding-effectiveness/transfer-function utilities.
+- [x] shielding-effectiveness magnitude utility baseline.
+- [ ] broadband EMC transfer-function workflow.
 - [ ] circuit load/termination coupling to FDTD/FEM ports.
 - [ ] bidirectional EM <-> SPICE co-simulation.
 
@@ -619,9 +626,9 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] Newton-Raphson nonlinear DC operating point.
 - [x] complex small-signal AC analysis.
 - [x] backward-Euler transient analysis.
-- [ ] sparse MNA through shared CSR/direct sparse backend.
+- [x] sparse MNA stamping through shared CSR + ILU(0)-GMRES backend with dense fallback.
 - [x] memoryless multi-terminal compact-device residual/Jacobian callback seam.
-- [ ] dynamic-state DAE residual/Jacobian device abstraction.
+- [x] dynamic-state charge-based DAE residual/Jacobian device abstraction.
 - [x] memoryless nonlinear multi-terminal residual/Jacobian compact-device seam.
 - [x] PN-junction voltage limiting primitive.
 - [x] source stepping.
@@ -635,11 +642,11 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] temperature sweep.
 
 - [x] logarithmic AC sweep framework.
-- [ ] multi-source noise sweep/integration framework.
+- [x] multi-source noise sweep/integration framework with per-source contributions.
 - [x] resistor thermal-noise output-referred baseline.
 - [x] pole-zero analysis.
 - [x] numerical DC sensitivity baseline.
-- [ ] small-signal distortion analysis.
+- [x] small-signal second/third-order distortion baseline from nonlinear transfer derivatives.
 - [x] Fourier/THD measurements.
 - [x] periodic steady state baseline / harmonic balance remains open.
 - [x] Monte-Carlo resistor tolerancing baseline.
@@ -659,10 +666,10 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [ ] nonlinear magnetic core/hysteresis transformer model.
 - [x] lossless/lossy sampled TEM transmission-line circuit elements for AC MNA.
 - [x] programmatic nonlinear static-device callback.
-- [ ] SPICE B-source/equation-defined source syntax.
-- [ ] device thermal/self-heating terminal framework.
+- [x] SPICE B-source/equation-defined voltage/current source syntax with numerical Jacobian linearization.
+- [x] coupled electrothermal/self-heating device terminal framework.
 - [x] resistor thermal and diode shot-noise contributions.
-- [ ] BJT/MOS/JFET compact-model noise contributions.
+- [x] BJT/MOS/JFET compact-model noise contributions baseline.
 
 ### SPICE/netlist/model interchange
 - [x] SPICE engineering suffix parser (`meg`, `k`, `m`, `u`, `n`, `p`, `f`).
@@ -672,10 +679,10 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] `.PARAM` and arithmetic expression evaluator.
 - [x] `.FUNC` user functions.
 - [x] `.INCLUDE` and `.LIB` sections with relative-path and named-section handling.
-- [ ] initial conditions / `.IC` / `.NODESET`.
-- [ ] dependent-source polynomial/table syntax.
+- [x] initial conditions / `.IC` / `.NODESET`.
+- [x] dependent-source `POLY(1)` / `TABLE` syntax baseline.
 - [ ] PSpice/LTspice/HSPICE compatibility modes.
-- [ ] SPICE RAW result writer/reader.
+- [x] ASCII SPICE RAW transient/AC writer/reader.
 - [ ] optional external ngspice adapter for cross-validation.
 - [ ] optional external Xyce adapter for cross-validation/scaling.
 - [x] OSDI dynamic-library/version/descriptor discovery seam.
@@ -694,7 +701,7 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] direct circuit port S-parameter extraction.
 - [x] shared two-port K/mu stability metrics.
 - [x] source/load stability circles.
-- [ ] noise circles.
+- [x] constant-noise circle calculation from two-port noise parameters.
 - [x] shared L-match synthesis baseline.
 - [x] sampled field/network N-port -> AC circuit component bridge.
 - [ ] circuit termination -> full-wave field-solver port bridge.
@@ -720,3 +727,70 @@ A feature is optimized only after a correctness baseline exists.
 - [ ] communication/computation overlap beyond LBM.
 - [ ] automatic backend/autotuning profiles saved per device.
 - [ ] regression performance thresholds for representative CPU/GPU hardware.
+
+## Phase 12 - CST-class electromagnetic, particle and bioelectromagnetic coverage [started]
+
+This phase maps the additional solver domains identified in the CST-style coverage audit in `CST_COVERAGE_AUDIT.md`.
+Existing capabilities remain owned by their original phases; this phase tracks only the missing cross-domain expansion work and newly added reference baselines.
+
+### Frequency-domain and eigenmode electromagnetics
+- [x] driven 1-D complex frequency-domain Maxwell/Helmholtz PEC reference solver with conductive loss.
+- [x] generalized 1-D PEC cavity electromagnetic eigenmode solver with spatial dielectric loading.
+- [x] 2-D Tri3 curl-conforming Nedelec edge-element Maxwell assembly.
+- [ ] 3-D tetrahedral curl-conforming Nedelec/Whitney Maxwell assembly.
+- [ ] driven 3-D frequency-domain sparse complex Maxwell solve.
+- [ ] wave-port eigenmode extraction and modal normalization.
+- [ ] cavity/resonator Q extraction including dielectric and conductor loss.
+- [ ] adaptive RF frequency sweep + rational reduced-order model.
+- [ ] RF FEM adaptive mesh refinement driven by field/error indicators.
+
+### Integral-equation and asymptotic electromagnetics
+- [ ] RWG surface-current MoM for PEC surfaces.
+- [ ] dielectric surface integral equations.
+- [ ] MLFMM acceleration for electrically large integral-equation systems.
+- [ ] physical-optics current approximation for large smooth conductors.
+- [ ] shooting-and-bouncing-rays high-frequency propagation/RCS solver.
+- [ ] hybrid MoM/FEM/FDTD/asymptotic domain coupling.
+
+### Low-frequency machines and conductors
+- [ ] transient magneto-quasistatic A-phi formulation.
+- [ ] nonlinear B-H curve material integration in magnetostatic/eddy-current FEM.
+- [ ] stranded/solid coil excitation and circuit coupling.
+- [ ] moving-band/sliding-interface electrical-machine formulation.
+- [ ] force/torque extraction from Maxwell stress/virtual work.
+
+### Signal/power integrity, cables and EMC
+- [ ] multiconductor transmission-line cable/harness solver with frequency-dependent RLCG.
+- [ ] cable shield/transfer-impedance model and field-to-cable coupling.
+- [ ] eye-diagram/BER-oriented signal-integrity post-processing.
+- [ ] PDN impedance/IR-drop/decoupling optimization workflow.
+- [ ] ESD/BCI/lightning waveform source library and standardized EMC probes.
+- [ ] installed-antenna/co-site hybrid coupling workflow.
+
+### Charged particles, PIC, plasma and wakefields
+- [x] non-relativistic 3-D Lorentz-force charged-particle tracker using the Boris pusher.
+- [x] periodic 1-D electrostatic PIC baseline with CIC deposition and spectral Poisson field solve.
+- [ ] relativistic Boris/Vay particle pusher.
+- [ ] self-consistent electromagnetic Yee-grid PIC.
+- [ ] particle boundary interaction/absorption/reflection/secondary-emission models.
+- [ ] Monte-Carlo collision model for neutral gas/plasma interactions.
+- [ ] plasma chemistry/ionization source coupling.
+- [ ] beam wake-potential and wake-impedance solver.
+- [ ] multipactor and gas-breakdown threshold workflow.
+
+### Bioelectromagnetics
+- [x] RMS electric-field -> local SAR material conversion helper.
+- [x] implicit 2-D Pennes bioheat solver with perfusion, metabolic heat and spatial SAR source.
+- [x] SAR -> bioheat coupling baseline with periodic/fixed-temperature thermal boundaries.
+- [ ] heterogeneous anatomical voxel material ingestion.
+- [ ] 1 g / 10 g SAR map -> Pennes mesh transfer on heterogeneous tissues.
+- [ ] temperature-dependent dielectric/perfusion feedback to the EM solve.
+- [ ] implant/wearable exposure validation cases.
+
+### Photonics and specialized EM
+- [ ] frequency-domain dispersive photonic waveguide mode solver.
+- [ ] periodic/Bloch boundary conditions and photonic band-structure solver.
+- [ ] metasurface/generalized sheet transition-condition model.
+- [ ] nonlinear optical material polarization models.
+- [ ] dedicated optical full-wave validation beyond ray/POP/FDTD baselines.
+

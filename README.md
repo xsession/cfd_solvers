@@ -6,23 +6,22 @@ The long-term goal is a readable solver collection covering CFD, FEM multiphysic
 
 The project is inspired by the capabilities and engineering lessons of OpenFOAM, FluidX3D, Elmer FEM, openEMS FDTD and Optiland. It is **not** a source-code merge or mechanical translation. The source projects have different licenses, and FluidX3D has additional restrictions, so performance techniques are independently implemented from publications and public descriptions.
 
-## v0.8.2 status - adaptive Gear/BDF2 and orientation-independent wire RF
+## v0.9.0 status - CST-class EM, particle and bioelectromagnetic expansion
 
-The machine-checkable integration program now reports **439/580 capabilities (75.7%)** complete. Phase 10 RF/antenna/microwave is **32/64 (50.0%)** and Phase 11 SPICE/circuit/compact-model simulation is **69/98 (70.4%)**. The full CPU validation matrix passes **47/47 CTest targets**. Earlier CFD/LBM/FEM/FDTD/optics/electrochemistry/multiphysics families remain independently tracked and validated.
+The machine-checkable integration program now reports **473/634 capabilities (74.6%)** complete. Phase 10 RF/antenna/microwave is **46/70 (65.7%)**, Phase 11 SPICE/circuit/compact-model simulation is **80/98 (81.6%)**, and the new Phase 12 CST-class expansion is **8/47 (17.0%)**. The CPU validation matrix now contains **52 CTest targets**.
 
 This checkpoint adds or consolidates:
 
-- generic N-port RF math, Touchstone SnP, mixed-mode/de-embedding/stability/gain utilities and common transmission-line/waveguide models;
-- thin-wire antenna references, phased-array utilities, PEEC filament extraction with skin-effect resistance and SPICE coupled-inductor export;
-- modified-nodal-analysis DC/AC/transient simulation with R/C/L, controlled sources, switches, mutual inductance, diode, MOS Level-1, BJT and JFET baselines;
-- backward-Euler, trapezoidal and BDF2 transient integration, homotopy/PN limiting, sweeps, noise, sensitivity, Monte Carlo and Fourier/THD analysis;
-- adaptive backward-Euler plus unequal-step BDF2/Gear step-doubling with LTE control, fitted small-signal pole/zero extraction and periodic steady-state shooting-by-settling;
-- coupled parallel-wire plus arbitrary-orientation disjoint straight-wire MoM with delta-gap feeds and lumped series loads while retaining the original center-fed and parallel-wire APIs;
-- ideal-transformer convenience stamping plus validated lossless/lossy TEM, microstrip, stripline, CPW and rectangular-waveguide AC circuit elements;
-- `.PARAM`, expressions, hierarchical `.SUBCKT`, `.FUNC`, `.INCLUDE`, `.LIB`, scoped local models, direct circuit S-parameter extraction and OSDI/OpenVAF dynamic-library discovery seam;
-- the large portable solver continuation across runtime, FVM, FEM, FDTD, optics, chemistry/electrochemistry, multiphysics and interoperability described by `docs/INTEGRATION_TRACKER.md`.
+- a driven complex 1-D frequency-domain Maxwell/Helmholtz solver with PEC boundaries, conductive loss and staggered magnetic-field reconstruction;
+- dielectric-loaded 1-D PEC cavity electromagnetic eigenmodes with analytical frequency validation;
+- reusable lowest-order first-kind Nedelec Tri3 basis functions and a driven 2-D curl-conforming edge-element Maxwell FEM baseline with global edge orientation and PEC tangential constraints;
+- non-relativistic 3-D charged-particle tracking through a Boris pusher plus a periodic 1-D electrostatic PIC baseline with cloud-in-cell deposition and spectral Poisson fields;
+- RMS electric-field to SAR conversion and an implicit 2-D Pennes bioheat solver with conduction, perfusion, metabolic heat and spatial SAR loading;
+- CLI smoke cases for the new EM, PIC and bioheat families;
+- `docs/CST_COVERAGE_AUDIT.md`, which maps the actual implementation against the wider EM/thermal/structural/particle/plasma/bioelectromagnetic domains and explicitly identifies remaining gaps;
+- tracker reconciliation for RF/SPICE capabilities that were already implemented and tested but still marked incomplete, including complex power-wave renormalization, passivity/causality tools, PEEC capacitance, connected-wire MoM, sparse MNA, DAE devices, B-sources, RAW I/O, noise/distortion and self-heating.
 
-The clean-room rule remains unchanged: upstream projects are capability/research references unless a permissive interface is explicitly used. Copyleft/restrictive source is not translated or copied into the MIT core.
+The clean-room rule remains unchanged: upstream projects and commercial-product capability descriptions are architecture/research references only; incompatible source code is not translated or copied into the MIT core.
 
 ## Build
 

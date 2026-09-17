@@ -1,5 +1,10 @@
 #include "continuation_cases.hpp"
 #include <numbers>
+#include "cfd/em/frequency_domain.hpp"
+#include "cfd/em/edge_fem2d.hpp"
+#include "cfd/particle/electromagnetic.hpp"
+#include "cfd/multiphysics/bioheat.hpp"
+#include "cfd/fem/mesh2d.hpp"
 #include "cfd/circuit/analysis.hpp"
 #include "cfd/circuit/spice.hpp"
 #include "cfd/rf/network.hpp"
@@ -116,6 +121,40 @@ int fvm_workspace(){
     return error<1.0e-12&&cache_error<1.0e-12&&std::abs(integral-net_boundary)<1.0e-12?0:1;
 }
 
+
+int em_frequency1d(){
+    using namespace cfd::em;
+    FrequencyDomain1DConfig config;config.points=121U;config.length_m=1.0;config.frequency_hz=8.0e7;
+    std::vector<Complex> current(config.points);
+    for(std::size_t i=0;i<current.size();++i){const double x=static_cast<double>(i)/static_cast<double>(current.size()-1U);current[i]=std::sin(std::numbers::pi*x);}
+    const auto start=Clock::now();const auto result=solve_pec_driven_maxwell_1d(config,current);
+    constexpr double mu0=1.25663706212e-6,epsilon0=8.8541878128e-12;
+    const double omega=2.0*std::numbers::pi*config.frequency_hz,k2=omega*omega*mu0*epsilon0,lambda=std::numbers::pi*std::numbers::pi;
+    const Complex exact=Complex{0.0,omega*mu0}/(k2-lambda);const double relative=std::abs(result.electric_v_per_m[config.points/2U]-exact)/std::abs(exact);
+    const auto modes=pec_cavity_eigenmodes_1d(81U,1.0,4.0,1.0,2U);
+    std::cout<<"case=em-frequency1d seconds="<<elapsed(start)<<" manufactured_relative_error="<<relative
+             <<" cavity_f1_hz="<<modes[0].frequency_hz<<" cavity_f2_hz="<<modes[1].frequency_hz<<'\n';
+    return relative<4.0e-4?0:1;
+}
+int em_edge2d(){
+    using namespace cfd::em;const auto mesh=cfd::fem::make_rectangle_tri_mesh(6U,6U,1.0,0.8);
+    EdgeMaxwell2DConfig config;config.frequency_hz=8.0e7;constexpr double mu0=1.25663706212e-6,epsilon0=8.8541878128e-12;
+    const double omega=2.0*std::numbers::pi*config.frequency_hz,lambda=std::numbers::pi*std::numbers::pi;
+    const double coefficient=lambda/mu0-omega*omega*epsilon0;
+    const auto start=Clock::now();const auto result=solve_driven_edge_maxwell_2d(mesh,config,[=](cfd::fem::Node2 point)->ComplexVec2{return {Complex{},Complex{0.0,coefficient*std::sin(std::numbers::pi*point.x)/omega}};});
+    double error2=0.0,reference2=0.0;for(std::size_t e=0;e<mesh.triangles.size();++e){double x=0.0;for(auto n:mesh.triangles[e].node)x+=mesh.nodes[n].x/3.0;const Complex exact{std::sin(std::numbers::pi*x),0.0};error2+=std::norm(result.electric_centroid_v_per_m[e][0])+std::norm(result.electric_centroid_v_per_m[e][1]-exact);reference2+=std::norm(exact);}
+    const double relative=std::sqrt(error2/reference2);std::cout<<"case=em-edge2d seconds="<<elapsed(start)<<" edges="<<result.edges.size()<<" relative_rms_error="<<relative<<'\n';return relative<0.15?0:1;
+}
+int particle_pic1d(){
+    using namespace cfd::particle;ChargedParticle charged;charged.velocity_m_per_s={1.0,0.2,0.0};charged.charge_c=1.0;charged.mass_kg=1.0;const double initial=std::hypot(charged.velocity_m_per_s.x,charged.velocity_m_per_s.y);
+    const auto start=Clock::now();for(std::size_t i=0;i<5000U;++i)boris_push(charged,{{0,0,0},{0,0,1}},1.0e-3);
+    ElectrostaticPic1DConfig config;config.grid_points=32U;config.dt_s=1.0e-3;ElectrostaticPic1D pic(config);std::vector<PicParticle1D> particles;for(std::size_t i=0;i<config.grid_points;++i)particles.push_back({static_cast<double>(i)/static_cast<double>(config.grid_points),0.1,1.0e-12,1.0,1.0});pic.set_particles(std::move(particles));pic.step(2U);double peak=0.0;for(double e:pic.electric_field())peak=std::max(peak,std::abs(e));const double speed_error=std::abs(std::hypot(charged.velocity_m_per_s.x,charged.velocity_m_per_s.y)-initial);
+    std::cout<<"case=particle-pic1d seconds="<<elapsed(start)<<" boris_speed_error="<<speed_error<<" neutralized_peak_field="<<peak<<'\n';return speed_error<1.0e-12&&peak<1.0e-8?0:1;
+}
+int bioheat_sar(){
+    using namespace cfd::multiphysics;PennesBioheat2DConfig config;config.nx=8U;config.ny=8U;config.dt_s=1.0;config.blood_perfusion_per_s=0.01;config.blood_temperature_k=310.0;PennesBioheat2D solver(config);solver.initialize(300.0);const double sar=sar_from_rms_electric_field(1.0,1000.0,100.0);solver.set_sar(sar);const auto start=Clock::now();solver.step();double min_t=solver.temperature_k().front(),max_t=min_t;for(double t:solver.temperature_k()){min_t=std::min(min_t,t);max_t=std::max(max_t,t);}std::cout<<"case=bioheat-sar seconds="<<elapsed(start)<<" sar_w_per_kg="<<sar<<" temperature_min_k="<<min_t<<" temperature_max_k="<<max_t<<" cg_iterations="<<solver.linear_result().iterations<<'\n';return solver.linear_result().converged&&max_t>300.0?0:1;
+}
+
 int rf_dipole(){
     const double frequency=1.0e9;
     cfd::rf::SinusoidalDipoleSolver dipole(0.5*299792458.0/frequency,frequency);
@@ -218,6 +257,10 @@ int run_continuation_case(std::string_view name){
     if(name=="optics-gaussian")return gaussian();
     if(name=="multiphysics-thermoelastic")return thermal_structure();
     if(name=="fvm-workspace")return fvm_workspace();
+    if(name=="em-frequency1d")return em_frequency1d();
+    if(name=="em-edge2d")return em_edge2d();
+    if(name=="particle-pic1d")return particle_pic1d();
+    if(name=="bioheat-sar")return bioheat_sar();
     if(name=="rf-dipole")return rf_dipole();
     if(name=="rf-microstrip")return rf_microstrip();
     if(name=="spice-rc")return spice_rc();

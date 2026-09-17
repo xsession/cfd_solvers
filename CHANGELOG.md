@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.0 - CST-class frequency-domain EM, particles/PIC and bioheat
+
+- Added a driven complex 1-D frequency-domain Maxwell/Helmholtz reference solver with PEC boundaries, conductive loss and manufactured-solution validation.
+- Added generalized dielectric-loaded 1-D PEC electromagnetic cavity eigenmodes with analytical frequency regression.
+- Added reusable lowest-order first-kind Nedelec Tri3 basis/curl utilities and a driven 2-D edge-element Maxwell solver with deterministic global-edge orientation and PEC tangential constraints.
+- Added mesh-refinement validation for the 2-D Nedelec Maxwell manufactured solution.
+- Added a non-relativistic 3-D Boris charged-particle pusher with long-run uniform-magnetic-field energy conservation validation.
+- Added periodic 1-D electrostatic PIC with cloud-in-cell charge deposition, spectral Poisson electric fields, field interpolation and particle stepping.
+- Added RMS E-field to SAR conversion and an implicit 2-D Pennes bioheat solver with conduction, perfusion, metabolic heat and spatial SAR sources.
+- Added CLI/CTest smoke cases for frequency-domain EM, edge-element EM, electrostatic PIC and SAR/bioheat.
+- Added `docs/CST_COVERAGE_AUDIT.md` and Phase 12 to distinguish current solver coverage from still-open CST-class domains such as 3-D RF FEM, MLFMM/SBR, cable/harness EMC, electromagnetic PIC/plasma and wakefields.
+- Reconciled stale Phase 10/11 tracker entries against already-tested RF/SPICE implementations; tracker now reports 473/634 capabilities (74.6%).
+- Full CPU validation passes 52/52 CTest targets; a focused standalone ASan+UBSan build of the new frequency-domain EM/Nedelec/PIC/bioheat slice passes with leak detection enabled.
+
 ## 0.8.2 - unequal-step Gear/BDF2 and arbitrary-orientation wire MoM
 
 - Extended adaptive circuit transient integration with variable-step BDF2/Gear coefficients after a backward-Euler bootstrap interval.
