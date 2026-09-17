@@ -1,5 +1,88 @@
 # Changelog
 
+## 0.15.11 - shared resident FVM RANS/thermal/species GPU-R3.3
+
+- Added a shared `ResidentFvmFieldRegistrySycl` so coupled equations reuse one resident `PolyMesh`/queue/context instead of mirroring mesh state per equation.
+- Added a reusable variable-diffusivity/source/sink resident scalar equation with BiCGStab, positivity clamping and fixed/zero-gradient boundaries.
+- Added device-resident Spalart-Allmaras, k-epsilon and k-omega/SST transport paths with resident strain/gradient/eddy-viscosity fields.
+- Added device-side one-step Arrhenius fuel/heat source coupling for resident temperature/species equations.
+- Added v0.15.11 regression coverage and strict fake-SYCL warnings-as-errors compilation.
+- Kept integration capability progress at 613/719 because this wave improves accelerator parity/residency; resident FEM and physical-GPU qualification are still required for the combined SYCL gate.
+
+## 0.15.10 - resident FVM Krylov/outlet/scalar GPU-R3.2
+
+- Added direct device-USM BiCGStab with persistent Krylov workspace for nonsymmetric sparse operators.
+- Replaced resident momentum Jacobi as the primary solve with a device-assembled upwind/diffusion CSR + BiCGStab path; Jacobi remains a robustness fallback.
+- Added per-patch fixed-pressure/outlet handling with dynamic pinned-Neumann versus Dirichlet pressure systems.
+- Added resident implicit scalar advection-diffusion transport that can consume the flow solver's device face flux directly.
+- Added v0.15.10 host/SYCL regression coverage and strict fake-SYCL warnings-as-errors compilation.
+- Kept integration capability progress at 613/719 because resident FEM and physical-GPU qualification are still required to close the combined FVM/FEM SYCL gate.
+
+## 0.15.9 - resident incompressible FVM GPU-R3.1
+
+- Added device-side Euler/upwind momentum coefficient/RHS assembly and matrix-free Jacobi momentum sweeps.
+- Added on-device `V/aP` pressure mobility and numeric CSR coefficient regeneration with device-to-device sparse-value refresh.
+- Added resident fixed/zero-gradient/slip velocity boundary descriptors and non-orthogonal pressure-flux correction.
+- Added first-order resident SIMPLE, PISO and PIMPLE control loops with no bulk host-field transfers through the covered hot loop.
+- Added v0.15.9 variable-mobility/non-orthogonal regressions and strict fake-SYCL warnings-as-errors compilation.
+- Kept integration capability progress at 613/719 because the combined FVM/FEM SYCL gate remains open until resident FEM and physical-GPU qualification are complete.
+
+## 0.15.8 - resident FVM GPU-R3
+
+- Added a persistent SYCL `PolyMesh` mirror with flattened cell-face adjacency and precomputed interpolation/orthogonal geometry.
+- Added resident scalar interpolation, Gauss gradient, vector divergence, orthogonal Laplacian, predictor face-flux and pressure-correction kernels.
+- Added symmetric orthogonal pressure-matrix construction with Dirichlet mode or a pinned all-Neumann reference cell.
+- Added queue/context reuse to `SyclCsrLinearAlgebra` so resident FVM USM vectors can enter SpMV/CG directly.
+- Added `ResidentPressureProjectionSycl` with device-owned predictor, pressure, gradient, velocity, face flux, RHS, mobility and continuity work fields.
+- Added v0.15.8 matrix/residency regression coverage and strict fake-SYCL warnings-as-errors compilation.
+- Kept integration capability progress at 613/719 because this wave improves accelerator execution architecture; the combined FVM/FEM SYCL sparse gate remains open until FEM is integrated.
+
+## 0.15.7 - resident FDTD GPU-R2
+
+- Added a persistent SYCL 3-D Yee FDTD backend with device-owned E/H state.
+- Added resident anisotropic/lossy material coefficients and device-side material-box updates.
+- Added 3-D CPML coefficient profiles plus twelve convolution-memory fields consumed directly by the E/H kernels.
+- Added device probe capture, scalar energy reduction and six-face device halo pack/unpack.
+- Added physical-face masks so internal domain-decomposition faces can bypass physical CPML/PEC/PMC enforcement.
+- Added v0.15.7 residency regression coverage and strict fake-SYCL warnings-as-errors compilation.
+- Closed the Phase-5 `SYCL FDTD kernels` tracker item, advancing overall integration to 613/719 and Phase 5 to 23/26.
+
+## 0.15.6 - resident LBM multiphysics GPU-R1
+
+- Added a persistent device-local acceleration field to the SYCL Esoteric-Pull LBM solver, including direct device access and host compatibility upload.
+- Added device-resident D3Q7 thermal/passive-scalar transport coupled directly to resident D3Q19 macroscopic velocity.
+- Added device-resident conservative VOF/free-surface advection, interface geometry and continuum-surface-force acceleration.
+- Added device-resident immersed-boundary particles with trilinear velocity interpolation and atomic two-way reaction-force spreading.
+- Added device-resident 3-D Q-criterion generation for visualization/diagnostics without a full-field CPU detour.
+- Added v0.15.6 residency regression coverage and strict fake-SYCL compilation; physical GPU qualification remains intentionally open.
+- Kept integration capability progress at 612/719 because this wave upgrades execution residency rather than adding a new modeled-physics capability.
+
+## 0.15.5 - GPU-resident execution groundwork
+
+- Added explicit accelerator transfer/synchronization accounting with `DeviceTransferStats`.
+- Moved common SYCL LBM initialization and mass/macroscopic diagnostics onto the device so the covered time loop no longer requires full-lattice host round-trips.
+- Reduced explicit host macroscopic extraction from q populations per cell to four `rho/u` values per cell.
+- Added persistent SYCL sparse Krylov work buffers plus direct device-USM SpMV/CG entry points, eliminating per-call allocation churn and optional host vector staging.
+- Added focused no-host-transfer LBM regression coverage and strict fake-SYCL syntax validation.
+- Added a clean-room FluidX3D GPU-residency research/mapping document and kept physical hardware qualification explicitly open.
+
+## 0.15.4 - characteristic WENO compressible transport
+
+- Added Roe-characteristic Jiang-Shu WENO5 reconstruction to the 1-D ideal-gas Euler solver while preserving the existing MUSCL-minmod path.
+- Added SSPRK3 time integration, arbitrary cell-profile initialization and a conserved total-momentum diagnostic.
+- Added local nonphysical-face fallback and a normalized pressure-jump shock sensor for later AMR coupling.
+- Added smooth entropy-wave convergence/conservation, uniform-state and Sod positivity regressions.
+- Closed the final Phase-3 high-order compressible-scheme tracker item, advancing Phase 3 to 98/106.
+
+## 0.15.3 - conservative FVM AMR and topology change
+
+- Added a polymorphic FVM topology-change operation boundary with explicit old/new cell-overlap maps.
+- Added local 2x2x2 adaptive Cartesian-hex refinement, complete-sibling coarsening and optional 2:1 balancing.
+- Added coarse/fine `PolyMesh` construction with split conservative interface faces.
+- Added exact overlap-volume remapping for adaptive cell-average fields.
+- Added scalar face-jump indicators, Dörfler bulk marking and an automatic refine/coarsen AMR cycle.
+- Added focused v0.15.3 AMR regressions and advanced Phase 3 to 97/106 tracked capabilities.
+
 ## 0.15.2 - transported RANS, Reynolds stress and SST-DES
 
 - Added shared implicit finite-volume transport for turbulence variables with variable diffusion, upwind convection, semi-implicit sinks, fixed/zero-gradient boundaries and Euler/BDF2/Crank-Nicolson time integration.
@@ -598,3 +681,20 @@
 - Existing SYCL D2Q9 queue is explicitly in-order so USM kernel dependencies do not rely on implementation scheduling.
 - CLI exposes D2Q9 single-grid, D3Q19 and D3Q27 examples.
 - CMake project version is now 0.2.0.
+
+## 0.16.3
+
+- Added history-bearing bonded-particle DEM with normal/shear stiffness, damping, progressive damage, tensile/shear failure and irreversible bond breakage.
+- Integrated bond forces and per-step bond damage/failure statistics into `ExplicitDemSystem`.
+- Added deterministic equal-width slab decomposition, ownership, migration planning and adjacent-rank ghost planning for DEM particles.
+- Added MPI `Alltoallv` particle migration and ghost exchange implementation with preserved global IDs and an MPI regression hook.
+- Added v0.16.3 bonded/distributed DEM regression coverage and strict compile checks for the MPI exchange source.
+
+## 0.16.2
+
+- Added device-resident SYCL spherical DEM with SoA particle state.
+- Added fully device-side uniform-grid cell counting, prefix offsets and compact particle bucketing.
+- Added 27-cell neighbor traversal with unique pair processing and atomic force/torque accumulation.
+- Added bounded device-resident persistent Mindlin tangential contact history.
+- Added resident Hertz/Mindlin, cohesion and rolling-resistance contact response plus semi-implicit integration.
+- Added CPU cell-linked broad-phase reference and v0.16.2 regression coverage.

@@ -1,6 +1,6 @@
 # Unified Solver Integration Tracker
 
-Last research refresh: 2026-09-16
+Last research refresh: 2026-09-17
 
 This is the authoritative completion checklist for `cfd_solvers`. A feature is not considered complete merely because code exists. Unless explicitly marked as an exploratory baseline, completion requires:
 
@@ -81,6 +81,14 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] distributed local-row CSR with explicit halo-column values and halo-aware SpMV baseline.
 - [x] MPI-owned distributed sparse-vector exchange integrated directly into Krylov iterations.
 - [x] mixed-precision iterative refinement.
+
+**v0.15.6 accelerator-residency policy:** hot device state should remain accelerator-owned across the time loop; initialization/derived fields/reductions should execute on-device where practical; host transfers are explicit API/I/O boundaries and are measurable through `DeviceTransferStats`. The SYCL LBM path now extends the no-bulk-host-transfer contract through resident D3Q7 thermal transport, free-surface VOF/capillary coupling, immersed-boundary particle reaction forces and Q-criterion diagnostics. SYCL sparse linear algebra reuses persistent Krylov work buffers, but full FVM/FEM loops are not yet claimed device-resident. Physical GPU qualification remains open until real hardware runners execute the parity matrix.
+
+**v0.15.7 FDTD residency:** the 3-D Yee accelerator path now keeps E/H, material coefficients and CPML memory on-device; probes and halo packing can target device buffers directly. This closes the implementation-level `SYCL FDTD kernels` item. `MPI + SYCL domain decomposition` remains open because v0.15.7 supplies only the device halo/physical-face seam, not a complete distributed Maxwell driver or hardware-qualified GPU-aware MPI execution.
+
+**v0.15.8 FVM residency:** `ResidentPolyMeshSycl` now mirrors general owner/neighbour `PolyMesh` geometry/connectivity, and resident interpolation/gradient/divergence/Laplacian plus pressure-correction kernels can share a queue/context with direct-device CSR/CG. A pinned-Neumann resident pressure-projection baseline keeps its volume fields on-device. The optimization gate `SYCL FVM/FEM sparse algebra` remains open because resident FEM assembly/operators and physical-GPU qualification are still missing.
+
+**v0.15.10 resident FVM GPU-R3.2:** the FVM accelerator path now assembles nonsymmetric momentum CSR values on-device, solves them through direct device-USM BiCGStab, supports fixed-pressure/outlet pressure patches, and provides a resident implicit scalar advection-diffusion equation that can consume the flow face flux directly. This still does not close `SYCL FVM/FEM sparse algebra`: full turbulence/thermophysical/reacting parity, FEM device assembly/operators, distributed FVM execution and physical-GPU qualification remain open.
 
 ## Phase 2 - FluidX3D-class LBM [advanced baseline]
 
@@ -185,7 +193,7 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] compressible equation-of-state framework.
 - [x] compressible pressure-energy coupling.
 - [x] MUSCL-minmod + Rusanov shock-capturing compressible baseline.
-- [ ] characteristic high-order/WENO compressible schemes.
+- [x] characteristic high-order/WENO compressible schemes.
 
 ### Turbulence
 - [x] laminar/turbulence runtime interface.
@@ -250,9 +258,9 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] mesh-motion field.
 - [x] ALE flux correction.
 - [x] rigid-body motion.
-- [ ] topology change interface.
-- [ ] local refinement/coarsening.
-- [ ] error-indicator-driven AMR.
+- [x] topology change interface.
+- [x] local refinement/coarsening.
+- [x] error-indicator-driven AMR.
 - [x] conservative field remap after topology changes.
 
 ### Case/IO/post-processing
@@ -353,7 +361,7 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] SAR 1g/10g calculation.
 - [ ] HDF5 output.
 - [x] legacy ASCII VTK E/H field output baseline.
-- [ ] SYCL FDTD kernels.
+- [x] SYCL FDTD kernels.
 - [ ] MPI + SYCL domain decomposition.
 - [x] geometry/material bridge shared with optics/FEM.
 
@@ -759,7 +767,7 @@ A feature is optimized only after a correctness baseline exists.
 - [ ] connectivity-preserving face/cell storage reorder integrated into solver meshes.
 - [x] SIMD fixed-width vector math.
 - [x] mixed precision with iterative refinement.
-- [ ] SYCL FVM/FEM sparse algebra.
+- [ ] SYCL FVM/FEM sparse algebra. (FVM resident operators, pressure CG, nonsymmetric BiCGStab momentum/scalar transport, fixed-pressure outlets and first-order SIMPLE/PISO/PIMPLE are implemented through v0.15.10; FEM integration and physical-GPU qualification remain open.)
 - [ ] kernel fusion guided by profiler measurements.
 - [ ] communication/computation overlap beyond LBM.
 - [ ] automatic backend/autotuning profiles saved per device.
@@ -878,3 +886,55 @@ Existing capabilities remain owned by their original phases; this phase tracks o
 - [ ] metasurface/generalized sheet transition-condition model.
 - [ ] nonlinear optical material polarization models.
 - [ ] dedicated optical full-wave validation beyond ray/POP/FDTD baselines.
+
+## Phase 13 - multibody, rigid-body and granular dynamics [started]
+
+Clean-room capability/reference family: Project Chrono. This phase adds constrained 6-DOF mechanics and granular/contact dynamics that are distinct from the existing FEM structural and transported-particle paths.
+
+### Rigid-body state and integration
+- [x] 6-DOF rigid-body state with quaternion orientation, force/torque accumulators and world-space inertia application.
+- [x] rigid-body system orchestration with gravity, external forces, attached collision shapes and deterministic stepping.
+- [x] semi-implicit Euler rigid-body integrator.
+- [x] velocity-Verlet rigid-body integrator baseline.
+- [ ] implicit Newmark multibody integrator.
+- [ ] generalized-alpha/HHT multibody integrator.
+
+### Constraint and joint framework
+- [x] reusable Jacobian-row constraint representation with projected Gauss-Seidel impulse solve.
+- [x] distance constraint.
+- [x] spherical joint.
+- [x] revolute joint with one free angular DOF.
+- [x] prismatic joint with one free translational DOF.
+- [x] fixed joint.
+- [x] gear-ratio angular constraint.
+- [x] motor/actuator constraint family.
+- [ ] articulated reduced-coordinate solver.
+
+### Collision and contact
+- [x] sphere AABB generation and sweep-and-prune broad phase.
+- [x] BVH broad-phase collision candidate generation.
+- [x] sphere-sphere narrow-phase contact geometry.
+- [x] sphere-plane narrow-phase contact geometry.
+- [x] smooth penalty contact with damping.
+- [x] non-smooth unilateral impulse/contact complementarity baseline.
+- [x] Coulomb friction impulse/force limiting.
+- [x] convex GJK/EPA narrow phase.
+- [x] mesh/triangle collision and persistent contact manifolds.
+
+### Granular / DEM
+- [x] explicit spherical DEM system.
+- [x] Hertz-type nonlinear normal contact with tangential damping/friction.
+- [x] rolling-resistance torque.
+- [x] cohesive normal contact force baseline.
+- [x] history-dependent Mindlin tangential spring.
+- [x] bonded particles with progressive tensile/shear damage and fracture/bond failure.
+- [x] GPU/SYCL particle neighbor search and contact kernels.
+- [ ] distributed-memory DEM domain decomposition (slab ownership, migration/ghost planning and MPI exchange implemented; end-to-end multi-rank contact/integration runtime validation pending).
+
+### Multiphysics coupling
+- [x] spherical Stokes-drag/reaction-force primitive for conservative CFD/DEM coupling.
+- [ ] resolved CFD <-> rigid-body surface traction/force/torque coupling.
+- [ ] unresolved CFD <-> many-particle drag/void-fraction coupling.
+- [ ] FEM flexible-body <-> multibody coupling.
+- [x] particle <-> sphere/plane contact-geometry bridge through the explicit DEM system.
+

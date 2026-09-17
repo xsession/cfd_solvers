@@ -217,9 +217,7 @@ int run_sycl(const Options& options) {
     const cfd::lbm::InPlaceLbmConfig config{options.nx, options.ny, options.nz, options.tau};
     Solver solver(config);
     solver.initialize_taylor_green(0.02F);
-    const auto initial = solver.download_macroscopic();
-    double mass0 = 0.0;
-    for (float rho : initial.rho) mass0 += rho;
+    const double mass0 = solver.total_mass();
     solver.step(options.warmup);
     solver.wait();
 
@@ -228,9 +226,7 @@ int run_sycl(const Options& options) {
     solver.wait();
     const auto end = std::chrono::steady_clock::now();
     const double seconds = std::chrono::duration<double>(end - begin).count();
-    const auto final = solver.download_macroscopic();
-    double mass1 = 0.0;
-    for (float rho : final.rho) mass1 += rho;
+    const double mass1 = solver.total_mass();
     print_result<Descriptor>(options, "sycl", "in-place", solver.device_name(), seconds, solver.cells(),
                              solver.population_bytes(), std::abs(mass1 - mass0), mass0);
     return 0;

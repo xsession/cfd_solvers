@@ -1,6 +1,7 @@
 #include "cfd/distributed/device_assignment.hpp"
 #include "cfd/distributed/mpi_runtime.hpp"
 #include "cfd/distributed/mpi_sparse.hpp"
+#include "cfd/multibody/distributed_dem.hpp"
 #include "cfd/core/csr_matrix.hpp"
 #include "cfd/distributed/mpi_selective_halo.hpp"
 #include "cfd/solvers/lbm/distributed_pull.hpp"
@@ -192,6 +193,28 @@ void run_distributed_sparse_krylov(const cfd::distributed::MpiCartesianRuntime& 
     }
 }
 
+
+void run_distributed_dem_exchange(const cfd::distributed::MpiCartesianRuntime& runtime) {
+    using namespace cfd::multibody;
+    DemSlabDecomposition decomposition{0.0,static_cast<double>(runtime.size()),runtime.size()};
+    MpiDemDomainExchange exchange(decomposition,runtime.communicator());
+    const int destination=(runtime.rank()+1)%runtime.size();
+    DistributedDemParticle particle;
+    particle.global_id=static_cast<std::uint64_t>(runtime.rank()+1000);
+    particle.state.position={static_cast<double>(destination)+0.25,0.0,0.0};
+    particle.radius=0.05;
+    particle.owner_rank=runtime.rank();
+    std::vector<DistributedDemParticle> owned{particle};
+    auto ghosts=exchange.exchange(owned,0.30);
+    if(owned.size()!=1U || owned.front().owner_rank!=runtime.rank()) throw std::runtime_error("MPI DEM ownership migration regression");
+    if(decomposition.owner_rank(owned.front().state.position.x)!=runtime.rank()) throw std::runtime_error("MPI DEM migrated particle on wrong rank");
+    const int local_ghosts=static_cast<int>(ghosts.size());
+    int global_ghosts=0;
+    MPI_Allreduce(&local_ghosts,&global_ghosts,1,MPI_INT,MPI_SUM,runtime.communicator());
+    const int expected=std::max(0,runtime.size()-1);
+    if(global_ghosts!=expected) throw std::runtime_error("MPI DEM ghost exchange count regression");
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -201,6 +224,7 @@ int main(int argc, char** argv) {
         run_cpu_case<cfd::lbm::D3Q19Descriptor>(runtime);
         run_cpu_case<cfd::lbm::D3Q27Descriptor>(runtime);
         run_distributed_sparse_krylov(runtime);
+        run_distributed_dem_exchange(runtime);
 #if defined(CFD_HAS_SYCL)
         run_sycl_case<cfd::lbm::D3Q19Descriptor>(runtime);
         run_sycl_case<cfd::lbm::D3Q27Descriptor>(runtime);

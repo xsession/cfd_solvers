@@ -962,3 +962,38 @@ Then compare the three eddy-viscosity transports. SA builds `fv1/fv2`, modified 
 Finally inspect `ReynoldsStressTransport`. Follow the velocity gradient into the exact tensor-production term, then the LRR-style pressure-strain source and the six segregated tensor equations. After the solve, trace `enforce_realizability()` to see how a numerically transported symmetric tensor is mapped back to a valid covariance tensor.
 
 Run `cfd-v0152-rans-transport-tests`; the most useful invariants are exact simple-shear strain, positivity of scalar turbulence variables, F1/F2 bounds, stronger DES dissipation on a fine grid and positive-semidefinite Reynolds stresses.
+
+### v0.15.3 conservative topology change and FVM AMR study path
+
+Start with `AdaptiveHexMesh` in `cfd/fvm/adaptive_mesh.hpp`. Compare the leaf-cell bounds/root/level/lineage metadata with the much lighter `PolyMesh` representation. Then follow `AdaptiveHexMesh::poly_mesh()` and identify how a coarse/fine interface is expressed as several owner/neighbour faces without adding explicit hanging nodes to the solver-facing mesh.
+
+Next inspect `MeshTopologyOperation`, `MarkedHexRefinement` and `MarkedHexCoarsening`. Trace one root cell through 2x2x2 splitting and back through complete-sibling merging, then enable 2:1 balancing and follow the recursive coarse-neighbour refinement.
+
+Finally inspect `build_topology_change_map(...)`, `conservative_adaptive_remap(...)` and `adapt_scalar_field(...)`. The key invariant is local overlap-volume conservation, followed by estimator/marking/topology separation. Run `cfd-v0153-fvm-amr-tests` and check the field integral before and after every topology change.
+
+### v0.15.4 characteristic WENO Euler study path
+
+Start with the new enums and controls in `cfd/solvers/fvm/compressible1d.hpp`. Compare the legacy `muscl_minmod + forward_euler` combination with `characteristic_weno5 + ssprk3`; the old path is intentionally still the default so existing callers do not silently change numerics.
+
+Then follow `roe_basis(...)` in `src/fvm/compressible1d.cpp`. Derive the three 1-D Euler right eigenvectors from Roe-averaged velocity, total enthalpy and sound speed. Inspect the small 3x3 inverse and trace a five-cell conservative stencil through left-eigenvector projection, scalar WENO5 reconstruction and right-eigenvector recovery.
+
+Next inspect `weno5_left(...)`: identify the three third-order candidate polynomials, the Jiang-Shu smoothness indicators and ideal weights 0.1/0.6/0.3. Reverse the stencil to see how the right face state uses the same scalar routine.
+
+Finally follow the SSPRK3 stages and `pressure_jump_sensor()`. Run `cfd-v0154-compressible-weno-tests`; the most important numerical check is the periodic entropy wave, because it tests reconstruction order without contaminating the result with a discontinuity. The Sod case is the robustness complement, not the convergence case.
+
+### v0.15.5 GPU-residency study path
+
+Start with `cfd/core/device_residency.hpp` and treat transfer bytes and synchronization points as first-class performance counters. Reset the counters after setup and identify every operation that forces host visibility.
+
+Then compare the SYCL LBM initialization and diagnostics with the previous host-staged shape. Follow `refresh_device_macroscopic()` to see how derived `rho/u` remain available to downstream GPU consumers without requiring a host copy, and compare `total_mass()` with a full macroscopic download.
+
+Next inspect `cfd/core/sycl_sparse.hpp` and `src/sycl/sparse_linalg_sycl.cpp`. The CSR matrix was already persistent; v0.15.5 also keeps Krylov work vectors allocated across solves and adds direct device-USM SpMV/CG calls. The host-span compatibility API still stages vectors, while the direct device API avoids that volume transfer. Per-iteration scalar convergence checks remain a synchronization boundary, so this is not yet a fully resident FVM pressure loop.
+
+Finally read `FLUIDX3D_GPU_RESIDENCY_RESEARCH.md`. Apply its acceptance test to each solver family: after initialization and before output, a qualified device time loop should show zero explicit host-field transfer bytes. Keep physical hardware parity separate from source-level/SYCL syntax validation.
+
+
+### v0.15.6 GPU-R1 study path
+
+Start with `include/cfd/solvers/lbm/esoteric_pull_sycl.hpp` and trace the optional resident acceleration field from `device_local_acceleration()` into the Guo-force collision term. Then inspect `resident_multiphysics_sycl.hpp`: thermal D3Q7 reads the device macroscopic view, free-surface VOF computes flux divergence entirely on-device, particle coupling atomically scatters equal-and-opposite drag into the same force field, and Q-criterion consumes the resident velocity scratch. The intended timestep has no full-field host transfer between these stages.
+
+When extending this path, preserve the same rule: setup/output may cross the host boundary, but ordinary no-output timesteps should not. Prefer persistent allocations and device views over convenience APIs that materialize host vectors.

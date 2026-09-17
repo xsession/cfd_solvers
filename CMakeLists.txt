@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(cfd_solvers VERSION 0.15.2 LANGUAGES C CXX)
+project(cfd_solvers VERSION 0.16.3 LANGUAGES C CXX)
 
 option(CFD_ENABLE_OPENMP "Enable multicore CPU execution through OpenMP" ON)
 option(CFD_ENABLE_SYCL "Enable AdaptiveCpp/SYCL accelerator backend" OFF)
@@ -30,6 +30,8 @@ add_library(cfd_solvers
     src/particle/transport.cpp
     src/particle/plasma.cpp
     src/particle/wakefield.cpp
+    src/multibody/multibody.cpp
+    src/multibody/distributed_dem.cpp
     src/rf/network.cpp
     src/rf/nport.cpp
     src/rf/peec.cpp
@@ -66,6 +68,7 @@ add_library(cfd_solvers
     src/fvm/premixed_flame1d.cpp
     src/fvm/radiation_network.cpp
     src/fvm/mesh_motion.cpp
+    src/fvm/adaptive_mesh.cpp
     src/lbm/diagnostics.cpp
     src/lbm/visualization.cpp
     src/lbm/particles.cpp
@@ -103,6 +106,9 @@ add_library(cfd_solvers
     src/fvm/diffusion2d.cpp
     src/fvm/poly_mesh.cpp
     src/fvm/operators.cpp
+    src/sycl/resident_fvm_sycl.cpp
+    src/sycl/resident_rans_sycl.cpp
+    src/sycl/resident_dem_sycl.cpp
     src/fvm/schemes.cpp
     src/fvm/pressure_velocity.cpp
     src/fvm/projection2d.cpp
@@ -227,7 +233,8 @@ endif()
 if(CFD_ENABLE_MPI)
     find_package(MPI REQUIRED COMPONENTS CXX)
     target_sources(cfd_solvers PRIVATE src/distributed/mpi_runtime.cpp
-        src/distributed/mpi_sparse.cpp)
+        src/distributed/mpi_sparse.cpp
+        src/distributed/mpi_dem.cpp)
     target_link_libraries(cfd_solvers PUBLIC MPI::MPI_CXX)
     target_compile_definitions(cfd_solvers PUBLIC CFD_HAS_MPI=1)
 
@@ -248,6 +255,9 @@ if(CFD_ENABLE_SYCL)
         src/sycl/d2q9_sycl.cpp
         src/sycl/esoteric_pull_sycl.cpp
         src/sycl/sparse_linalg_sycl.cpp
+        src/sycl/resident_fvm_sycl.cpp
+        src/sycl/resident_rans_sycl.cpp
+        src/sycl/resident_dem_sycl.cpp
         src/sycl/voxelize_sycl.cpp
     )
     if(TARGET cfd-distributed)
@@ -409,6 +419,77 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     add_executable(cfd-v0152-rans-transport-tests tests/test_v0152_rans_transport.cpp)
     target_link_libraries(cfd-v0152-rans-transport-tests PRIVATE cfd::solvers)
     add_test(NAME cfd-v0152-rans-transport-tests COMMAND cfd-v0152-rans-transport-tests)
+
+    add_executable(cfd-v0153-fvm-amr-tests tests/test_v0153_fvm_amr.cpp)
+    target_link_libraries(cfd-v0153-fvm-amr-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0153-fvm-amr-tests COMMAND cfd-v0153-fvm-amr-tests)
+
+    add_executable(cfd-v0154-compressible-weno-tests tests/test_v0154_compressible_weno.cpp)
+    target_link_libraries(cfd-v0154-compressible-weno-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0154-compressible-weno-tests COMMAND cfd-v0154-compressible-weno-tests)
+    add_executable(cfd-v0155-gpu-residency-tests tests/test_v0155_gpu_residency.cpp)
+    target_link_libraries(cfd-v0155-gpu-residency-tests PRIVATE cfd::solvers)
+    if(CFD_ENABLE_SYCL)
+        add_sycl_to_target(TARGET cfd-v0155-gpu-residency-tests SOURCES tests/test_v0155_gpu_residency.cpp)
+    endif()
+    add_test(NAME cfd-v0155-gpu-residency-tests COMMAND cfd-v0155-gpu-residency-tests)
+    add_executable(cfd-v0156-gpu-lbm-multiphysics-tests tests/test_v0156_gpu_lbm_multiphysics.cpp)
+    target_link_libraries(cfd-v0156-gpu-lbm-multiphysics-tests PRIVATE cfd::solvers)
+    if(CFD_ENABLE_SYCL)
+        add_sycl_to_target(TARGET cfd-v0156-gpu-lbm-multiphysics-tests SOURCES tests/test_v0156_gpu_lbm_multiphysics.cpp)
+    endif()
+    add_test(NAME cfd-v0156-gpu-lbm-multiphysics-tests COMMAND cfd-v0156-gpu-lbm-multiphysics-tests)
+    add_executable(cfd-v0157-gpu-fdtd-residency-tests tests/test_v0157_gpu_fdtd_residency.cpp)
+    target_link_libraries(cfd-v0157-gpu-fdtd-residency-tests PRIVATE cfd::solvers)
+    if(CFD_ENABLE_SYCL)
+        add_sycl_to_target(TARGET cfd-v0157-gpu-fdtd-residency-tests SOURCES tests/test_v0157_gpu_fdtd_residency.cpp)
+    endif()
+    add_test(NAME cfd-v0157-gpu-fdtd-residency-tests COMMAND cfd-v0157-gpu-fdtd-residency-tests)
+    add_executable(cfd-v0158-gpu-fvm-residency-tests tests/test_v0158_gpu_fvm_residency.cpp)
+    target_link_libraries(cfd-v0158-gpu-fvm-residency-tests PRIVATE cfd::solvers)
+    if(CFD_ENABLE_SYCL)
+        add_sycl_to_target(TARGET cfd-v0158-gpu-fvm-residency-tests SOURCES tests/test_v0158_gpu_fvm_residency.cpp)
+    endif()
+    add_test(NAME cfd-v0158-gpu-fvm-residency-tests COMMAND cfd-v0158-gpu-fvm-residency-tests)
+    add_executable(cfd-v0159-resident-incompressible-sycl-tests tests/test_v0159_resident_incompressible_sycl.cpp)
+    target_link_libraries(cfd-v0159-resident-incompressible-sycl-tests PRIVATE cfd::solvers)
+    if(CFD_ENABLE_SYCL)
+        add_sycl_to_target(TARGET cfd-v0159-resident-incompressible-sycl-tests SOURCES tests/test_v0159_resident_incompressible_sycl.cpp)
+    endif()
+    add_test(NAME cfd-v0159-resident-incompressible-sycl-tests COMMAND cfd-v0159-resident-incompressible-sycl-tests)
+
+    add_executable(cfd-v01510-resident-krylov-scalar-tests tests/test_v01510_resident_krylov_scalar.cpp)
+    target_link_libraries(cfd-v01510-resident-krylov-scalar-tests PRIVATE cfd::solvers)
+    if(CFD_HAS_SYCL)
+        add_sycl_to_target(TARGET cfd-v01510-resident-krylov-scalar-tests SOURCES tests/test_v01510_resident_krylov_scalar.cpp)
+    endif()
+    add_test(NAME cfd-v01510-resident-krylov-scalar-tests COMMAND cfd-v01510-resident-krylov-scalar-tests)
+
+    add_executable(cfd-v01511-resident-rans-tests tests/test_v01511_resident_rans.cpp)
+    target_link_libraries(cfd-v01511-resident-rans-tests PRIVATE cfd::solvers)
+    if(CFD_ENABLE_SYCL)
+        add_sycl_to_target(TARGET cfd-v01511-resident-rans-tests SOURCES tests/test_v01511_resident_rans.cpp)
+    endif()
+    add_test(NAME cfd-v01511-resident-rans-tests COMMAND cfd-v01511-resident-rans-tests)
+
+    add_executable(cfd-v0160-multibody-dem-tests tests/test_v0160_multibody_dem.cpp)
+    target_link_libraries(cfd-v0160-multibody-dem-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0160-multibody-dem-tests COMMAND cfd-v0160-multibody-dem-tests)
+
+    add_executable(cfd-v0161-contact-maturity-tests tests/test_v0161_contact_maturity.cpp)
+    target_link_libraries(cfd-v0161-contact-maturity-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0161-contact-maturity-tests COMMAND cfd-v0161-contact-maturity-tests)
+
+    add_executable(cfd-v0162-resident-dem-sycl-tests tests/test_v0162_resident_dem_sycl.cpp)
+    target_link_libraries(cfd-v0162-resident-dem-sycl-tests PRIVATE cfd::solvers)
+    if(CFD_ENABLE_SYCL)
+        add_sycl_to_target(TARGET cfd-v0162-resident-dem-sycl-tests SOURCES tests/test_v0162_resident_dem_sycl.cpp)
+    endif()
+    add_test(NAME cfd-v0162-resident-dem-sycl-tests COMMAND cfd-v0162-resident-dem-sycl-tests)
+
+    add_executable(cfd-v0163-bonded-distributed-dem-tests tests/test_v0163_bonded_distributed_dem.cpp)
+    target_link_libraries(cfd-v0163-bonded-distributed-dem-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0163-bonded-distributed-dem-tests COMMAND cfd-v0163-bonded-distributed-dem-tests)
     if(CFD_BUILD_PYTHON_BINDINGS)
         find_package(Python3 QUIET COMPONENTS Interpreter)
         if(Python3_Interpreter_FOUND)

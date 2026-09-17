@@ -473,3 +473,50 @@ Primary references and design mapping are recorded in `UPSTREAM_DOCUMENTATION_RE
 - Keep wall-reflection, buoyancy and rotation corrections behind source/closure extension seams rather than hard-wiring every RSM variant into the transport kernel.
 
 Primary public references and clean-room mapping are recorded in `UPSTREAM_DOCUMENTATION_REVIEW_0_15_2.md`.
+
+## v0.15.3 learning notes - topology change and adaptive FVM meshes
+
+- Distinguish coordinate-only mesh motion from topology change that creates or deletes control volumes.
+- Derive why an isotropic hexahedral split creates eight child cells and why a coarse/fine shared face must be partitioned into multiple conservative subfaces.
+- Treat lineage as part of coarsening correctness: only a complete sibling set can recover its parent.
+- Compare nearest-cell interpolation with exact overlap-volume mapping for cell averages and prove conservation of `sum(phi*V)`.
+- Study 2:1 balancing as a mesh-quality/topology constraint separate from the error indicator itself.
+- Derive the face-jump estimator used by the baseline and compare Dörfler bulk marking with a fixed absolute threshold.
+- Keep estimator, marking, topology update and field transfer as independent layers so later shock/interface/adjoint indicators can reuse the same AMR machinery.
+
+Primary public references and clean-room mapping are recorded in `UPSTREAM_DOCUMENTATION_REVIEW_0_15_3.md`.
+
+## v0.15.4 learning notes - characteristic WENO compressible flow
+
+- Treat finite-volume state values as cell averages; initialize smooth verification fields consistently with that interpretation.
+- Derive the 1-D Euler characteristic speeds `u-c`, `u`, `u+c` and the corresponding conservative-variable eigenvectors.
+- Compare component-wise reconstruction with projection into a face-local Roe characteristic basis.
+- Work through the three WENO5 candidate polynomials, Jiang-Shu smoothness indicators and nonlinear weights.
+- Separate high-order spatial reconstruction from the Riemann flux; this checkpoint keeps Rusanov so accuracy changes can be attributed to reconstruction/time integration.
+- Trace all three SSPRK3 convex-combination stages and compare their temporal order with forward Euler.
+- Treat positivity handling as a numerical safety boundary: reconstructed interface states are checked before they reach the equation of state or flux function.
+- Use the normalized pressure-jump sensor as an AMR indicator input, not as a hidden reconstruction switch.
+
+Primary public references and clean-room mapping are recorded in `UPSTREAM_DOCUMENTATION_REVIEW_0_15_4.md`.
+
+## v0.15.5 learning notes - device residency and bandwidth-first GPU design
+
+- Think of the accelerator as the owner of evolving numerical state, not a function accelerator called from a CPU-owned solver.
+- Count bytes moved per cell/update before optimizing FLOPs in memory-bound methods such as LBM.
+- Generate common initial conditions on-device so setup does not materialize q population fields on the host.
+- Compute reductions and derived macroscopic fields on-device and transfer only the requested scalar/field subset.
+- Track synchronization separately from transfer volume; a one-scalar residual check can still serialize an accelerator queue.
+- Reuse persistent workspaces in sparse/Krylov and particle algorithms instead of allocating device memory in inner APIs.
+- Exchange packed halos rather than whole domains and make direct device MPI an explicitly validated optimization over pinned-host staging.
+- Treat zero-copy/unified memory as a hardware-specific policy that requires driver validation rather than as a universal accelerator assumption.
+- Do not equate successful kernel compilation with numerical qualification: vendor/driver-specific silent miscompilation is a real risk and requires physical parity tests.
+- Keep orchestration and I/O on the host; "GPU-resident simulation" refers to the hot numerical loop and its diagnostics, not every line of the application.
+
+Primary public references and the clean-room design mapping are recorded in `FLUIDX3D_GPU_RESIDENCY_RESEARCH.md`.
+
+
+## v0.15.6 learning notes - resident LBM multiphysics
+
+The important architectural change is that coupling now occurs through device views rather than host vectors. `EsotericPullSyclSolver::DeviceMacroscopicView` feeds thermal, VOF and particle kernels directly. Their buoyancy/capillary/reaction contributions accumulate into `DeviceAccelerationView`, which the subsequent D3Q19 collision consumes without field download/upload. This is the practical meaning of a resident multiphysics timestep.
+
+Study `include/cfd/solvers/lbm/resident_multiphysics_sycl.hpp` together with `esoteric_pull_sycl.hpp`. Pay attention to queue ordering, scratch reuse, reductions versus bulk transfers, conservative VOF face fluxes, and particle atomic scatter. The next performance step is not adding more host-side features: it is profiling particle contention, device visualization/export and real multi-vendor memory bandwidth.

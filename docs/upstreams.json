@@ -203,6 +203,16 @@
       "license_blob_sha": "f288702d2fa16d3cdf0035b15a9fcbc552cd88e7",
       "tracker_phase": 9,
       "integration": "clean-room campaign automation, DOE/template and solver-adapter boundary reference; no source translation"
+    },
+    {
+      "name": "Project Chrono",
+      "repository": "https://github.com/projectchrono/chrono",
+      "branch": "main",
+      "commit": "7571eed9f92a10c5e8dbcddc1f37b401ca2c3661",
+      "license": "BSD-3-Clause",
+      "license_source": "LICENSE / repository metadata",
+      "tracker_phase": 13,
+      "integration": "permissive multibody/contact/DEM capability and validation reference; independent cfd_solvers implementation"
     }
   ]
 }

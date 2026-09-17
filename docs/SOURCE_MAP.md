@@ -16,7 +16,7 @@ Target families:
 - dynamic meshes/AMR
 - function-object style diagnostics and post-processing
 
-Phase 4A adds the clean-room `PolyMesh` owner/neighbour topology, boundary patches, cell-parallel Gauss gradient/divergence, an orthogonal two-point Laplacian, shared matrix-free CG, and a staggered conservative pressure projection. Phase 4B adds linear/upwind face schemes, conservative convective divergence and transient Taylor-Green flow. Phase 4C adds collocated unstructured momentum, non-orthogonal correction, Rhie-Chow-style flux handling and SIMPLE/PISO/PIMPLE-style coupling. v0.5.0 moves collocated momentum to shared ILU(0)-GMRES and adds bounded reconstruction plus generic scalar transport. Remaining FVM targets are turbulence, compressible/energy/species flow, VOF/multiphase, moving mesh/AMR and CHT.
+Phase 4A adds the clean-room `PolyMesh` owner/neighbour topology, boundary patches, cell-parallel Gauss gradient/divergence, an orthogonal two-point Laplacian, shared matrix-free CG, and a staggered conservative pressure projection. Phase 4B adds linear/upwind face schemes, conservative convective divergence and transient Taylor-Green flow. Phase 4C adds collocated unstructured momentum, non-orthogonal correction, Rhie-Chow-style flux handling and SIMPLE/PISO/PIMPLE-style coupling. v0.15.x extends this into second-order temporal integration, transported RANS/RSM/DES, thermal/restart support, an adaptive Cartesian-hex topology-change baseline with exact overlap remapping, sibling coarsening, 2:1 balancing and jump-indicator/Dorfler AMR, plus characteristic WENO5/SSPRK3 1-D Euler transport with a pressure-jump shock sensor. Remaining FVM targets are the unchecked Phase-3 items in `INTEGRATION_TRACKER.md`, concentrated in deeper multiphase/Lagrangian/reacting coupling.
 
 ## FluidX3D -> LBM performance architecture
 
@@ -112,3 +112,9 @@ Relevant files:
 - `include/cfd/multiphysics/bioheat.hpp`, `src/multiphysics/bioheat.cpp`: SAR conversion, heterogeneous voxel tissues, mass-averaged SAR, voxel-to-Pennes projection and implicit Pennes stepping.
 
 Remaining Phase-12 gaps are still explicit in `docs/INTEGRATION_TRACKER.md`: RWG/MLFMM/SBR, transient machine A-phi, EM-PIC, plasma chemistry/breakdown, temperature-dependent bio-EM feedback and full-wave photonic band/mode solvers.
+
+## Project Chrono -> Phase 13 multibody/contact/DEM
+
+Project Chrono (BSD-3-Clause) is the primary capability and validation reference for the new multibody family. Public documentation was used to identify the important architectural separation between rigid bodies/links, time steppers and smooth-vs-nonsmooth contact formulations. cfd_solvers does not copy Chrono's class hierarchy or implementation: v0.16.0 independently implements a compact quaternion rigid-body state, Jacobian-row projected impulse constraints, sphere collision broad/narrow phases, smooth penalty contact, a nonsmooth unilateral impulse baseline and explicit Hertz-style spherical DEM. v0.16.1 extends that independent implementation with bounded velocity motors, support-mapped convex GJK/EPA contact, sphere-triangle mesh contact, persistent manifold state and history-dependent Mindlin tangential displacement.
+
+The intentionally open items are more important than superficial parity: convex GJK/EPA and mesh manifolds, history-dependent Mindlin contact, bonded-particle fracture, implicit HHT/generalized-alpha stepping, articulated reduced coordinates, GPU/distributed DEM and resolved CFD/FEM multibody coupling remain future work.

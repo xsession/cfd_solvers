@@ -57,6 +57,28 @@ Started in v0.8.0. Validated baselines include generic N-port network math, Touc
 
 v0.8.0 provides a clean-room MNA baseline with passive elements, controlled sources, nonlinear diode/MOS/BJT/JFET devices, switches, mutual inductance, RF N-port elements, DC/AC/transient analysis, sweeps/noise/sensitivity/Monte Carlo/Fourier, hierarchical parameterized netlists and an OSDI/OpenVAF loader seam. v0.8.1 adds adaptive step-doubling LTE control, a fitted small-signal pole/zero baseline and periodic steady-state shooting-by-settling. v0.8.2 adds unequal-step adaptive BDF2/Gear control, an ideal-transformer convenience model, and validated lossy sampled transmission-line behavior. Next priorities are sparse MNA migration, BDF3+ order selection, direct generalized-eigenvalue pole-zero analysis, harmonic balance, richer source/device models, full OSDI descriptor evaluation/DAE state handling, RAW/data interoperability and broader vendor-model compatibility.
 
+
+## Phase 13 - multibody, rigid bodies and granular dynamics
+
+v0.16.0 starts a Project-Chrono-class clean-room mechanics family: 6-DOF quaternion rigid bodies, Jacobian/PGS constraints, distance/spherical/revolute/prismatic/fixed/gear joints, sweep-and-prune plus BVH sphere collision, smooth penalty and nonsmooth impulse contact, and explicit spherical DEM with Hertz-type contact, friction, rolling resistance and cohesion. v0.16.1 adds bounded linear/angular motors, convex GJK/EPA, sphere-triangle mesh contact, persistent contact manifolds and a history-dependent Mindlin tangential spring. v0.16.2 adds resident SYCL spherical DEM with device cell-linked neighbor search/contact kernels. v0.16.3 adds progressive bonded-particle damage/fracture plus deterministic slab ownership, migration/ghost planning and MPI exchange foundations. Next priorities are real multi-rank distributed-contact validation, implicit HHT/generalized-alpha integration, articulated reduced coordinates, flexible-body coupling and CFD-DEM coupling.
+
+
+## Planned solver-family expansion after Phase 13
+
+The uncovered-domain audit is retained in `UNCOVERED_SOLVER_FIELDS_RESEARCH.md`. These phases are intentionally **not** added to the machine-counted integration denominator until implementation begins. Current planned order:
+
+- Phase 14: acoustics, ultrasound and photoacoustics (k-Wave-class pseudospectral methods).
+- Phase 15: semiconductor TCAD (DEVSIM-class Poisson/carrier drift-diffusion).
+- Phase 16A: battery cell physics (PyBaMM-class SPM/SPMe/DFN and degradation).
+- Phase 16B: nuclear neutronics (OpenMC-class Monte Carlo and depletion).
+- Phase 17: electrical power systems (pandapower/VeraGrid-class load flow, OPF and dynamics).
+- Phase 18: geomechanics and porous THMC (OpenGeoSys/PyLith-class coupled subsurface physics).
+- Phase 19: atomistics and molecular dynamics (HOOMD-blue/LAMMPS-class particle mechanics).
+- Phase 20: explicit impact/crash mechanics (OpenRadioss-class high-rate nonlinear FEM).
+- Phase 21: electronic structure/DFT (Quantum ESPRESSO-class plane-wave methods).
+
+Horizontal common-runtime references from the audit—SUNDIALS, hypre and AMReX—should be mined continuously rather than treated as separate physics phases.
+
 ## Release checkpoints
 
 - v0.2.x: LBM performance and physical boundaries.
@@ -69,3 +91,7 @@ v0.8.0 provides a clean-room MNA baseline with passive elements, controlled sour
 - v0.8.0: RF/microwave networks, thin-wire/PEEC references and the first SPICE-class MNA engine.
 - v0.8.1: adaptive circuit LTE control, pole-zero/PSS baselines and coupled parallel-wire MoM.
 - v0.8.2: unequal-step adaptive BDF2/Gear plus arbitrary-orientation disjoint-wire MoM.
+- v0.16.0: Phase-13 multibody/contact/DEM foundation.
+- v0.16.1: Phase-13 contact/collision maturity (motors, GJK/EPA, triangle mesh, persistent manifolds, Mindlin history).
+- v0.16.2: resident SYCL DEM neighbor/contact hot loop.
+- v0.16.3: bonded-particle damage/fracture plus distributed DEM ownership/migration/ghost-exchange foundations.

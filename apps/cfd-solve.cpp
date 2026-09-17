@@ -21,6 +21,7 @@
 #include "cfd/solvers/fvm/incompressible2d.hpp"
 #include "cfd/solvers/fvm/collocated_incompressible.hpp"
 #include "cfd/solvers/fvm/scalar_transport.hpp"
+#include "cfd/solvers/fvm/compressible1d.hpp"
 #include "cfd/fvm/operators.hpp"
 #include "cfd/fvm/schemes.hpp"
 #include "cfd/fvm/poly_mesh.hpp"
@@ -79,6 +80,7 @@ void print_list() {
         << "  fvm-collocated-cavity  collocated SIMPLE lid-driven cavity\n"
         << "  fvm-collocated-skew    sheared-mesh PISO/PIMPLE pressure-coupling regression\n"
         << "  fvm-scalar-transport   implicit PolyMesh scalar advection-diffusion demo\n"
+        << "  fvm-euler-weno1d      characteristic WENO5 + SSPRK3 Sod shock tube\n"
         << "  fem-poisson1d          linear finite-element Poisson solver\n"
         << "  fem-poisson3d          Tet4 finite-element manufactured Poisson case\n"
         << "  fem-nonlinear-poisson  nonlinear Tri3 Newton/ILU-GMRES manufactured case\n"
@@ -191,9 +193,7 @@ int run_lbm_sycl_legacy() {
     const auto t1 = std::chrono::steady_clock::now();
     const double seconds = std::chrono::duration<double>(t1 - t0).count();
     const double mlups = (static_cast<double>(256U * 256U) * 200.0) / (seconds * 1.0e6);
-    const auto rho = solver.download_density();
-    double mass = 0.0;
-    for (float r : rho) mass += r;
+    const double mass = solver.total_mass();
     std::cout << "backend=sycl streaming=two-grid device=\"" << solver.device_name() << "\""
               << " mass=" << mass << " MLUPS=" << mlups << '\n';
     return 0;
@@ -203,17 +203,13 @@ template<class Descriptor>
 int run_lbm_inplace_sycl(cfd::lbm::InPlaceLbmConfig config, std::size_t steps) {
     cfd::lbm::EsotericPullSyclSolver<Descriptor> solver(config);
     solver.initialize_taylor_green(0.02F);
-    const auto before = solver.download_macroscopic();
-    double mass0 = 0.0;
-    for (float rho : before.rho) mass0 += rho;
+    const double mass0 = solver.total_mass();
     const auto t0 = std::chrono::steady_clock::now();
     solver.step(steps);
     solver.wait();
     const auto t1 = std::chrono::steady_clock::now();
     const double seconds = std::chrono::duration<double>(t1 - t0).count();
-    const auto after = solver.download_macroscopic();
-    double mass1 = 0.0;
-    for (float rho : after.rho) mass1 += rho;
+    const double mass1 = solver.total_mass();
     const double mlups = static_cast<double>(solver.cells()) * static_cast<double>(steps) /
                          (seconds * 1.0e6);
     std::cout << "backend=sycl streaming=in-place device=\"" << solver.device_name() << "\""
@@ -641,6 +637,36 @@ int run_scalar_transport() {
     return solver.linear_result().converged ? 0 : 1;
 }
 
+int run_euler_weno1d() {
+    cfd::fvm::Compressible1DConfig cfg;
+    cfg.cells=320U;
+    cfg.length=1.0;
+    cfg.cfl=0.2;
+    cfg.reconstruction=cfd::fvm::CompressibleReconstruction::characteristic_weno5;
+    cfg.time_integrator=cfd::fvm::CompressibleTimeIntegrator::ssprk3;
+    cfd::fvm::CompressibleEuler1D solver(cfg);
+    solver.initialize({1.0,0.0,1.0},{0.125,0.0,0.1},0.5);
+    solver.run(0.12);
+    const auto sensor=solver.pressure_jump_sensor();
+    double minimum_density=std::numeric_limits<double>::infinity();
+    double minimum_pressure=std::numeric_limits<double>::infinity();
+    double maximum_sensor=0.0;
+    for(std::size_t i=0;i<cfg.cells;++i){
+        const auto q=solver.primitive(i);
+        minimum_density=std::min(minimum_density,q.density);
+        minimum_pressure=std::min(minimum_pressure,q.pressure);
+        maximum_sensor=std::max(maximum_sensor,sensor[i]);
+    }
+    std::cout << "case=fvm-euler-weno1d"
+              << " min_density=" << minimum_density
+              << " min_pressure=" << minimum_pressure
+              << " max_pressure_jump_sensor=" << maximum_sensor
+              << " mass=" << solver.mass()
+              << " momentum=" << solver.momentum()
+              << " total_energy=" << solver.total_energy() << '\n';
+    return (minimum_density>0.0&&minimum_pressure>0.0&&maximum_sensor>0.0)?0:2;
+}
+
 int run_fdtd_mur1d() {
     cfd::fdtd::Maxwell1D solver({800,1.0e-3,0.95,1.0,1.0,cfd::fdtd::Boundary1D::mur1});
     solver.set_material(460,620,4.0,0.01);
@@ -970,6 +996,7 @@ int main(int argc, char** argv) {
     if (solver == "fvm-collocated-cavity") return run_fvm_collocated_cavity();
     if (solver == "fvm-collocated-skew") return run_fvm_collocated_skew();
     if (solver == "fvm-scalar-transport") return run_scalar_transport();
+    if (solver == "fvm-euler-weno1d") return run_euler_weno1d();
     if (solver == "fem-poisson1d") return run_fem();
     if (solver == "fem-poisson3d") return run_fem_poisson3d();
     if (solver == "fem-nonlinear-poisson") return run_fem_nonlinear_poisson();
