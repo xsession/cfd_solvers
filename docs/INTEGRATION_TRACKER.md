@@ -1,6 +1,6 @@
 # Unified Solver Integration Tracker
 
-Last research refresh: 2026-09-17
+Last research refresh: 2026-09-18
 
 This is the authoritative completion checklist for `cfd_solvers`. A feature is not considered complete merely because code exists. Unless explicitly marked as an exploratory baseline, completion requires:
 
@@ -1009,14 +1009,14 @@ Clean-room capability/reference family: DEVSIM public documentation, published s
 - [x] electrothermal Joule-heating field/output for thermal coupling.
 - [x] TCAD <-> SPICE compact-model extraction/interface.
 
-## Phase 16A - lithium-ion battery cell physics [started]
+## Phase 16A - lithium-ion battery cell physics [complete]
 
 Clean-room capability/reference family: PyBaMM public documentation and the standard SPM/SPMe/DFN literature. The cfd_solvers implementation is independent C++20 and does not translate PyBaMM source.
 
 ### Cell electrochemistry
 - [x] Single Particle Model (SPM) with one spherical diffusion particle per electrode.
 - [x] Single Particle Model with Electrolyte (SPMe) baseline.
-- [ ] full Doyle-Fuller-Newman / P2D distributed porous-electrode model.
+- [x] full Doyle-Fuller-Newman / P2D distributed porous-electrode model.
 - [x] conservative spherical solid-particle lithium diffusion.
 - [x] through-cell electrolyte concentration transport.
 - [x] electrolyte ohmic plus concentration-polarization potential baseline.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.19.3
+- Added the full Doyle-Fuller-Newman / P2D distributed porous-electrode cell model (`cfd/battery/dfn.hpp`, `DoyleFullerNewmanModel`): per-node spherical solid particles, distributed electrolyte concentration with a conservative implicit finite-volume solve, and distributed solid/electrolyte potentials with Butler-Volmer-consistent reaction-current partitioning.
+- Added `battery-dfn` cfd-solve case, a `cfd-v0193-dfn-tests` regression (open-circuit, discharge, charge, global lithium conservation, distributed potentials, invalid-config rejection) and a CTest smoke test.
+- Completed Phase 16A (18/18); tracker advances to 718/825 (87.0%).
+- Added a Docker-based deployment system: multi-stage `Dockerfile` (Release/OpenMP/optional MPI+HDF5), `docker-compose.yml` (run / test / mpi profiles), and a no-bash Windows `cfd-docker.bat` + `cfd-docker.ps1` helper.
+
 ## 0.19.2
 - Added implicit 3-D finite-volume thermal fields with heterogeneous heat capacity, diagonal anisotropic conductivity, harmonic interface conductance and six-face convection.
 - Added conservative cell-to-voxel heat mapping, temperature feedback, external thermal ownership and atomic electrothermal pack stepping with hotspot cutoffs.

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(cfd_solvers VERSION 0.19.2 LANGUAGES C CXX)
+project(cfd_solvers VERSION 0.19.3 LANGUAGES C CXX)
 
 option(CFD_ENABLE_OPENMP "Enable multicore CPU execution through OpenMP" ON)
 option(CFD_ENABLE_SYCL "Enable AdaptiveCpp/SYCL accelerator backend" OFF)
@@ -45,6 +45,7 @@ add_library(cfd_solvers
     src/battery/lithium_ion.cpp
     src/battery/pack.cpp
     src/battery/thermal3d.cpp
+    src/battery/dfn.cpp
     src/rf/network.cpp
     src/rf/nport.cpp
     src/rf/peec.cpp
@@ -616,6 +617,10 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     target_link_libraries(cfd-v0192-thermal-tests PRIVATE cfd::solvers)
     add_test(NAME cfd-v0192-thermal-tests COMMAND cfd-v0192-thermal-tests)
 
+    add_executable(cfd-v0193-dfn-tests tests/test_v0193_dfn.cpp)
+    target_link_libraries(cfd-v0193-dfn-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0193-dfn-tests COMMAND cfd-v0193-dfn-tests)
+
     add_executable(cfd-v0191-pack-tests tests/test_v0191_pack.cpp)
     target_link_libraries(cfd-v0191-pack-tests PRIVATE cfd::solvers)
     add_test(NAME cfd-v0191-pack-tests COMMAND cfd-v0191-pack-tests)
@@ -666,6 +671,7 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     add_test(NAME cfd-bench-json-smoke COMMAND cfd-bench --lattice d3q19 --nx 8 --ny 8 --nz 8 --warmup 1 --steps 2 --threads 1 --json)
     add_test(NAME cfd-halo-plan-smoke COMMAND cfd-halo-plan --lattice d3q27 --nx 8 --ny 8 --nz 8)
     add_test(NAME cfd-validation-catalog-smoke COMMAND cfd-validate)
+    add_test(NAME cfd-battery-dfn-smoke COMMAND cfd-solve battery-dfn)
     foreach(case_name lbm-trt fvm-workspace fdtd-pml1d chemistry-reactor chemistry-equilibrium optics-gaussian multiphysics-thermoelastic em-frequency1d em-edge2d em-edge3d em-waveport particle-pic1d particle-em-pic1d particle-pic2d particle-em-pic2d particle-staggered-em-pic2d particle-pic3d particle-em-pic3d particle-staggered-em-pic3d particle-local-current3d particle-sort-halo3d particle-domain-exchange3d particle-comm-exchange3d particle-transport3d particle-serialized-transport3d particle-distributed-round3d particle-field-guards3d particle-distributed-step3d particle-geant4-transport particle-transport-dose-bvh particle-campaign-doe particle-campaign-execution particle-campaign-local-runner particle-campaign-control particle-multiserver-deploy particle-multiserver-execution particle-multiserver-supervision particle-multiserver-controller particle-multiserver-dashboard particle-plasma-chemistry particle-breakdown-threshold bioheat-sar rf-dipole rf-microstrip rf-multiwire spice-rc spice-diode spice-adaptive spice-pss-pz)
         add_test(NAME cfd-${case_name}-smoke COMMAND cfd-solve ${case_name})
     endforeach()

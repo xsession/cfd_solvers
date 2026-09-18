@@ -1,0 +1,80 @@
+# cfd_solvers Docker deployment.
+#
+# Quick start:
+#   docker compose run cfd lbm-d3q19-cpu
+#   docker compose run cfd battery-dfn
+#   docker compose run --profile test cfd-test
+#   OMP_NUM_THREADS=8 docker compose run cfd fvm-taylor-green2d
+#
+# The `cfd` service maps the build dir, the `cfd-test` service runs the full
+# CTest suite, and `cfd-mpi` (MPI build only) runs a distributed case under
+# mpirun. `command` overrides the solver/case for the `cfd` service.
+
+name: cfd_solvers
+
+x-cfd-base: &cfd-base
+  image: cfd_solvers:dev
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      CMAKE_BUILD_TYPE: Release
+      CFD_ENABLE_OPENMP: "ON"
+      CFD_ENABLE_MPI: "OFF"
+      CFD_ENABLE_NATIVE_ARCH: "ON"
+      CFD_ENABLE_HDF5: "ON"
+  environment:
+    OMP_NUM_THREADS: ${OMP_NUM_THREADS:-4}
+    OMP_PROC_BIND: spread
+    OMP_DYNAMIC: "false"
+  tmpfs:
+    - /tmp
+
+services:
+  cfd:
+    <<: *cfd-base
+    command: ["--list"]
+    # Run a specific case:  docker compose run cfd lbm-d3q19-cpu
+    # (passing a command on `run` overrides the list above)
+
+  cfd-test:
+    <<: *cfd-base
+    profiles: ["test"]
+    command:
+      - bash
+      - -c
+      - |
+        set -euo pipefail
+        ctest --test-dir /cfd_solvers/build --output-on-failure
+
+  cfd-mpi:
+    <<: *cfd-base
+    profiles: ["mpi"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CMAKE_BUILD_TYPE: Release
+        CFD_ENABLE_OPENMP: "ON"
+        CFD_ENABLE_MPI: "ON"
+        CFD_ENABLE_NATIVE_ARCH: "ON"
+        CFD_ENABLE_HDF5: "ON"
+    command:
+      - mpirun
+      - --allow-run-as-root
+      - --oversubscribe
+      - -np
+      - "${MPI_RANKS:-4}"
+      - /cfd_solvers/build/cfd-distributed
+      - --backend
+      - cpu
+      - --lattice
+      - d3q19
+      - --nx
+      - "192"
+      - --ny
+      - "128"
+      - --nz
+      - "96"
+      - --steps
+      - "100"

@@ -6,14 +6,20 @@ The long-term goal is a readable solver collection covering CFD, FEM multiphysic
 
 The project is inspired by the capabilities and engineering lessons of OpenFOAM, FluidX3D, Elmer FEM, openEMS FDTD and Optiland. It is **not** a source-code merge or mechanical translation. The source projects have different licenses, and FluidX3D has additional restrictions, so performance techniques are independently implemented from publications and public descriptions.
 
-## v0.19.2 status - 3-D battery thermal coupling
+## v0.19.3 status - DFN/P2D and Docker deployment
 
-v0.19.2 adds an implicit 3-D thermal field with heterogeneous materials, directional conductivity and convective boundaries. The electrothermal pack wrapper deposits cell heat conservatively, feeds temperatures back into SPMe, and rolls back both systems on solver failure or hotspot cutoff. See `docs/RELEASE_0_19_2.md` for usage and validation.
+v0.19.3 completes Phase 16A with the full Doyle-Fuller-Newman / P2D distributed
+porous-electrode model (`cfd/battery/dfn.hpp`): per-node spherical solid particles,
+distributed electrolyte concentration, and distributed solid/electrolyte potentials.
+It also adds a Docker-based deployment system (multi-stage `Dockerfile`,
+`docker-compose.yml`, and a no-bash Windows helper). See `docs/RELEASE_0_19_3.md`
+for usage and validation.
 
-Validation: all **165 CTest targets passed** across the main run and focused rerun; native HDF5 was unavailable.
-
-Phase 16A is **17/18** and the tracker is **717/825 = 86.9%**. Full DFN/P2D remains open. The existing practical benchmarks and v0.19.0 timing reference are retained.
-
+Validation: `cfd-v0193-dfn-tests` plus the `battery-dfn` smoke case pass; the DFN
+regression, the DFN source and the updated case dispatcher compile clean under
+`-Wall -Wextra -Wshadow` (C++20). The full CTest suite is exercised via the
+`cfd-test` compose profile. Phase 16A is **18/18** and the tracker is
+**718/825 = 87.0%**.
 
 ## Build
 
@@ -85,8 +91,42 @@ Examples:
 ./build/cfd-solve particle-multiserver-deploy
 ./build/cfd-solve particle-multiserver-execution
 ./build/cfd-solve particle-multiserver-supervision
+./build/cfd-solve battery-dfn
 ./scripts/integration_status.py
 ```
+
+## Docker deployment
+
+A multi-stage `Dockerfile` builds the solvers (Release, OpenMP, optional MPI/HDF5)
+and ships the binaries plus the source tree in a slim non-root runtime image.
+Build args: `CMAKE_BUILD_TYPE`, `CFD_ENABLE_OPENMP`, `CFD_ENABLE_MPI`,
+`CFD_ENABLE_NATIVE_ARCH`, `CFD_ENABLE_HDF5` (all default to a CPU/OpenMP build).
+
+```bash
+# Build the runtime image
+docker build -f Dockerfile -t cfd_solvers:dev .
+
+# Run a case
+docker run --rm -e OMP_NUM_THREADS=8 --entrypoint /cfd_solvers/build/cfd-solve \
+  cfd_solvers:dev lbm-d3q19-cpu
+docker run --rm --entrypoint /cfd_solvers/build/cfd-solve cfd_solvers:dev battery-dfn
+
+# docker compose: run / full CTest suite / MPI distributed case
+docker compose run cfd lbm-d3q19-cpu
+docker compose run --profile test cfd-test
+docker compose run --profile mpi cfd-mpi          # requires the MPI build
+```
+
+On Windows use the no-bash helper (`cfd-docker.bat` delegates to `cfd-docker.ps1`):
+
+```bat
+cfd-docker.bat build
+cfd-docker.bat run --threads 8 battery-dfn
+cfd-docker.bat test
+cfd-docker.bat mpi --ranks 4
+```
+
+`CFD_TAG` and `CFD_MPI=1` override the image tag and enable the MPI build.
 
 ## Benchmark
 

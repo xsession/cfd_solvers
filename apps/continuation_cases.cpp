@@ -28,6 +28,7 @@
 #include "cfd/workflow/campaign.hpp"
 #include "cfd/workflow/campaign_control.hpp"
 #include "cfd/workflow/deploy.hpp"
+#include "cfd/battery/dfn.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -994,6 +995,32 @@ int rf_multiwire(){
         <<" rotation_relative_error="<<relative_rotation<<'\n';
     return induced>driven*1.0e-6&&loaded.feed_current_a[0]<open.feed_current_a[0]&&relative_rotation<2.0e-10?0:1;
 }
+int battery_dfn(){
+    using namespace cfd::battery;
+    auto cfg=default_graphite_nmc_dfn_config();
+    cfg.transference_number=1.0; // close the global lithium balance for the regression
+    DoyleFullerNewmanModel cell(cfg);
+    const auto open=cell.state();
+    const double li0=cell.total_lithium_mol();
+    const int steps=96;
+    const double dt=1.0;
+    DfnStepResult last{};
+    for(int i=0;i<steps;++i) last=cell.step(0.5,dt);
+    const double li1=cell.total_lithium_mol();
+    const bool conservation=std::abs(li1-li0)<=std::max(1.0e-12,1.0e-9*std::abs(li0));
+    const bool discharge=last.negative_surface_stoichiometry<open.negative_surface_stoichiometry
+        &&last.positive_surface_stoichiometry>open.positive_surface_stoichiometry;
+    const bool voltage=last.terminal_voltage_v<last.open_circuit_voltage_v&&last.reaction_overpotential_v>0.0;
+    std::cout<<"case=battery-dfn nodes="<<cell.config().negative_nodes+cell.config().separator_nodes+cell.config().positive_nodes
+        <<" open_circuit_voltage_v="<<open.open_circuit_voltage_v
+        <<" terminal_voltage_v="<<last.terminal_voltage_v
+        <<" reaction_overpotential_v="<<last.reaction_overpotential_v
+        <<" lithium_conserved="<<conservation
+        <<" negative_surf_x="<<last.negative_surface_stoichiometry
+        <<" positive_surf_x="<<last.positive_surface_stoichiometry
+        <<" total_lithium_mol="<<li1<<'\n';
+    return conservation&&discharge&&voltage?0:1;
+}
 
 }
 
@@ -1047,5 +1074,6 @@ int run_continuation_case(std::string_view name){
     if(name=="spice-adaptive")return spice_adaptive();
     if(name=="spice-pss-pz")return spice_pss_pz();
     if(name=="rf-multiwire")return rf_multiwire();
+    if(name=="battery-dfn")return battery_dfn();
     return -1;
 }

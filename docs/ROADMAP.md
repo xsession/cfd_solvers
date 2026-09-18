@@ -96,6 +96,7 @@ Horizontal common-runtime references from the auditâ€”SUNDIALS, hypre and AMReXâ
 - v0.16.2: resident SYCL DEM neighbor/contact hot loop.
 - v0.16.3: bonded-particle damage/fracture plus distributed DEM ownership/migration/ghost-exchange foundations.
 - v0.16.4: distributed DEM contact ownership, persistent-history migration, reverse-force exchange and MPI timestep driver.
+- v0.19.3: Phase 16A completion with the full DFN/P2D distributed porous-electrode model, plus a Docker-based build/runtime and `docker compose` deployment system.
 
 
 ## Phase 14 - acoustics, ultrasound and photoacoustics [complete]
@@ -109,3 +110,7 @@ Series SPMe pack control and dissipative balancing now have deterministic valida
 ## Battery continuation v0.19.2
 
 3-D pack thermal fields and conservative SPMe electrothermal coupling are validated. Phase 16A now has one remaining item: full DFN/P2D.
+
+## Battery continuation v0.19.3
+
+The full Doyle-Fuller-Newman / P2D distributed porous-electrode model is implemented and validated: per-node spherical solid particles, distributed electrolyte concentration and ohmic/concentration polarization, and distributed solid/electrolyte potentials. This closes the last Phase 16A item (18/18). A Docker-based build/runtime image and `docker compose` deployment system were added alongside it.
