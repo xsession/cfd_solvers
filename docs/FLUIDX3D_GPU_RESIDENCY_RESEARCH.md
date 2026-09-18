@@ -268,3 +268,27 @@ The reacting seam intentionally starts with a compact one-step Arrhenius source 
 Phase 13 now has a resident spherical-DEM path that follows the same ownership rule as the LBM/FDTD/FVM accelerator work: evolving particle state remains device-owned through neighbor construction, contact evaluation and integration. A uniform grid is formed entirely on-device by atomic cell counts, a device prefix pass and compact bucket placement. Pair kernels inspect only 27 neighboring cells and process each pair once (`j > i`).
 
 Persistent Mindlin state is also kept on-device. Instead of requiring a globally concurrent pair hash, each lower-index particle owns a bounded history table keyed by its higher-index contact neighbors. This provides deterministic tangential spring memory without a host reconciliation pass. The current baseline is intentionally spherical/single-device and uses single-precision particle/contact storage; distributed halos, bonded fracture, non-spherical GPU collision and physical backend qualification remain open.
+
+
+## v0.16.5 GPU-aware distributed DEM transport result
+
+The resident DEM path now uses stable 64-bit global particle IDs as the persistence key for device contact history instead of local array indices. This matters for domain decomposition: compaction, sorting and rank migration can change local indices without destroying the identity of a Mindlin contact pair. Fixed-size history slots can be packed together with a migrating particle entirely on-device and restored after it is appended on the destination rank.
+
+`MpiResidentDemSyclExchange` adds two explicit transport modes. `staged_host` packs only migrant/halo records on the GPU, stages those compact records through host vectors, exchanges them with MPI, and copies only received compact records back to the accelerator. `direct_device` passes SYCL USM pointers directly to `MPI_Alltoallv`, but it requires an explicit caller opt-in because GPU-aware handling of SYCL USM is an MPI implementation/runtime property rather than a guarantee made by the MPI standard. Small per-rank count exchanges and scalar synchronizations remain on the host in both modes.
+
+After migration the owned particle arrays are compacted in device memory and incoming particle/history records are appended on-device. Ghost particles stay in a separate device buffer, and a one-byte boundary mask distinguishes particles that require halo data from interior particles. That mask is the scheduling seam for the next step: overlap interior contact kernels with boundary exchange, then run local<->ghost contacts and reverse force exchange after the halo arrives. This release therefore improves GPU-resident transport without claiming the distributed DEM tracker gate complete before real multi-rank GPU-aware MPI execution and resident ghost-force kernels exist.
+
+
+## v0.16.6 distributed resident DEM result
+
+The distributed DEM path now crosses the execution boundary left open in v0.16.5. Halo traffic is initiated with nonblocking `MPI_Ialltoallv` after compact device packing. While that transfer is active, the resident solver builds/uses the owned neighbor structure and evaluates the interior owned-owned contact partition. After halo completion, boundary owned-owned and local-ghost contacts run under the same history stamp, so persistent Mindlin state remains continuous rather than being split into independent substeps.
+
+Cross-rank contact ownership follows the same deterministic rule as the CPU distributed baseline: the rank owning the lower global particle ID evaluates the pair. Equal-and-opposite remote force/torque records are compacted by destination on-device, exchanged in staged-host or direct-device mode, and accumulated into the destination resident force arrays before integration. Bond records use canonical `(particle_a < particle_b)` ownership and migrate with `particle_a`, preserving tangential displacement, damage and fracture state across slab ownership changes.
+
+This is now an end-to-end *architectural* distributed resident timestep rather than only a transport seam. The remaining qualification gap is environmental, not a missing code path: the current environment cannot execute a real multi-rank GPU-aware MPI job on physical SYCL accelerators. The tracker therefore intentionally remains open until that runtime validation passes.
+
+## v0.16.7 resident CFD/DEM coupling result
+
+The resident execution model now crosses the solver-family boundary between FVM and DEM. `ResidentCfdDemSyclCoupler` projects particle volume to a device-resident Eulerian void-fraction field, computes particle drag/pressure/lift from resident FVM fields, accumulates those forces directly into resident DEM force arrays, and deposits the equal-and-opposite reaction into a persistent device-side FVM acceleration source. This extends the FluidX3D-inspired rule from "one solver owns its hot state" to "coupled solvers exchange hot state device-to-device".
+
+The current projection is a conservative nearest-cell baseline for general `PolyMesh`; higher-order compact kernels and particle-cell search acceleration are future optimization work. The resident path performs an O(Np*Nc) nearest-cell search today, so scalable production CFD/DEM should add a device spatial index or reuse a structured/block locator where available.

@@ -1,0 +1,3 @@
+#include "common/benchmark.hpp"
+#include "cfd/solvers/lbm/esoteric_pull.hpp"
+int main(int argc,char**argv){using namespace cfd::examples;const auto o=parse_options(argc,argv);const std::size_t n=o.quick?16U:48U*o.scale;const std::size_t steps=o.quick?5U:80U;Timer setup;cfd::lbm::InPlaceLbmConfig cfg{n,n,n,0.58F};cfg.smagorinsky_les=true;cfd::lbm::D3Q19Solver solver(cfg);solver.initialize_taylor_green(0.04F);const double setup_ms=setup.milliseconds();Timer sim;solver.step(steps);const double sim_ms=sim.milliseconds();const double checksum=solver.mass()+solver.kinetic_energy();emit({"phase02_lbm","taylor_green_d3q19","cpu","cell_steps",n*n*n,steps,setup_ms,sim_ms,double(n*n*n)*double(steps),checksum});return 0;}

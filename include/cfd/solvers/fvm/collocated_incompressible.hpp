@@ -69,6 +69,8 @@ public:
     // Installs one external AMG V-cycle (or equivalent SPD preconditioner) for
     // the matrix-free pressure correction equation. The callback must map r->z.
     void set_pressure_amg_cycle(std::function<void(std::span<const double>, std::span<double>)> apply);
+    void set_body_acceleration(std::span<const Vec3> acceleration);
+    void clear_body_acceleration() noexcept;
 
     // One pseudo-time SIMPLE iteration (one pressure solve sequence, relaxed).
     CollocatedIterationInfo iterate_simple();
@@ -108,6 +110,7 @@ private:
     std::vector<double> face_flux_;
     std::vector<double> pressure_rhs_;
     std::vector<double> pressure_face_coefficient_;
+    std::vector<Vec3> body_acceleration_;
     cfd::core::ConjugateGradientWorkspace pressure_workspace_;
     cfd::core::KrylovWorkspace pressure_krylov_workspace_;
     std::function<void(std::span<const double>, std::span<double>)> pressure_amg_cycle_;

@@ -215,6 +215,41 @@ void run_distributed_dem_exchange(const cfd::distributed::MpiCartesianRuntime& r
     if(global_ghosts!=expected) throw std::runtime_error("MPI DEM ghost exchange count regression");
 }
 
+void run_distributed_dem_contact_step(const cfd::distributed::MpiCartesianRuntime& runtime) {
+    using namespace cfd::multibody;
+    if(runtime.size()<2) return;
+    DemSlabDecomposition decomposition{0.0,static_cast<double>(runtime.size()),runtime.size()};
+    MpiDemDomainExchange exchange(decomposition,runtime.communicator());
+    std::vector<DistributedDemParticle> owned;
+    if(runtime.rank()==0){
+        DistributedDemParticle p; p.global_id=100;p.owner_rank=0;p.state.position={0.95,0,0};p.mass=1.0;p.radius=0.1;p.inertia_diagonal={0.004,0.004,0.004};owned.push_back(p);
+    }else if(runtime.rank()==1){
+        DistributedDemParticle p; p.global_id=200;p.owner_rank=1;p.state.position={1.05,0,0};p.mass=1.0;p.radius=0.1;p.inertia_diagonal={0.004,0.004,0.004};owned.push_back(p);
+    }
+    std::vector<DistributedDemContactHistory> history;
+    std::vector<DistributedDemBond> bonds;
+    HertzMindlinContactModel model; model.normal_stiffness=1.0e4;model.normal_damping=0.0;model.tangential_stiffness=100.0;model.tangential_damping=0.0;model.rolling_resistance=0.0;
+    const auto stats=exchange.step(owned,history,bonds,0.15,1.0e-4,{0,0,0},model);
+    unsigned long long local_contacts=static_cast<unsigned long long>(stats.contacts),global_contacts=0;
+    MPI_Allreduce(&local_contacts,&global_contacts,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,runtime.communicator());
+    if(global_contacts!=1ULL) throw std::runtime_error("MPI DEM cross-rank contact ownership regression");
+    double local_momentum=0.0;for(const auto& p:owned)local_momentum+=p.mass*p.state.linear_velocity.x;double global_momentum=0.0;
+    MPI_Allreduce(&local_momentum,&global_momentum,1,MPI_DOUBLE,MPI_SUM,runtime.communicator());
+    if(std::abs(global_momentum)>1.0e-10) throw std::runtime_error("MPI DEM reverse-force momentum regression");
+
+    // Move the lower-ID/history owner across the slab and ensure the persistent
+    // pair state follows it to rank 1 during the next ownership exchange.
+    if(runtime.rank()==0){for(auto& p:owned)if(p.global_id==100U)p.state.position.x=1.20;}
+    auto ghosts=exchange.exchange(owned,history,bonds,0.15);
+    (void)ghosts;
+    unsigned long long local_history=static_cast<unsigned long long>(history.size()),global_history=0;
+    MPI_Allreduce(&local_history,&global_history,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,runtime.communicator());
+    if(global_history!=1ULL) throw std::runtime_error("MPI DEM contact-history migration count regression");
+    if(runtime.rank()==1 && (history.size()!=1U || history.front().particle_a!=100U || history.front().particle_b!=200U)) {
+        throw std::runtime_error("MPI DEM contact history did not follow lower-ID owner");
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -225,6 +260,7 @@ int main(int argc, char** argv) {
         run_cpu_case<cfd::lbm::D3Q27Descriptor>(runtime);
         run_distributed_sparse_krylov(runtime);
         run_distributed_dem_exchange(runtime);
+        run_distributed_dem_contact_step(runtime);
 #if defined(CFD_HAS_SYCL)
         run_sycl_case<cfd::lbm::D3Q19Descriptor>(runtime);
         run_sycl_case<cfd::lbm::D3Q27Descriptor>(runtime);

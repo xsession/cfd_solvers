@@ -6,7 +6,7 @@
 #include <vector>
 
 namespace {void copy_error(char* out,size_t cap,const char* text){if(!out||cap==0U)return;const auto n=std::min(cap-1U,std::strlen(text));std::memcpy(out,text,n);out[n]='\0';}}
-extern "C" const char* cfd_solvers_version(void){return "0.16.3";}
+extern "C" const char* cfd_solvers_version(void){return "0.19.2";}
 extern "C" int cfd_write_xdmf_tri3(const char* path,const double* xy,size_t nodes,const size_t* tri,size_t triangles,const double* scalar,const char* name,char* error,size_t cap){
     try{
         if(!path||!xy||!tri||nodes==0U||triangles==0U)throw std::invalid_argument("path, coordinates and triangles are required");

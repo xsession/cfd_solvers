@@ -60,7 +60,7 @@ v0.8.0 provides a clean-room MNA baseline with passive elements, controlled sour
 
 ## Phase 13 - multibody, rigid bodies and granular dynamics
 
-v0.16.0 starts a Project-Chrono-class clean-room mechanics family: 6-DOF quaternion rigid bodies, Jacobian/PGS constraints, distance/spherical/revolute/prismatic/fixed/gear joints, sweep-and-prune plus BVH sphere collision, smooth penalty and nonsmooth impulse contact, and explicit spherical DEM with Hertz-type contact, friction, rolling resistance and cohesion. v0.16.1 adds bounded linear/angular motors, convex GJK/EPA, sphere-triangle mesh contact, persistent contact manifolds and a history-dependent Mindlin tangential spring. v0.16.2 adds resident SYCL spherical DEM with device cell-linked neighbor search/contact kernels. v0.16.3 adds progressive bonded-particle damage/fracture plus deterministic slab ownership, migration/ghost planning and MPI exchange foundations. Next priorities are real multi-rank distributed-contact validation, implicit HHT/generalized-alpha integration, articulated reduced coordinates, flexible-body coupling and CFD-DEM coupling.
+v0.16.0 starts a Project-Chrono-class clean-room mechanics family: 6-DOF quaternion rigid bodies, Jacobian/PGS constraints, distance/spherical/revolute/prismatic/fixed/gear joints, sweep-and-prune plus BVH sphere collision, smooth penalty and nonsmooth impulse contact, and explicit spherical DEM with Hertz-type contact, friction, rolling resistance and cohesion. v0.16.1 adds motors, GJK/EPA, triangle-mesh contact, persistent manifolds and Mindlin history; v0.16.2-v0.16.6 add resident GPU DEM and deterministic distributed contact/history/force-exchange infrastructure; v0.16.7 adds conservative resolved and unresolved CFD/DEM coupling. v0.16.8 adds nonlinear implicit Newmark/generalized-alpha/HHT integration, a coupled fixed-base reduced-coordinate articulated-tree solver, and conservative floating-frame FEM-interface kinematic/force transfer. Phase 13 is therefore algorithmically complete except for the intentionally open distributed-memory DEM qualification item, which still requires a real multi-rank GPU-aware MPI run.
 
 
 ## Planned solver-family expansion after Phase 13
@@ -95,3 +95,17 @@ Horizontal common-runtime references from the auditâ€”SUNDIALS, hypre and AMReXâ
 - v0.16.1: Phase-13 contact/collision maturity (motors, GJK/EPA, triangle mesh, persistent manifolds, Mindlin history).
 - v0.16.2: resident SYCL DEM neighbor/contact hot loop.
 - v0.16.3: bonded-particle damage/fracture plus distributed DEM ownership/migration/ghost-exchange foundations.
+- v0.16.4: distributed DEM contact ownership, persistent-history migration, reverse-force exchange and MPI timestep driver.
+
+
+## Phase 14 - acoustics, ultrasound and photoacoustics [complete]
+
+v0.17.0 introduced the project first dedicated Fourier-pseudospectral wave backend: radix-2 FFTs, spectral derivatives/fractional Laplacians, a 2-D first-order k-space acoustic solver, heterogeneous media, nonlinear B/A response, split-field PML, power-law attenuation, photoacoustic initial pressure, transducer/sensor arrays, beamforming and acoustic post-processing. v0.17.1 completes the phase with Dirichlet time reversal plus structural, CFD, Pennes bioheat, piezoelectric FEM and optimization/inverse-problem coupling baselines.
+
+## Battery continuation v0.19.1
+
+Series SPMe pack control and dissipative balancing now have deterministic validation. Remaining Phase 16A work is full DFN/P2D and 3-D battery thermal coupling.
+
+## Battery continuation v0.19.2
+
+3-D pack thermal fields and conservative SPMe electrothermal coupling are validated. Phase 16A now has one remaining item: full DFN/P2D.

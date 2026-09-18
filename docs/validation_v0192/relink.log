@@ -1,0 +1,9 @@
+[100%] Built target cfd_solvers
+[100%] Linking CXX executable cfd-v0165-gpu-aware-dem-exchange-tests
+[100%] Built target cfd-v0165-gpu-aware-dem-exchange-tests
+[100%] Built target cfd_solvers
+[100%] Linking CXX executable cfd-v0167-cfd-dem-coupling-tests
+[100%] Built target cfd-v0167-cfd-dem-coupling-tests
+[ 97%] Built target cfd_solvers
+[ 97%] Linking CXX executable cfd-v0168-advanced-multibody-tests
+[100%] Built target cfd-v0168-advanced-multibody-tests

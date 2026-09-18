@@ -65,7 +65,8 @@ CollocatedIncompressible::CollocatedIncompressible(PolyMesh mesh,
       pressure_(mesh_.cell_count(), 0.0),
       face_flux_(mesh_.face_count(), 0.0),
       pressure_rhs_(mesh_.cell_count(), 0.0),
-      pressure_face_coefficient_(mesh_.face_count(), 0.0) {
+      pressure_face_coefficient_(mesh_.face_count(), 0.0),
+      body_acceleration_(mesh_.cell_count()) {
     if (!(config_.density > 0.0) || !(config_.kinematic_viscosity >= 0.0) || !(config_.dt > 0.0) ||
         config_.momentum_sweeps == 0U || config_.momentum_iterations == 0U ||
         !(config_.momentum_tolerance > 0.0) || config_.pressure_iterations == 0U ||
@@ -122,6 +123,14 @@ void CollocatedIncompressible::set_pressure_amg_cycle(
     pressure_amg_cycle_ = std::move(apply);
     config_.pressure_preconditioner = PressurePreconditionerKind::external_amg;
 }
+
+void CollocatedIncompressible::set_body_acceleration(std::span<const Vec3> acceleration) {
+    if (acceleration.size()!=mesh_.cell_count()) throw std::invalid_argument("body acceleration size mismatch");
+    for (const auto& a:acceleration) if (!std::isfinite(a.x)||!std::isfinite(a.y)||!std::isfinite(a.z)) throw std::invalid_argument("non-finite body acceleration");
+    body_acceleration_.assign(acceleration.begin(),acceleration.end());
+}
+
+void CollocatedIncompressible::clear_body_acceleration() noexcept { std::fill(body_acceleration_.begin(),body_acceleration_.end(),Vec3{}); }
 
 bool CollocatedIncompressible::has_fixed_pressure_boundary() const noexcept {
     for (const auto& bc : pressure_boundary_) {
@@ -220,7 +229,7 @@ void CollocatedIncompressible::momentum_predictor(std::span<const Vec3> time_sou
         const double vdt = mesh_.cells()[cell].volume / config_.dt;
         Vec3 temporal = time_source[cell];
         if (use_bdf2) temporal = time_source[cell] * 2.0 - old_velocity_[cell] * 0.5;
-        Vec3 full_rhs = temporal * vdt + boundary_rhs[cell] - grad_p[cell] * mesh_.cells()[cell].volume;
+        Vec3 full_rhs = temporal * vdt + boundary_rhs[cell] - grad_p[cell] * mesh_.cells()[cell].volume + body_acceleration_[cell] * mesh_.cells()[cell].volume;
         if (theta < 1.0) {
             full_rhs.x -= (1.0 - theta) * spatial_old[0][cell];
             full_rhs.y -= (1.0 - theta) * spatial_old[1][cell];

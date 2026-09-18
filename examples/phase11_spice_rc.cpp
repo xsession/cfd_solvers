@@ -1,0 +1,3 @@
+#include "common/benchmark.hpp"
+#include "cfd/circuit/spice.hpp"
+int main(int argc,char**argv){using namespace cfd::examples;const auto o=parse_options(argc,argv);const std::size_t steps=o.quick?40U:20000U*o.scale;Timer setup;cfd::circuit::Circuit c;const auto in=c.node("in"),out=c.node("out");c.add_voltage_source("V",in,0,1.0);c.add_resistor("R",in,out,1000.0);c.add_capacitor("C",out,0,1e-6);const double setup_ms=setup.milliseconds();Timer sim;const auto tr=c.transient(1e-6,steps,cfd::circuit::TransientMethod::bdf2);const double sim_ms=sim.milliseconds();const double checksum=tr.back().node_voltage[out];emit({"phase11_spice","rc_transient_bdf2","cpu","time_steps",3U,steps,setup_ms,sim_ms,double(steps),checksum});return 0;}

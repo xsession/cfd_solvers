@@ -37,6 +37,18 @@ namespace cfd::fvm {
 
 #if defined(CFD_HAS_SYCL)
 
+
+struct ResidentPolyMeshDeviceView {
+    std::size_t cell_count{};
+    std::size_t face_count{};
+    const std::size_t* face_owner{};
+    const std::size_t* face_neighbour{};
+    const std::size_t* cell_face_offsets{};
+    const std::size_t* cell_face_indices{};
+    const double* cell_geometry{};
+    const double* face_geometry{};
+};
+
 // Device-resident mirror of the geometry/connectivity needed by the core FVM
 // operators. Vector fields use SoA layout: [x(0..N), y(0..N), z(0..N)].
 class ResidentPolyMeshSycl {
@@ -57,6 +69,7 @@ public:
     [[nodiscard]] std::size_t adjacency_count() const noexcept { return adjacency_count_; }
     [[nodiscard]] sycl::queue& queue() noexcept { return queue_; }
     [[nodiscard]] const sycl::queue& queue() const noexcept { return queue_; }
+    [[nodiscard]] ResidentPolyMeshDeviceView device_view() const noexcept;
 
     [[nodiscard]] std::size_t resident_bytes() const noexcept;
     [[nodiscard]] const cfd::core::DeviceTransferStats& transfer_stats() const noexcept {
@@ -142,7 +155,8 @@ public:
                                   bool include_convection,
                                   double* diagonal,
                                   double* mobility,
-                                  double* rhs_soa) const;
+                                  double* rhs_soa,
+                                  const double* acceleration_soa = nullptr) const;
     void momentum_jacobi_sweep(const double* current_velocity_soa,
                                const double* face_flux,
                                const std::uint8_t* boundary_kind,
@@ -362,6 +376,8 @@ public:
     [[nodiscard]] double* pressure_device() noexcept { return pressure_; }
     [[nodiscard]] double* face_flux_device() noexcept { return face_flux_; }
     [[nodiscard]] double* mobility_device() noexcept { return mobility_; }
+    [[nodiscard]] double* external_acceleration_device() noexcept { return external_acceleration_; }
+    void clear_external_acceleration();
     [[nodiscard]] double time() const noexcept { return time_; }
     [[nodiscard]] std::size_t steps() const noexcept { return steps_; }
 
@@ -404,6 +420,7 @@ private:
     double* mobility_{nullptr};
     double* momentum_diagonal_{nullptr};
     double* momentum_rhs_{nullptr};
+    double* external_acceleration_{nullptr};
     double* boundary_velocity_{nullptr};
     std::uint8_t* boundary_kind_{nullptr};
     double* boundary_fixed_{nullptr};

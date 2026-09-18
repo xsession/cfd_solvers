@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(cfd_solvers VERSION 0.16.3 LANGUAGES C CXX)
+project(cfd_solvers VERSION 0.19.2 LANGUAGES C CXX)
 
 option(CFD_ENABLE_OPENMP "Enable multicore CPU execution through OpenMP" ON)
 option(CFD_ENABLE_SYCL "Enable AdaptiveCpp/SYCL accelerator backend" OFF)
@@ -7,6 +7,7 @@ option(CFD_ENABLE_MPI "Enable MPI distributed-memory runtime" OFF)
 option(CFD_ENABLE_NATIVE_ARCH "Enable -march=native on supported compilers" ON)
 option(CFD_FAST_MATH "Enable aggressive floating-point optimizations" OFF)
 option(CFD_BUILD_TESTS "Build tests" ON)
+option(CFD_BUILD_EXAMPLES "Build practical benchmark examples" ON)
 option(CFD_ENABLE_HDF5 "Enable native HDF5 plus XDMF output" ON)
 option(CFD_BUILD_PYTHON_BINDINGS "Build the stable C ABI used by the Python ctypes package" ON)
 
@@ -32,6 +33,18 @@ add_library(cfd_solvers
     src/particle/wakefield.cpp
     src/multibody/multibody.cpp
     src/multibody/distributed_dem.cpp
+    src/multibody/cfd_dem_coupling.cpp
+    src/multibody/advanced_dynamics.cpp
+    src/spectral/fft.cpp
+    src/acoustics/kspace2d.cpp
+    src/acoustics/postprocess.cpp
+    src/acoustics/coupling.cpp
+    src/tcad/semiconductor1d.cpp
+    src/tcad/mos.cpp
+    src/tcad/bipolar_power.cpp
+    src/battery/lithium_ion.cpp
+    src/battery/pack.cpp
+    src/battery/thermal3d.cpp
     src/rf/network.cpp
     src/rf/nport.cpp
     src/rf/peec.cpp
@@ -78,6 +91,7 @@ add_library(cfd_solvers
     src/fvm/thermal_transport.cpp
     src/fvm/species_transport.cpp
     src/fem/dynamic_bar1d.cpp
+    src/fem/piezoelectric_bar1d.cpp
     src/fem/stokes2d.cpp
     src/fem/nonlinear_geometry.cpp
     src/fem/brinkman2d.cpp
@@ -109,6 +123,7 @@ add_library(cfd_solvers
     src/sycl/resident_fvm_sycl.cpp
     src/sycl/resident_rans_sycl.cpp
     src/sycl/resident_dem_sycl.cpp
+    src/sycl/resident_cfd_dem_coupling.cpp
     src/fvm/schemes.cpp
     src/fvm/pressure_velocity.cpp
     src/fvm/projection2d.cpp
@@ -234,7 +249,8 @@ if(CFD_ENABLE_MPI)
     find_package(MPI REQUIRED COMPONENTS CXX)
     target_sources(cfd_solvers PRIVATE src/distributed/mpi_runtime.cpp
         src/distributed/mpi_sparse.cpp
-        src/distributed/mpi_dem.cpp)
+        src/distributed/mpi_dem.cpp
+        src/distributed/mpi_resident_dem_sycl.cpp)
     target_link_libraries(cfd_solvers PUBLIC MPI::MPI_CXX)
     target_compile_definitions(cfd_solvers PUBLIC CFD_HAS_MPI=1)
 
@@ -258,8 +274,12 @@ if(CFD_ENABLE_SYCL)
         src/sycl/resident_fvm_sycl.cpp
         src/sycl/resident_rans_sycl.cpp
         src/sycl/resident_dem_sycl.cpp
+    src/sycl/resident_cfd_dem_coupling.cpp
         src/sycl/voxelize_sycl.cpp
     )
+    if(CFD_ENABLE_MPI)
+        add_sycl_to_target(TARGET cfd_solvers SOURCES src/distributed/mpi_resident_dem_sycl.cpp)
+    endif()
     if(TARGET cfd-distributed)
         add_sycl_to_target(TARGET cfd-distributed SOURCES apps/cfd-distributed.cpp)
     endif()
@@ -283,8 +303,58 @@ if(CFD_ENABLE_SYCL)
     add_sycl_to_target(TARGET cfd-bench SOURCES apps/cfd-bench.cpp)
 endif()
 
+if(CFD_BUILD_EXAMPLES)
+    add_executable(cfd-example-battery-thermal examples/battery_thermal_pack.cpp)
+    target_link_libraries(cfd-example-battery-thermal PRIVATE cfd::solvers)
+    add_executable(cfd-example-battery-pack examples/battery_series_pack.cpp)
+    target_link_libraries(cfd-example-battery-pack PRIVATE cfd::solvers)
+    set(CFD_EXAMPLE_TARGETS
+        cfd-example-phase01-hpc
+        cfd-example-phase02-lbm
+        cfd-example-phase03-fvm
+        cfd-example-phase04-fem
+        cfd-example-phase05-fdtd
+        cfd-example-phase06-optics
+        cfd-example-phase07-chemistry-corrosion
+        cfd-example-phase08-multiphysics
+        cfd-example-phase10-rf
+        cfd-example-phase11-spice
+        cfd-example-phase12-em-pic
+        cfd-example-phase13-dem
+        cfd-example-phase14-acoustics
+        cfd-example-phase15-tcad
+        cfd-example-phase16a-battery)
+    set(CFD_EXAMPLE_SOURCES
+        examples/phase01_hpc_multigrid.cpp
+        examples/phase02_lbm_taylor_green.cpp
+        examples/phase03_fvm_lid_cavity.cpp
+        examples/phase04_fem_dynamic_bar.cpp
+        examples/phase05_fdtd_pulse.cpp
+        examples/phase06_optics_lens.cpp
+        examples/phase07_chemistry_corrosion.cpp
+        examples/phase08_multiphysics_joule.cpp
+        examples/phase10_rf_sweep.cpp
+        examples/phase11_spice_rc.cpp
+        examples/phase12_em_pic.cpp
+        examples/phase13_dem_settling.cpp
+        examples/phase14_acoustics_photoacoustic.cpp
+        examples/phase15_tcad_pn.cpp
+        examples/phase16a_battery_drive_cycle.cpp)
+    list(LENGTH CFD_EXAMPLE_TARGETS _cfd_example_count)
+    math(EXPR _cfd_example_last "${_cfd_example_count} - 1")
+    foreach(_i RANGE 0 ${_cfd_example_last})
+        list(GET CFD_EXAMPLE_TARGETS ${_i} _target)
+        list(GET CFD_EXAMPLE_SOURCES ${_i} _source)
+        add_executable(${_target} ${_source})
+        target_link_libraries(${_target} PRIVATE cfd::solvers)
+        target_include_directories(${_target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/examples)
+        target_compile_definitions(${_target} PRIVATE CFD_SOLVERS_VERSION="${PROJECT_VERSION}")
+    endforeach()
+endif()
+
 include(CTest)
 if(CFD_BUILD_TESTS AND BUILD_TESTING)
+    find_package(Python3 QUIET COMPONENTS Interpreter)
     add_executable(cfd-tests tests/test_main.cpp)
     target_link_libraries(cfd-tests PRIVATE cfd::solvers)
     if(CFD_ENABLE_SYCL)
@@ -490,8 +560,79 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     add_executable(cfd-v0163-bonded-distributed-dem-tests tests/test_v0163_bonded_distributed_dem.cpp)
     target_link_libraries(cfd-v0163-bonded-distributed-dem-tests PRIVATE cfd::solvers)
     add_test(NAME cfd-v0163-bonded-distributed-dem-tests COMMAND cfd-v0163-bonded-distributed-dem-tests)
+
+    add_executable(cfd-v0164-distributed-contact-tests tests/test_v0164_distributed_contact.cpp)
+    target_link_libraries(cfd-v0164-distributed-contact-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0164-distributed-contact-tests COMMAND cfd-v0164-distributed-contact-tests)
+
+    add_executable(cfd-v0165-gpu-aware-dem-exchange-tests tests/test_v0165_gpu_aware_dem_exchange.cpp)
+    target_link_libraries(cfd-v0165-gpu-aware-dem-exchange-tests PRIVATE cfd::solvers)
+    if(CFD_ENABLE_SYCL)
+        add_sycl_to_target(TARGET cfd-v0165-gpu-aware-dem-exchange-tests SOURCES tests/test_v0165_gpu_aware_dem_exchange.cpp)
+    endif()
+    add_test(NAME cfd-v0165-gpu-aware-dem-exchange-tests COMMAND cfd-v0165-gpu-aware-dem-exchange-tests)
+
+    add_executable(cfd-v0166-distributed-resident-dem-tests tests/test_v0166_distributed_resident_dem.cpp)
+    target_link_libraries(cfd-v0166-distributed-resident-dem-tests PRIVATE cfd::solvers)
+    if(CFD_ENABLE_SYCL)
+        add_sycl_to_target(TARGET cfd-v0166-distributed-resident-dem-tests SOURCES tests/test_v0166_distributed_resident_dem.cpp)
+    endif()
+    add_test(NAME cfd-v0166-distributed-resident-dem-tests COMMAND cfd-v0166-distributed-resident-dem-tests)
+
+    add_executable(cfd-v0167-cfd-dem-coupling-tests tests/test_v0167_cfd_dem_coupling.cpp)
+    target_link_libraries(cfd-v0167-cfd-dem-coupling-tests PRIVATE cfd::solvers)
+    if(CFD_ENABLE_SYCL)
+        add_sycl_to_target(TARGET cfd-v0167-cfd-dem-coupling-tests SOURCES tests/test_v0167_cfd_dem_coupling.cpp)
+    endif()
+    add_test(NAME cfd-v0167-cfd-dem-coupling-tests COMMAND cfd-v0167-cfd-dem-coupling-tests)
+
+    add_executable(cfd-v0168-advanced-multibody-tests tests/test_v0168_advanced_multibody.cpp)
+    target_link_libraries(cfd-v0168-advanced-multibody-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0168-advanced-multibody-tests COMMAND cfd-v0168-advanced-multibody-tests)
+
+    add_executable(cfd-v0170-acoustics-tests tests/test_v0170_acoustics.cpp)
+    target_link_libraries(cfd-v0170-acoustics-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0170-acoustics-tests COMMAND cfd-v0170-acoustics-tests)
+    add_executable(cfd-v0171-acoustic-multiphysics-tests tests/test_v0171_acoustic_multiphysics.cpp)
+    target_link_libraries(cfd-v0171-acoustic-multiphysics-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0171-acoustic-multiphysics-tests COMMAND cfd-v0171-acoustic-multiphysics-tests)
+    add_executable(cfd-v0180-tcad-tests tests/test_v0180_tcad.cpp)
+    target_link_libraries(cfd-v0180-tcad-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0180-tcad-tests COMMAND cfd-v0180-tcad-tests)
+
+    add_executable(cfd-v0181-tcad-analysis-tests tests/test_v0181_tcad_analysis.cpp)
+    target_link_libraries(cfd-v0181-tcad-analysis-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0181-tcad-analysis-tests COMMAND cfd-v0181-tcad-analysis-tests)
+
+    add_executable(cfd-v0182-tcad-mos-tests tests/test_v0182_tcad_mos.cpp)
+    target_link_libraries(cfd-v0182-tcad-mos-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0182-tcad-mos-tests COMMAND cfd-v0182-tcad-mos-tests)
+
+    add_executable(cfd-v0183-tcad-bipolar-power-tests tests/test_v0183_tcad_bipolar_power.cpp)
+    target_link_libraries(cfd-v0183-tcad-bipolar-power-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0183-tcad-bipolar-power-tests COMMAND cfd-v0183-tcad-bipolar-power-tests)
+
+    add_executable(cfd-v0192-thermal-tests tests/test_v0192_thermal.cpp)
+    target_link_libraries(cfd-v0192-thermal-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0192-thermal-tests COMMAND cfd-v0192-thermal-tests)
+
+    add_executable(cfd-v0191-pack-tests tests/test_v0191_pack.cpp)
+    target_link_libraries(cfd-v0191-pack-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0191-pack-tests COMMAND cfd-v0191-pack-tests)
+
+    add_executable(cfd-v0190-battery-tests tests/test_v0190_battery.cpp)
+    target_link_libraries(cfd-v0190-battery-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-v0190-battery-tests COMMAND cfd-v0190-battery-tests)
+    if(CFD_BUILD_EXAMPLES AND Python3_Interpreter_FOUND)
+        add_test(
+            NAME cfd-v0190-example-benchmark-smoke
+            COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/examples/run_benchmarks.py
+                    --build-dir ${CMAKE_CURRENT_BINARY_DIR}
+                    --quick --repeat 1
+                    --output ${CMAKE_CURRENT_BINARY_DIR}/v0190_example_benchmark_smoke.json)
+    endif()
     if(CFD_BUILD_PYTHON_BINDINGS)
-        find_package(Python3 QUIET COMPONENTS Interpreter)
         if(Python3_Interpreter_FOUND)
             add_test(NAME cfd-v0130-python-binding-smoke COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_python_bindings.py $<TARGET_FILE:cfd_solvers_capi> ${CMAKE_CURRENT_SOURCE_DIR}/python)
         endif()
@@ -516,6 +657,11 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
         add_sycl_to_target(TARGET cfd-sanitize-smoke SOURCES tests/test_sanitize_smoke.cpp)
     endif()
     add_test(NAME cfd-sanitize-smoke COMMAND cfd-sanitize-smoke)
+    if(CFD_BUILD_EXAMPLES)
+        foreach(_target IN LISTS CFD_EXAMPLE_TARGETS)
+            add_test(NAME ${_target}-smoke COMMAND ${_target} --quick)
+        endforeach()
+    endif()
     add_test(NAME cfd-bench-smoke COMMAND cfd-bench --lattice d3q19 --nx 8 --ny 8 --nz 8 --warmup 1 --steps 2 --threads 1 --csv)
     add_test(NAME cfd-bench-json-smoke COMMAND cfd-bench --lattice d3q19 --nx 8 --ny 8 --nz 8 --warmup 1 --steps 2 --threads 1 --json)
     add_test(NAME cfd-halo-plan-smoke COMMAND cfd-halo-plan --lattice d3q27 --nx 8 --ny 8 --nz 8)

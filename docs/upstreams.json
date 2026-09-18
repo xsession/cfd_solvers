@@ -213,6 +213,35 @@
       "license_source": "LICENSE / repository metadata",
       "tracker_phase": 13,
       "integration": "permissive multibody/contact/DEM capability and validation reference; independent cfd_solvers implementation"
+    },
+    {
+      "name": "k-Wave",
+      "repository": "https://github.com/ucl-bug/k-wave",
+      "branch": "main",
+      "commit": "94e558318b4ab7c583b63c50b7e9b574556dc159",
+      "license": "LGPL-3.0",
+      "license_source": "LICENSE.txt / repository README",
+      "tracker_phase": 14,
+      "integration": "clean-room k-space pseudospectral acoustics, nonlinear/heterogeneous propagation, power-law absorption, PML and photoacoustic workflow capability reference; no source translation"
+    },
+    {
+      "name": "DEVSIM",
+      "repository": "https://github.com/devsim/devsim",
+      "branch": "main",
+      "commit": "43b41ca845184c47e22b72d144db7e7db8509377",
+      "license": "Apache-2.0",
+      "license_source": "LICENSE / repository README",
+      "license_blob_sha": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+      "tracker_phase": 15,
+      "integration": "permissive TCAD capability/API/validation reference for Poisson + carrier drift-diffusion, DC/AC/transient workflows and device structures; independent cfd_solvers implementation"
+    },
+    {
+      "name": "PyBaMM",
+      "repository": "https://github.com/pybamm-team/PyBaMM",
+      "commit": "71d9ff424f876debe67132b86f900d77e511fe8e",
+      "tracker_phase": "16A",
+      "license": "BSD-3-Clause",
+      "role": "clean-room battery capability and validation reference"
     }
   ]
 }

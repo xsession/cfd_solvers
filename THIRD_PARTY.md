@@ -100,3 +100,21 @@ Exact research pins are recorded in `docs/upstreams.json`.
 - Xyce — GPL-3.0; clean-room capability reference for scalable DAE, harmonic balance and Verilog-A workflows.
 - QucsatorRF — GPL-2.0; clean-room RF-network/circuit capability reference.
 - OpenVAF/OSDI — external Verilog-A/compact-model toolchain/interface target. The core only implements an independent loader/adapter boundary; OpenVAF source is not vendored.
+
+### k-Wave
+- Reference: https://github.com/ucl-bug/k-wave
+- Pinned reference commit: `94e558318b4ab7c583b63c50b7e9b574556dc159`
+- License: LGPL-3.0.
+- Usage in this repository: clean-room capability and numerical-method reference for Phase 14 only. No k-Wave source is copied or translated into the core implementation.
+
+### DEVSIM
+- Reference: https://github.com/devsim/devsim
+- Pinned reference commit: `43b41ca845184c47e22b72d144db7e7db8509377`
+- License: Apache-2.0 (`LICENSE` blob `d645695673349e3947e8e5ae42332d0ac3164cd7`).
+- Usage in this repository: permissive clean-room capability/API/validation reference for Phase 15 semiconductor TCAD. The new C++ drift-diffusion implementation is independently written from standard semiconductor equations and Scharfetter-Gummel mathematics.
+
+### PyBaMM
+- Reference: https://github.com/pybamm-team/PyBaMM
+- Pinned reference commit: `71d9ff424f876debe67132b86f900d77e511fe8e`
+- License: BSD 3-Clause (`LICENSE.txt` blob `db0e12049e3444deb75c95ce9a5a8d0fcebc6f99`).
+- Usage in this repository: clean-room capability and validation reference for Phase 16A battery models. The SPM/SPMe, thermal, degradation, EIS, and drive-cycle C++ implementation is independently written from standard battery equations and public documentation.

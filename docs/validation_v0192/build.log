@@ -1,0 +1,219 @@
+CMake Warning at CMakeLists.txt:199 (message):
+  HDF5 requested but not found; inline XDMF remains available
+
+
+-- Configuring done (0.2s)
+-- Generating done (0.2s)
+-- Build files have been written to: /workspace/scratch/0720baa3e4a2/work/cfd_solvers-v0.19.0/build
+[  1%] Built target cfd-osdi-fixture
+[  1%] Building CXX object CMakeFiles/cfd_solvers.dir/src/battery/lithium_ion.cpp.o
+[  2%] Building CXX object CMakeFiles/cfd_solvers.dir/src/battery/thermal3d.cpp.o
+[  2%] Building CXX object CMakeFiles/cfd_solvers.dir/src/battery/pack.cpp.o
+[  2%] Linking CXX static library libcfd_solvers.a
+[ 49%] Built target cfd_solvers
+[ 49%] Building CXX object CMakeFiles/cfd_solvers_capi.dir/src/python/c_api.cpp.o
+[ 50%] Linking CXX executable cfd-halo-plan
+[ 50%] Linking CXX executable cfd-validate
+[ 51%] Linking CXX executable cfd-solve
+[ 51%] Building CXX object CMakeFiles/cfd-example-battery-pack.dir/examples/battery_series_pack.cpp.o
+[ 51%] Linking CXX executable cfd-bench
+[ 51%] Built target cfd-halo-plan
+[ 51%] Built target cfd-validate
+[ 51%] Building CXX object CMakeFiles/cfd-example-phase01-hpc.dir/examples/phase01_hpc_multigrid.cpp.o
+[ 52%] Building CXX object CMakeFiles/cfd-example-phase02-lbm.dir/examples/phase02_lbm_taylor_green.cpp.o
+[ 52%] Built target cfd-bench
+[ 52%] Building CXX object CMakeFiles/cfd-example-phase03-fvm.dir/examples/phase03_fvm_lid_cavity.cpp.o
+[ 52%] Built target cfd-solve
+[ 53%] Building CXX object CMakeFiles/cfd-example-phase04-fem.dir/examples/phase04_fem_dynamic_bar.cpp.o
+[ 54%] Linking CXX executable cfd-example-battery-pack
+[ 54%] Built target cfd-example-battery-pack
+[ 54%] Building CXX object CMakeFiles/cfd-example-phase05-fdtd.dir/examples/phase05_fdtd_pulse.cpp.o
+[ 55%] Linking CXX shared library libcfd_solvers_capi.so
+[ 55%] Built target cfd_solvers_capi
+[ 55%] Building CXX object CMakeFiles/cfd-example-phase06-optics.dir/examples/phase06_optics_lens.cpp.o
+[ 55%] Linking CXX executable cfd-example-phase01-hpc
+[ 55%] Built target cfd-example-phase01-hpc
+[ 55%] Building CXX object CMakeFiles/cfd-example-phase07-chemistry-corrosion.dir/examples/phase07_chemistry_corrosion.cpp.o
+[ 55%] Linking CXX executable cfd-example-phase04-fem
+[ 55%] Built target cfd-example-phase04-fem
+[ 55%] Building CXX object CMakeFiles/cfd-example-phase08-multiphysics.dir/examples/phase08_multiphysics_joule.cpp.o
+[ 55%] Linking CXX executable cfd-example-phase03-fvm
+[ 55%] Built target cfd-example-phase03-fvm
+[ 55%] Building CXX object CMakeFiles/cfd-example-phase10-rf.dir/examples/phase10_rf_sweep.cpp.o
+[ 56%] Linking CXX executable cfd-example-phase05-fdtd
+[ 56%] Built target cfd-example-phase05-fdtd
+[ 56%] Building CXX object CMakeFiles/cfd-example-phase11-spice.dir/examples/phase11_spice_rc.cpp.o
+[ 56%] Linking CXX executable cfd-example-phase02-lbm
+[ 56%] Linking CXX executable cfd-example-phase06-optics
+[ 56%] Built target cfd-example-phase02-lbm
+[ 57%] Building CXX object CMakeFiles/cfd-example-phase12-em-pic.dir/examples/phase12_em_pic.cpp.o
+[ 57%] Built target cfd-example-phase06-optics
+[ 57%] Building CXX object CMakeFiles/cfd-example-phase13-dem.dir/examples/phase13_dem_settling.cpp.o
+[ 58%] Linking CXX executable cfd-example-phase07-chemistry-corrosion
+[ 58%] Built target cfd-example-phase07-chemistry-corrosion
+[ 59%] Building CXX object CMakeFiles/cfd-example-phase14-acoustics.dir/examples/phase14_acoustics_photoacoustic.cpp.o
+[ 60%] Linking CXX executable cfd-example-phase10-rf
+[ 60%] Built target cfd-example-phase10-rf
+[ 60%] Building CXX object CMakeFiles/cfd-example-phase15-tcad.dir/examples/phase15_tcad_pn.cpp.o
+[ 60%] Linking CXX executable cfd-example-phase08-multiphysics
+[ 60%] Linking CXX executable cfd-example-phase12-em-pic
+[ 60%] Built target cfd-example-phase08-multiphysics
+[ 60%] Built target cfd-example-phase12-em-pic
+[ 60%] Building CXX object CMakeFiles/cfd-example-phase16a-battery.dir/examples/phase16a_battery_drive_cycle.cpp.o
+[ 60%] Linking CXX executable cfd-tests
+[ 60%] Linking CXX executable cfd-example-phase13-dem
+[ 61%] Built target cfd-tests
+[ 62%] Linking CXX executable cfd-completion-tests
+[ 62%] Built target cfd-example-phase13-dem
+[ 62%] Linking CXX executable cfd-spice-io-tests
+[ 62%] Linking CXX executable cfd-example-phase11-spice
+[ 62%] Built target cfd-completion-tests
+[ 62%] Built target cfd-spice-io-tests
+[ 62%] Linking CXX executable cfd-next-analysis-tests
+[ 62%] Linking CXX executable cfd-cst-expansion-tests
+[ 62%] Built target cfd-example-phase11-spice
+[ 62%] Linking CXX executable cfd-v091-sanitize-smoke
+[ 62%] Built target cfd-next-analysis-tests
+[ 62%] Built target cfd-cst-expansion-tests
+[ 62%] Linking CXX executable cfd-v092-expansion-tests
+[ 63%] Linking CXX executable cfd-v093-em-pic-tests
+[ 63%] Built target cfd-v091-sanitize-smoke
+[ 63%] Linking CXX executable cfd-v094-pic2d-tests
+[ 63%] Built target cfd-v093-em-pic-tests
+[ 64%] Linking CXX executable cfd-v095-em-pic2d-tests
+[ 65%] Built target cfd-v092-expansion-tests
+[ 65%] Linking CXX executable cfd-v096-staggered-pic2d-tests
+[ 65%] Built target cfd-v094-pic2d-tests
+[ 65%] Linking CXX executable cfd-v097-pic3d-tests
+[ 65%] Built target cfd-v095-em-pic2d-tests
+[ 65%] Built target cfd-v096-staggered-pic2d-tests
+[ 65%] Linking CXX executable cfd-v098-em-pic3d-tests
+[ 65%] Linking CXX executable cfd-v099-staggered-pic3d-tests
+[ 66%] Built target cfd-v097-pic3d-tests
+[ 66%] Linking CXX executable cfd-example-phase14-acoustics
+[ 66%] Built target cfd-v098-em-pic3d-tests
+[ 67%] Built target cfd-v099-staggered-pic3d-tests
+[ 67%] Linking CXX executable cfd-v0100-local-current-tests
+[ 67%] Linking CXX executable cfd-v0101-particle-sorting-tests
+[ 67%] Linking CXX executable cfd-v0102-domain-exchange-tests
+[ 67%] Built target cfd-v0100-local-current-tests
+[ 67%] Built target cfd-v0102-domain-exchange-tests
+[ 67%] Built target cfd-example-phase14-acoustics
+[ 67%] Linking CXX executable cfd-v0103-comm-exchange-tests
+[ 68%] Linking CXX executable cfd-v0104-transport-tests
+[ 69%] Linking CXX executable cfd-v0105-serialized-transport-tests
+[ 70%] Built target cfd-v0101-particle-sorting-tests
+[ 70%] Linking CXX executable cfd-v0105-plasma-tests
+[ 71%] Built target cfd-v0103-comm-exchange-tests
+[ 71%] Linking CXX executable cfd-v0106-distributed-round-tests
+[ 71%] Built target cfd-v0105-plasma-tests
+[ 71%] Built target cfd-v0104-transport-tests
+[ 71%] Linking CXX executable cfd-v0107-distributed-step-tests
+[ 71%] Built target cfd-v0105-serialized-transport-tests
+[ 71%] Linking CXX executable cfd-v0108-geant4-transport-tests
+[ 71%] Linking CXX executable cfd-v0109-transport-campaign-tests
+[ 71%] Built target cfd-v0106-distributed-round-tests
+[ 71%] Linking CXX executable cfd-v0110-campaign-execution-tests
+[ 72%] Built target cfd-v0107-distributed-step-tests
+[ 72%] Built target cfd-v0108-geant4-transport-tests
+[ 72%] Linking CXX executable cfd-v0111-local-campaign-runner-tests
+[ 73%] Linking CXX executable cfd-v0112-campaign-control-tests
+[ 74%] Built target cfd-v0109-transport-campaign-tests
+[ 74%] Linking CXX executable cfd-v0113-multiserver-deploy-tests
+[ 74%] Built target cfd-v0110-campaign-execution-tests
+[ 75%] Linking CXX executable cfd-v0114-multiserver-execution-tests
+[ 76%] Built target cfd-v0111-local-campaign-runner-tests
+[ 76%] Built target cfd-v0112-campaign-control-tests
+[ 76%] Linking CXX executable cfd-v0115-multiserver-supervision-tests
+[ 76%] Linking CXX executable cfd-v0116-multiserver-controller-tests
+[ 76%] Built target cfd-v0114-multiserver-execution-tests
+[ 76%] Built target cfd-v0113-multiserver-deploy-tests
+[ 77%] Linking CXX executable cfd-example-phase15-tcad
+[ 77%] Linking CXX executable cfd-v0117-controller-dashboard-tests
+[ 77%] Linking CXX executable cfd-v0118-controller-sse-tests
+[ 77%] Built target cfd-v0115-multiserver-supervision-tests
+[ 77%] Built target cfd-v0117-controller-dashboard-tests
+[ 77%] Built target cfd-example-phase15-tcad
+[ 78%] Built target cfd-v0116-multiserver-controller-tests
+[ 78%] Linking CXX executable cfd-v0120-production-controller-tests
+[ 78%] Linking CXX executable cfd-v0130-xdmf-python-tests
+[ 78%] Linking CXX executable cfd-v0141-lbm-les-qcriterion-tests
+[ 79%] Linking CXX executable cfd-v0140-hpc-runtime-tests
+[ 80%] Built target cfd-v0118-controller-sse-tests
+[ 81%] Linking CXX executable cfd-v0142-portability-tests
+[ 81%] Built target cfd-v0120-production-controller-tests
+[ 81%] Built target cfd-v0140-hpc-runtime-tests
+[ 81%] Linking CXX executable cfd-v0150-fvm-temporal-pressure-tests
+[ 81%] Linking CXX executable cfd-v0151-thermal-coupling-tests
+[ 81%] Built target cfd-v0142-portability-tests
+[ 82%] Built target cfd-v0130-xdmf-python-tests
+[ 82%] Built target cfd-v0141-lbm-les-qcriterion-tests
+[ 82%] Linking CXX executable cfd-v0151-fvm-hdf5-checkpoint-tests
+[ 82%] Linking CXX executable cfd-v0152-rans-transport-tests
+[ 83%] Linking CXX executable cfd-v0153-fvm-amr-tests
+[ 83%] Built target cfd-v0151-thermal-coupling-tests
+[ 83%] Linking CXX executable cfd-v0154-compressible-weno-tests
+[ 83%] Built target cfd-v0150-fvm-temporal-pressure-tests
+[ 84%] Linking CXX executable cfd-v0155-gpu-residency-tests
+[ 85%] Built target cfd-v0151-fvm-hdf5-checkpoint-tests
+[ 85%] Linking CXX executable cfd-example-phase16a-battery
+[ 85%] Built target cfd-v0153-fvm-amr-tests
+[ 86%] Built target cfd-v0152-rans-transport-tests
+[ 86%] Linking CXX executable cfd-v0156-gpu-lbm-multiphysics-tests
+[ 86%] Linking CXX executable cfd-v0157-gpu-fdtd-residency-tests
+[ 86%] Linking CXX executable cfd-v0158-gpu-fvm-residency-tests
+[ 86%] Built target cfd-v0154-compressible-weno-tests
+[ 86%] Built target cfd-v0155-gpu-residency-tests
+[ 86%] Linking CXX executable cfd-v0159-resident-incompressible-sycl-tests
+[ 86%] Linking CXX executable cfd-v01510-resident-krylov-scalar-tests
+[ 86%] Built target cfd-v0156-gpu-lbm-multiphysics-tests
+[ 86%] Built target cfd-example-phase16a-battery
+[ 87%] Built target cfd-v0157-gpu-fdtd-residency-tests
+[ 87%] Linking CXX executable cfd-v01511-resident-rans-tests
+[ 87%] Linking CXX executable cfd-v0160-multibody-dem-tests
+[ 87%] Built target cfd-v0158-gpu-fvm-residency-tests
+[ 87%] Linking CXX executable cfd-v0161-contact-maturity-tests
+[ 88%] Linking CXX executable cfd-v0162-resident-dem-sycl-tests
+[ 89%] Built target cfd-v0159-resident-incompressible-sycl-tests
+[ 90%] Built target cfd-v01510-resident-krylov-scalar-tests
+[ 90%] Linking CXX executable cfd-v0163-bonded-distributed-dem-tests
+[ 91%] Linking CXX executable cfd-v0164-distributed-contact-tests
+[ 91%] Built target cfd-v0160-multibody-dem-tests
+[ 92%] Built target cfd-v0161-contact-maturity-tests
+[ 92%] Built target cfd-v01511-resident-rans-tests
+[ 92%] Linking CXX executable cfd-v0165-gpu-aware-dem-exchange-tests
+[ 92%] Linking CXX executable cfd-v0166-distributed-resident-dem-tests
+[ 92%] Linking CXX executable cfd-v0167-cfd-dem-coupling-tests
+[ 92%] Built target cfd-v0163-bonded-distributed-dem-tests
+[ 92%] Built target cfd-v0164-distributed-contact-tests
+[ 92%] Built target cfd-v0162-resident-dem-sycl-tests
+[ 92%] Linking CXX executable cfd-v0170-acoustics-tests
+[ 92%] Linking CXX executable cfd-v0168-advanced-multibody-tests
+[ 93%] Built target cfd-v0166-distributed-resident-dem-tests
+[ 93%] Linking CXX executable cfd-v0171-acoustic-multiphysics-tests
+[ 93%] Built target cfd-v0165-gpu-aware-dem-exchange-tests
+[ 94%] Linking CXX executable cfd-v0180-tcad-tests
+[ 94%] Built target cfd-v0167-cfd-dem-coupling-tests
+[ 94%] Linking CXX executable cfd-v0181-tcad-analysis-tests
+[ 95%] Linking CXX executable cfd-v0182-tcad-mos-tests
+[ 96%] Built target cfd-v0168-advanced-multibody-tests
+[ 96%] Linking CXX executable cfd-v0183-tcad-bipolar-power-tests
+[ 96%] Built target cfd-v0170-acoustics-tests
+[ 97%] Built target cfd-v0171-acoustic-multiphysics-tests
+[ 98%] Building CXX object CMakeFiles/cfd-v0192-thermal-tests.dir/tests/test_v0192_thermal.cpp.o
+[ 98%] Built target cfd-v0181-tcad-analysis-tests
+[ 98%] Built target cfd-v0180-tcad-tests
+[ 98%] Building CXX object CMakeFiles/cfd-v0191-pack-tests.dir/tests/test_v0191_pack.cpp.o
+[ 98%] Built target cfd-v0182-tcad-mos-tests
+[ 99%] Building CXX object CMakeFiles/cfd-v0190-battery-tests.dir/tests/test_v0190_battery.cpp.o
+[ 99%] Linking CXX executable cfd-osdi-tests
+[ 99%] Linking CXX executable cfd-sanitize-smoke
+[ 99%] Built target cfd-v0183-tcad-bipolar-power-tests
+[ 99%] Built target cfd-osdi-tests
+[100%] Built target cfd-sanitize-smoke
+[100%] Linking CXX executable cfd-v0190-battery-tests
+[100%] Built target cfd-v0190-battery-tests
+[100%] Linking CXX executable cfd-v0191-pack-tests
+[100%] Built target cfd-v0191-pack-tests
+[100%] Linking CXX executable cfd-v0192-thermal-tests
+[100%] Built target cfd-v0192-thermal-tests

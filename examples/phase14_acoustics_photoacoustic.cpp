@@ -1,0 +1,4 @@
+#include "common/benchmark.hpp"
+#include "cfd/acoustics/kspace2d.hpp"
+#include <algorithm>
+int main(int argc,char**argv){using namespace cfd::examples;const auto o=parse_options(argc,argv);const std::size_t n=o.quick?32U:128U*o.scale,steps=o.quick?8U:160U;Timer setup;cfd::acoustics::KSpace2DConfig cfg;cfg.nx=n;cfg.ny=n;cfg.dx=1e-4;cfg.dy=1e-4;cfg.cfl=0.18;cfg.pml_cells=std::min<std::size_t>(12U,n/4U);cfd::acoustics::KSpaceAcoustic2D a(cfg);a.set_uniform_medium(1540.0,1000.0);a.set_uniform_nonlinearity(6.0);a.set_power_law_absorption({0.4,1.2,1e6});a.initialize_gaussian_pressure(0.5,0.5,5e-4,1e5);a.add_sensor((n/2U)*n+3U*n/4U);const double setup_ms=setup.milliseconds();Timer sim;a.run(steps);const double sim_ms=sim.milliseconds();double maxp=0;for(double p:a.pressure())maxp=std::max(maxp,std::abs(p));emit({"phase14_acoustics","photoacoustic_kspace2d","cpu","cell_steps",n*n,steps,setup_ms,sim_ms,double(n*n)*double(steps),a.total_energy()+maxp});return 0;}

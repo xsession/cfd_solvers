@@ -65,11 +65,14 @@ public:
     void initialize(double temperature_k);
     void set_sar(double sar_w_per_kg);
     void set_sar(std::span<const double> sar_w_per_kg);
+    void set_volumetric_heating(double heat_w_per_m3);
+    void set_volumetric_heating(std::span<const double> heat_w_per_m3);
     void step(std::size_t steps = 1U);
 
     [[nodiscard]] const PennesBioheat2DConfig& config() const noexcept { return config_; }
     [[nodiscard]] const std::vector<double>& temperature_k() const noexcept { return temperature_; }
     [[nodiscard]] const std::vector<double>& sar_w_per_kg() const noexcept { return sar_; }
+    [[nodiscard]] const std::vector<double>& volumetric_heating_w_per_m3() const noexcept { return volumetric_heating_; }
     [[nodiscard]] double time_s() const noexcept { return time_s_; }
     [[nodiscard]] const cfd::core::ConjugateGradientResult& linear_result() const noexcept { return linear_result_; }
 
@@ -77,6 +80,7 @@ private:
     PennesBioheat2DConfig config_;
     std::vector<double> temperature_;
     std::vector<double> sar_;
+    std::vector<double> volumetric_heating_;
     cfd::core::ConjugateGradientWorkspace workspace_;
     cfd::core::ConjugateGradientResult linear_result_{};
     double time_s_{};

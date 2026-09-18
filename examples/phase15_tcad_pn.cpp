@@ -1,0 +1,4 @@
+#include "common/benchmark.hpp"
+#include "cfd/tcad/semiconductor1d.hpp"
+#include <cmath>
+int main(int argc,char**argv){using namespace cfd::examples;const auto o=parse_options(argc,argv);cfd::tcad::Semiconductor1DConfig cfg;cfg.length_m=2e-6;cfg.nodes=o.quick?31U:151U*o.scale;cfg.material.intrinsic_density_m3=1e16;cfg.max_gummel_iterations=800;cfg.relative_tolerance=2e-7;cfg.under_relaxation=0.05;Timer setup;cfd::tcad::SemiconductorDevice1D d(cfg);d.set_net_doping(cfd::tcad::pn_junction_doping(d.x(),1e-6,1e21,1e21));const double setup_ms=setup.milliseconds();Timer sim;const auto eq=d.solve_equilibrium();const auto sweep=d.sweep_right_contact(-0.02,0.02,o.quick?3U:9U);const double sim_ms=sim.milliseconds();double checksum=eq.terminal_current_a;for(const auto&p:sweep)checksum+=p.current_a;emit({"phase15_tcad","pn_diode_iv","cpu","nodes_bias_points",cfg.nodes,sweep.size()+1U,setup_ms,sim_ms,double(cfg.nodes)*double(sweep.size()+1U),checksum});return eq.converged?0:1;}

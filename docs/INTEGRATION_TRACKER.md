@@ -896,8 +896,8 @@ Clean-room capability/reference family: Project Chrono. This phase adds constrai
 - [x] rigid-body system orchestration with gravity, external forces, attached collision shapes and deterministic stepping.
 - [x] semi-implicit Euler rigid-body integrator.
 - [x] velocity-Verlet rigid-body integrator baseline.
-- [ ] implicit Newmark multibody integrator.
-- [ ] generalized-alpha/HHT multibody integrator.
+- [x] implicit Newmark multibody integrator.
+- [x] generalized-alpha/HHT multibody integrator.
 
 ### Constraint and joint framework
 - [x] reusable Jacobian-row constraint representation with projected Gauss-Seidel impulse solve.
@@ -908,7 +908,7 @@ Clean-room capability/reference family: Project Chrono. This phase adds constrai
 - [x] fixed joint.
 - [x] gear-ratio angular constraint.
 - [x] motor/actuator constraint family.
-- [ ] articulated reduced-coordinate solver.
+- [x] articulated reduced-coordinate solver.
 
 ### Collision and contact
 - [x] sphere AABB generation and sweep-and-prune broad phase.
@@ -929,12 +929,110 @@ Clean-room capability/reference family: Project Chrono. This phase adds constrai
 - [x] history-dependent Mindlin tangential spring.
 - [x] bonded particles with progressive tensile/shear damage and fracture/bond failure.
 - [x] GPU/SYCL particle neighbor search and contact kernels.
-- [ ] distributed-memory DEM domain decomposition (slab ownership, migration/ghost planning and MPI exchange implemented; end-to-end multi-rank contact/integration runtime validation pending).
+- [ ] distributed-memory DEM domain decomposition (CPU distributed timestep is complete; v0.16.6 adds the resident SYCL local<->ghost Hertz-Mindlin path, deterministic lower-global-ID contact ownership, compact reverse force/torque exchange, nonblocking halo/interior overlap, and cross-rank bonded-particle damage/history migration. The checkbox remains open only because real multi-rank GPU-aware MPI execution and physical accelerator qualification are not available in this environment).
 
 ### Multiphysics coupling
 - [x] spherical Stokes-drag/reaction-force primitive for conservative CFD/DEM coupling.
-- [ ] resolved CFD <-> rigid-body surface traction/force/torque coupling.
-- [ ] unresolved CFD <-> many-particle drag/void-fraction coupling.
-- [ ] FEM flexible-body <-> multibody coupling.
+- [x] resolved CFD <-> rigid-body surface traction/force/torque coupling.
+- [x] unresolved CFD <-> many-particle drag/void-fraction coupling.
+- [x] FEM flexible-body <-> multibody coupling.
 - [x] particle <-> sphere/plane contact-geometry bridge through the explicit DEM system.
 
+
+## Phase 14 - acoustics, ultrasound and photoacoustics [complete]
+
+Clean-room capability/reference family: k-Wave public documentation and published numerical-method descriptions. This phase adds a Fourier pseudospectral wave backend rather than another FVM/FEM/FDTD discretization.
+
+### K-space acoustic core
+- [x] linear 2-D acoustic pressure/particle-velocity solver.
+- [x] heterogeneous density and sound-speed fields.
+- [x] reusable radix-2 FFT/Fourier-collocation spectral derivative backend.
+- [x] k-space temporal sinc correction for spectral gradients.
+- [x] split-field PML baseline using directional density components and directional damping.
+- [x] frequency power-law acoustic attenuation baseline in spectral space.
+- [x] reusable periodic fractional-Laplacian spectral operator.
+- [x] nonlinear B/A pressure-density equation-of-state term (Westervelt-class baseline).
+- [x] point, plane and delayed transducer-array pressure sources.
+- [x] pressure sensor arrays with time-history recording.
+- [x] time-reversal source/reconstruction workflow.
+- [x] delay-and-sum beamforming baseline.
+- [x] photoacoustic initial-pressure propagation.
+- [x] acoustic intensity helper.
+- [x] acoustic radiation-pressure helper.
+- [x] absorption-derived acoustic heating helper.
+
+### Multiphysics coupling
+- [x] acoustics -> structural vibration coupling.
+- [x] acoustics -> CFD coupling.
+- [x] ultrasound -> Pennes bioheat coupling.
+- [x] acoustics -> piezoelectric FEM coupling.
+- [x] acoustics -> optimization/inverse-problem coupling.
+
+
+## Phase 15 - semiconductor devices / TCAD [complete]
+
+Clean-room capability/reference family: DEVSIM public documentation, published semiconductor drift-diffusion equations, and standard Scharfetter-Gummel discretization. The cfd_solvers implementation is independent C++ and does not translate DEVSIM source.
+
+### Semiconductor transport core
+- [x] 1-D semiconductor Poisson equation with dielectric permittivity and ionized net doping.
+- [x] electron continuity equation.
+- [x] hole continuity equation.
+- [x] electron drift transport.
+- [x] hole drift transport.
+- [x] carrier diffusion through the Einstein relation D=mu*Vt.
+- [x] stable Bernoulli function and Scharfetter-Gummel edge flux discretization.
+- [x] arbitrary spatial net-doping profiles plus PN/PIN profile helpers.
+- [x] non-degenerate Boltzmann carrier-statistics baseline.
+- [x] Fermi-Dirac carrier statistics / incomplete-ionization framework.
+- [x] doping-dependent Caughey-Thomas and high-field velocity-saturation mobility helpers.
+- [x] Shockley-Read-Hall recombination.
+- [x] Auger recombination.
+- [x] radiative recombination.
+- [x] ohmic-contact carrier/potential boundary conditions.
+- [x] Schottky Boltzmann carrier-boundary baseline.
+- [x] insulating/gate carrier boundary conditions.
+
+### Device structures
+- [x] PN diode equilibrium/device baseline.
+- [x] PIN diode doping/device baseline.
+- [x] bipolar junction transistor structure/model baseline.
+- [x] MOS capacitor electrostatics baseline.
+- [x] MOSFET drift-diffusion device baseline.
+- [x] IGBT/power-device foundation.
+
+### Analyses and coupling
+- [x] DC Gummel operating-point solve.
+- [x] backward-Euler transient drift-diffusion solve with terminal displacement current.
+- [x] small-signal AC/impedance terminal linearization baseline (dI/dV + j*omega*dQ/dV).
+- [x] C-V sweep workflow from finite-difference electrode charge.
+- [x] I-V/contact-voltage sweep workflow.
+- [x] electrothermal Joule-heating field/output for thermal coupling.
+- [x] TCAD <-> SPICE compact-model extraction/interface.
+
+## Phase 16A - lithium-ion battery cell physics [started]
+
+Clean-room capability/reference family: PyBaMM public documentation and the standard SPM/SPMe/DFN literature. The cfd_solvers implementation is independent C++20 and does not translate PyBaMM source.
+
+### Cell electrochemistry
+- [x] Single Particle Model (SPM) with one spherical diffusion particle per electrode.
+- [x] Single Particle Model with Electrolyte (SPMe) baseline.
+- [ ] full Doyle-Fuller-Newman / P2D distributed porous-electrode model.
+- [x] conservative spherical solid-particle lithium diffusion.
+- [x] through-cell electrolyte concentration transport.
+- [x] electrolyte ohmic plus concentration-polarization potential baseline.
+- [x] solid-phase electrode ohmic-potential baseline.
+- [x] symmetric Butler-Volmer electrode reaction overpotentials.
+
+### Thermal and degradation
+- [x] lumped cell thermal state with irreversible electrochemical heat and convection.
+- [x] through-cell 1-D thermal conduction baseline.
+- [x] 3-D battery thermal coupling / pack-scale thermal field (voxel finite volumes, conservative SPMe coupling; `cfd-v0192-thermal-tests`).
+- [x] SEI-growth state baseline.
+- [x] lithium-plating inventory baseline.
+- [x] loss-of-active-material state baseline.
+- [x] particle concentration-gradient cracking/damage baseline.
+
+### Analysis and system workflows
+- [x] battery terminal EIS/Randles-plus-finite-diffusion baseline.
+- [x] piecewise-current drive-cycle simulation with capacity/energy accounting.
+- [x] cell-balancing / multi-cell pack-control interface (series SPMe, dissipative shunts, atomic cutoffs; `cfd-v0191-pack-tests`).

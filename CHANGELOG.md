@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.19.2
+- Added implicit 3-D finite-volume thermal fields with heterogeneous heat capacity, diagonal anisotropic conductivity, harmonic interface conductance and six-face convection.
+- Added conservative cell-to-voxel heat mapping, temperature feedback, external thermal ownership and atomic electrothermal pack stepping with hotspot cutoffs.
+- Added analytical diffusion/convection, heterogeneous energy conservation, coupled heating, rollback and invalid-input tests plus a three-cell thermal CSV example.
+- Phase 16A advances to 17/18; full DFN/P2D remains open.
+
+## 0.19.1
+- Added heterogeneous series SPMe packs with dissipative balancing, atomic voltage/thermal cutoff handling and signed charge/energy accounting.
+- Fixed SPMe state queries to include electrolyte polarization and concentration extrema; reject electrolyte grids with fewer than three cells.
+- Added independent-cell parity, Kirchhoff power balance, charging/rest behavior, reset, cutoff rollback and invalid-input regressions.
+- Phase 16A advances to 16/18; DFN/P2D and 3-D battery thermal coupling remain open.
+
+## 0.19.0
+- Started Phase 16A lithium-ion battery physics with conservative spherical solid diffusion, SPM and SPMe baselines, Butler-Volmer polarization, electrolyte/solid potential losses, lumped and 1-D thermal models, degradation state, EIS and drive-cycle workflows.
+- Added a practical `examples/` directory spanning 15 major solver families, from HPC/LBM/FVM/FEM through FDTD/optics/chemistry/RF/SPICE/PIC/DEM/acoustics/TCAD to batteries.
+- Added a common machine-readable timing record (`setup_ms`, `simulation_ms`, work units, throughput and checksum), a repeatable benchmark runner with host/build metadata, and a median comparison tool for future release/hardware regressions.
+- Added a quick all-example benchmark smoke to CTest and a stored Release-mode v0.19.0 timing reference; final HDF5/Python/examples matrix is 163/163.
+
+## 0.18.3
+- Completed Phase 15 with a physics-parameterized 1-D BJT charge-control/Ebers-Moll baseline derived from device geometry, doping, mobility and minority-carrier diffusion lengths.
+- Added NPN/PNP doping profiles, transport-factor/injection-efficiency diagnostics, TCAD-derived BJT SPICE evaluator and circuit regression.
+- Added a MOS-gated bipolar IGBT/power-device foundation with conductivity-modulated drift resistance, temperature-scaled channel mobility, turn-off tail storage, lumped self-heating and a three-terminal SPICE evaluator.
+- Added v0.18.3 regressions for BJT reciprocity/gain/polarity and IGBT conduction, thermal/tail behavior and SPICE convergence.
+
+## 0.18.2
+- Added insulating/gate carrier boundaries and oxide-capacitance Robin electrostatic gate conditions to the 1-D semiconductor solver.
+- Added Fermi-Dirac half-integral/inversion and incomplete donor/acceptor ionization helpers.
+- Added quasi-static MOS-capacitor C-V and a long-channel charge-sheet MOSFET drift-diffusion baseline.
+- Added a four-terminal TCAD-derived static-device evaluator that plugs directly into the existing SPICE Newton solver.
+
+## 0.18.1
+- Added backward-Euler transient drift-diffusion with conduction plus displacement terminal current.
+- Added small-signal terminal admittance/impedance and C-V sweeps from finite-difference current/electrode-charge linearization.
+- Added optional Varshni bandgap, intrinsic-density, mobility and density-of-states temperature scaling with analytic regression coverage.
+
+## 0.18.0
+- Started Phase 15 semiconductor TCAD with a clean-room 1-D Poisson + electron/hole drift-diffusion solver.
+- Added stable Scharfetter-Gummel transport, PN/PIN profiles, ohmic/Schottky boundaries, mobility and recombination models.
+- Added DC Gummel/I-V workflows and conservative Joule-heating diagnostics for electrothermal coupling.
+
+## 0.17.1
+- Completed Phase 14 with Dirichlet time reversal, structural/CFD/Pennes/piezoelectric coupling, and sensor-trace inverse parameter fitting.
+- Added a coupled 1-D piezoelectric finite-element receive/transmit baseline and Pennes volumetric-heating source.
+- Added conservative acoustic traction/radiation-force coupling helpers and direct FVM body-acceleration support.
+
+## 0.17.0
+- Start Phase 14 acoustics/ultrasound/photoacoustics with a clean-room 2-D k-space pseudospectral solver, FFT/fractional operators, heterogeneous/nonlinear propagation, PML, attenuation, sources/sensors, beamforming and acoustic post-processing.
+
+## 0.16.8
+- Added dense nonlinear implicit generalized-coordinate integration with Newmark, generalized-alpha and HHT parameterizations.
+- Added a fixed-base revolute/prismatic articulated tree solver with Jacobian-assembled reduced mass matrix and generalized gravity/effort projection.
+- Added a conservative floating-frame/modal FEM-to-multibody interface with bidirectional nodal kinematics and force/torque/modal-force projection.
+- Added v0.16.8 regressions for Newmark energy behavior, HHT damping, articulated coupling and virtual-work conservation; default matrix is 140/140.
+
+## 0.16.7
+- Added conservative unresolved CFD/DEM void-fraction, drag/lift/pressure-gradient and reaction-force coupling.
+- Added resolved rigid-body pressure/viscous surface traction force/torque integration.
+- Added resident SYCL CFD/DEM coupling and a persistent external acceleration source for resident incompressible FVM.
+- Added v0.16.7 conservation and zero-host-transfer regressions; default matrix is 139/139.
+
+
 ## 0.15.11 - shared resident FVM RANS/thermal/species GPU-R3.3
 
 - Added a shared `ResidentFvmFieldRegistrySycl` so coupled equations reuse one resident `PolyMesh`/queue/context instead of mirroring mesh state per equation.

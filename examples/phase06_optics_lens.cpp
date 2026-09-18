@@ -1,0 +1,5 @@
+#include "common/benchmark.hpp"
+#include "cfd/solvers/optics/sequential.hpp"
+#include "cfd/optics/analysis.hpp"
+#include <vector>
+int main(int argc,char**argv){using namespace cfd::examples;const auto o=parse_options(argc,argv);const std::size_t side=o.quick?11U:201U*o.scale;Timer setup;cfd::optics::SequentialOpticalSystem lens(1.0);lens.add_surface({cfd::optics::SurfaceType::sphere,0.0,50.0,12.0,1.5});lens.add_surface({cfd::optics::SurfaceType::sphere,5.0,-50.0,12.0,1.0});std::vector<cfd::optics::Ray> rays;rays.reserve(side*side);for(std::size_t j=0;j<side;++j)for(std::size_t i=0;i<side;++i){const double x=-5.0+10.0*double(i)/double(side-1U),y=-5.0+10.0*double(j)/double(side-1U);if(x*x+y*y<=25.0)rays.push_back({{x,y,-10.0},{0.0,0.0,1.0},550.0});}const double setup_ms=setup.milliseconds();Timer sim;const auto traced=lens.trace_many(rays);const double rms=cfd::optics::rms_spot_radius_at_plane(traced,55.0);const double sim_ms=sim.milliseconds();std::size_t valid=0;for(const auto&r:traced)valid+=r.valid?1U:0U;emit({"phase06_optics","biconvex_ray_bundle","cpu","rays",rays.size(),1U,setup_ms,sim_ms,double(rays.size()),rms+double(valid)});return 0;}

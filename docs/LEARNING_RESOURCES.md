@@ -520,3 +520,13 @@ Primary public references and the clean-room design mapping are recorded in `FLU
 The important architectural change is that coupling now occurs through device views rather than host vectors. `EsotericPullSyclSolver::DeviceMacroscopicView` feeds thermal, VOF and particle kernels directly. Their buoyancy/capillary/reaction contributions accumulate into `DeviceAccelerationView`, which the subsequent D3Q19 collision consumes without field download/upload. This is the practical meaning of a resident multiphysics timestep.
 
 Study `include/cfd/solvers/lbm/resident_multiphysics_sycl.hpp` together with `esoteric_pull_sycl.hpp`. Pay attention to queue ordering, scratch reuse, reductions versus bulk transfers, conservative VOF face fluxes, and particle atomic scatter. The next performance step is not adding more host-side features: it is profiling particle contention, device visualization/export and real multi-vendor memory bandwidth.
+
+
+## v0.17.0 acoustics / k-space pseudospectral study path
+
+1. k-Wave public overview and numerical-method description: https://www.k-wave.org/documentation.php
+2. kspaceFirstOrder2D documentation for heterogeneous first-order propagation and PML: https://k-wave.org/documentation/kspaceFirstOrder2D.php
+3. Treeby & Cox (2010), photoacoustic k-Wave overview.
+4. Treeby et al. (2012), nonlinear heterogeneous k-space propagation.
+5. Treeby & Cox (2010), fractional-Laplacian power-law absorption/dispersion.
+6. Compare these concepts with the independent implementations in `include/cfd/spectral/fft.hpp` and `include/cfd/acoustics/kspace2d.hpp`.

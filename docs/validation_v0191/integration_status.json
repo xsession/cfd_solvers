@@ -1,0 +1,314 @@
+{
+  "overall": {
+    "done": 716,
+    "percent": 86.78787878787878,
+    "total": 825
+  },
+  "phases": [
+    {
+      "done": 13,
+      "percent": 100.0,
+      "phase": "0",
+      "title": "project rules and traceability",
+      "total": 13
+    },
+    {
+      "done": 34,
+      "percent": 100.0,
+      "phase": "1",
+      "title": "common HPC runtime [baseline complete]",
+      "total": 34
+    },
+    {
+      "done": 43,
+      "percent": 93.47826086956522,
+      "phase": "2",
+      "title": "FluidX3D-class LBM [advanced baseline]",
+      "total": 46
+    },
+    {
+      "done": 98,
+      "percent": 92.45283018867924,
+      "phase": "3",
+      "title": "OpenFOAM-class finite-volume framework [in progress]",
+      "total": 106
+    },
+    {
+      "done": 41,
+      "percent": 82.0,
+      "phase": "4",
+      "title": "Elmer-class finite-element framework [in progress]",
+      "total": 50
+    },
+    {
+      "done": 23,
+      "percent": 88.46153846153847,
+      "phase": "5",
+      "title": "openEMS-class FDTD [in progress]",
+      "total": 26
+    },
+    {
+      "done": 40,
+      "percent": 90.9090909090909,
+      "phase": "6",
+      "title": "Optiland-class optics [in progress]",
+      "total": 44
+    },
+    {
+      "done": 57,
+      "percent": 79.16666666666667,
+      "phase": "7",
+      "title": "chemistry, electrochemistry and corrosion [started]",
+      "total": 72
+    },
+    {
+      "done": 12,
+      "percent": 80.0,
+      "phase": "8",
+      "title": "coupled multiphysics [started]",
+      "total": 15
+    },
+    {
+      "done": 50,
+      "percent": 100.0,
+      "phase": "9",
+      "title": "interoperability, workflow and UX [complete]",
+      "total": 50
+    },
+    {
+      "done": 46,
+      "percent": 65.71428571428571,
+      "phase": "10",
+      "title": "RF, antennas and microwave networks [started]",
+      "total": 70
+    },
+    {
+      "done": 80,
+      "percent": 81.63265306122449,
+      "phase": "11",
+      "title": "SPICE-class circuit and compact-model simulation [started]",
+      "total": 98
+    },
+    {
+      "done": 76,
+      "percent": 80.0,
+      "phase": "12",
+      "title": "CST-class electromagnetic, particle and bioelectromagnetic coverage [started]",
+      "total": 95
+    },
+    {
+      "done": 36,
+      "percent": 97.29729729729729,
+      "phase": "13",
+      "title": "multibody, rigid-body and granular dynamics [started]",
+      "total": 37
+    },
+    {
+      "done": 21,
+      "percent": 100.0,
+      "phase": "14",
+      "title": "acoustics, ultrasound and photoacoustics [complete]",
+      "total": 21
+    },
+    {
+      "done": 30,
+      "percent": 100.0,
+      "phase": "15",
+      "title": "semiconductor devices / TCAD [complete]",
+      "total": 30
+    },
+    {
+      "done": 16,
+      "percent": 88.88888888888889,
+      "phase": "16A",
+      "title": "lithium-ion battery cell physics [started]",
+      "total": 18
+    }
+  ],
+  "upstreams": [
+    {
+      "done": 98,
+      "name": "OpenFOAM 14",
+      "percent": 92.45283018867924,
+      "phase": "3",
+      "pin": "a4a8a1eff092ff9452a95aa85f8250319776bfa2",
+      "total": 106
+    },
+    {
+      "done": 43,
+      "name": "FluidX3D",
+      "percent": 93.47826086956522,
+      "phase": "2",
+      "pin": "9f3a995599740082690ace8cdc7a82b0396adddd",
+      "total": 46
+    },
+    {
+      "done": 41,
+      "name": "Elmer FEM",
+      "percent": 82.0,
+      "phase": "4",
+      "pin": "4bc328d56588b37c3e002acab087728755b804c8",
+      "total": 50
+    },
+    {
+      "done": 23,
+      "name": "openEMS FDTD",
+      "percent": 88.46153846153847,
+      "phase": "5",
+      "pin": "bbb876041b89abc26c0168f89af9ac2fc1e72627",
+      "total": 26
+    },
+    {
+      "done": 40,
+      "name": "Optiland",
+      "percent": 90.9090909090909,
+      "phase": "6",
+      "pin": "8bd86cf4c31878f6ad7cabed9f290b9a7ecfe1c7",
+      "total": 44
+    },
+    {
+      "done": 57,
+      "name": "EchemFEM",
+      "percent": 79.16666666666667,
+      "phase": "7",
+      "pin": "2ea3d3869c7e575ca4d5c2397633865d16f0dba0",
+      "total": 72
+    },
+    {
+      "done": 57,
+      "name": "echemAMR",
+      "percent": 79.16666666666667,
+      "phase": "7",
+      "pin": "29fb99f450481c8e5f2e3f132b44ab14ee054871",
+      "total": 72
+    },
+    {
+      "done": 57,
+      "name": "Cantera",
+      "percent": 79.16666666666667,
+      "phase": "7",
+      "pin": "61433163abe81711a09cabebefff4a7002bd6d37",
+      "total": 72
+    },
+    {
+      "done": 57,
+      "name": "Reaktoro",
+      "percent": 79.16666666666667,
+      "phase": "7",
+      "pin": "f587235e692b7168faa272c8892a4c079a1f7dd9",
+      "total": 72
+    },
+    {
+      "done": 57,
+      "name": "PHREEQC/PhreeqcRM",
+      "percent": 79.16666666666667,
+      "phase": "7",
+      "pin": "3.8.6",
+      "total": 72
+    },
+    {
+      "done": 46,
+      "name": "Palace RF FEM",
+      "percent": 65.71428571428571,
+      "phase": "10",
+      "pin": "dff1ef9d1794ff8733ac8b939fb185b181786c1d",
+      "total": 70
+    },
+    {
+      "done": 46,
+      "name": "OpenSEMBA FDTD",
+      "percent": 65.71428571428571,
+      "phase": "10",
+      "pin": "82e310c9ac43d729256b23a42d8c20799ad42b8a",
+      "total": 70
+    },
+    {
+      "done": 46,
+      "name": "OpenNEC",
+      "percent": 65.71428571428571,
+      "phase": "10",
+      "pin": "acafb3796066562cf3331fc9106485f33b6dbcc6",
+      "total": 70
+    },
+    {
+      "done": 80,
+      "name": "ngspice",
+      "percent": 81.63265306122449,
+      "phase": "11",
+      "pin": "47",
+      "total": 98
+    },
+    {
+      "done": 80,
+      "name": "Xyce",
+      "percent": 81.63265306122449,
+      "phase": "11",
+      "pin": "7.10",
+      "total": 98
+    },
+    {
+      "done": 80,
+      "name": "QucsatorRF",
+      "percent": 81.63265306122449,
+      "phase": "11",
+      "pin": "1.0.7-dev-news",
+      "total": 98
+    },
+    {
+      "done": 76,
+      "name": "Geant4",
+      "percent": 80.0,
+      "phase": "12",
+      "pin": "f3d5293d384757b8a228a099898b2b87cfa4023c",
+      "total": 95
+    },
+    {
+      "done": 50,
+      "name": "SU2",
+      "percent": 100.0,
+      "phase": "9",
+      "pin": "unversioned",
+      "total": 50
+    },
+    {
+      "done": 50,
+      "name": "csauto",
+      "percent": 100.0,
+      "phase": "9",
+      "pin": "unversioned",
+      "total": 50
+    },
+    {
+      "done": 36,
+      "name": "Project Chrono",
+      "percent": 97.29729729729729,
+      "phase": "13",
+      "pin": "7571eed9f92a10c5e8dbcddc1f37b401ca2c3661",
+      "total": 37
+    },
+    {
+      "done": 21,
+      "name": "k-Wave",
+      "percent": 100.0,
+      "phase": "14",
+      "pin": "94e558318b4ab7c583b63c50b7e9b574556dc159",
+      "total": 21
+    },
+    {
+      "done": 30,
+      "name": "DEVSIM",
+      "percent": 100.0,
+      "phase": "15",
+      "pin": "43b41ca845184c47e22b72d144db7e7db8509377",
+      "total": 30
+    },
+    {
+      "done": 16,
+      "name": "PyBaMM",
+      "percent": 88.88888888888889,
+      "phase": "16A",
+      "pin": "71d9ff424f876debe67132b86f900d77e511fe8e",
+      "total": 18
+    }
+  ]
+}

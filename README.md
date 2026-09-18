@@ -6,11 +6,14 @@ The long-term goal is a readable solver collection covering CFD, FEM multiphysic
 
 The project is inspired by the capabilities and engineering lessons of OpenFOAM, FluidX3D, Elmer FEM, openEMS FDTD and Optiland. It is **not** a source-code merge or mechanical translation. The source projects have different licenses, and FluidX3D has additional restrictions, so performance techniques are independently implemented from publications and public descriptions.
 
-## v0.16.3 status - bonded/fracturing DEM and distributed foundations
+## v0.19.2 status - 3-D battery thermal coupling
 
-v0.16.3 adds history-bearing bonded particles with progressive tensile/shear damage and irreversible fracture, plus equal-width slab ownership, migration and ghost planning for distributed DEM. An MPI `Alltoallv` migration/ghost exchange implementation and an MPI smoke path are included; this environment lacks a real MPI runtime, so the full distributed-contact checkbox remains open until multi-rank execution is validated.
+v0.19.2 adds an implicit 3-D thermal field with heterogeneous materials, directional conductivity and convective boundaries. The electrothermal pack wrapper deposits cell heat conservatively, feeds temperatures back into SPMe, and rolls back both systems on solver failure or hotspot cutoff. See `docs/RELEASE_0_19_2.md` for usage and validation.
 
-The machine-counted tracker is now **643/756 = 85.1%**, with Phase 13 at **30/37 = 81.1%**. The complete default regression matrix target is **135 CTest tests** after this release.
+Validation: all **165 CTest targets passed** across the main run and focused rerun; native HDF5 was unavailable.
+
+Phase 16A is **17/18** and the tracker is **717/825 = 86.9%**. Full DFN/P2D remains open. The existing practical benchmarks and v0.19.0 timing reference are retained.
+
 
 ## Build
 
@@ -20,6 +23,15 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ./build/cfd-solve --list
 ```
+
+Practical examples and repeatable timing baselines:
+
+```bash
+python3 examples/run_benchmarks.py --build-dir build --repeat 3 --output examples/results/my_machine.json
+python3 examples/compare_benchmarks.py examples/results/v0.19.0_reference.json examples/results/my_machine.json
+```
+
+Use `--quick` for CI/smoke runs. `simulation_ms` excludes case construction/setup so it can be compared separately from `setup_ms`; compare only runs with equivalent case mode/scale and comparable compiler/backend/power settings. The runner records build flags/compiler/CPU affinity, and the comparison tool flags checksum drift. See `examples/README.md` and `examples/results/v0.19.0_reference_summary.md`.
 
 Examples:
 
@@ -168,6 +180,7 @@ include/cfd/solvers/    solver APIs grouped by numerical method
 src/                    implementations
 src/sycl/               accelerator-specific C++20/SYCL implementations
 apps/                   solver and benchmark CLIs
+examples/               practical solver-family examples and comparable timing baselines
 scripts/                repeatable benchmark helpers
 tests/                  numerical regression tests
 docs/                   architecture, provenance, performance and roadmap

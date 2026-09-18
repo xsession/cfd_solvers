@@ -1,0 +1,333 @@
+Test project /workspace/scratch/0720baa3e4a2/work/cfd_solvers-v0.19.0/build
+        Start   1: cfd-tests
+        Start   2: cfd-spice-io-tests
+        Start   3: cfd-next-analysis-tests
+        Start   4: cfd-cst-expansion-tests
+  1/164 Test   #2: cfd-spice-io-tests ..............................   Passed    0.00 sec
+        Start   5: cfd-v091-sanitize-smoke
+  2/164 Test   #5: cfd-v091-sanitize-smoke .........................   Passed    0.00 sec
+        Start   6: cfd-v092-expansion-tests
+  3/164 Test   #6: cfd-v092-expansion-tests ........................   Passed    0.00 sec
+        Start   7: cfd-v093-em-pic-tests
+  4/164 Test   #3: cfd-next-analysis-tests .........................   Passed    0.01 sec
+        Start   8: cfd-v094-pic2d-tests
+  5/164 Test   #8: cfd-v094-pic2d-tests ............................   Passed    0.02 sec
+        Start   9: cfd-v095-em-pic2d-tests
+  6/164 Test   #9: cfd-v095-em-pic2d-tests .........................   Passed    0.15 sec
+        Start  10: cfd-v096-staggered-pic2d-tests
+  7/164 Test   #7: cfd-v093-em-pic-tests ...........................   Passed    0.18 sec
+        Start  11: cfd-v097-pic3d-tests
+  8/164 Test  #11: cfd-v097-pic3d-tests ............................   Passed    0.03 sec
+        Start  12: cfd-v098-em-pic3d-tests
+  9/164 Test  #12: cfd-v098-em-pic3d-tests .........................   Passed    0.07 sec
+        Start  13: cfd-v099-staggered-pic3d-tests
+ 10/164 Test  #13: cfd-v099-staggered-pic3d-tests ..................   Passed    0.03 sec
+        Start  14: cfd-v0100-local-current-tests
+ 11/164 Test  #14: cfd-v0100-local-current-tests ...................   Passed    0.01 sec
+        Start  15: cfd-v0101-particle-sorting-tests
+ 12/164 Test  #15: cfd-v0101-particle-sorting-tests ................   Passed    0.00 sec
+        Start  16: cfd-v0102-domain-exchange-tests
+ 13/164 Test  #16: cfd-v0102-domain-exchange-tests .................   Passed    0.00 sec
+        Start  17: cfd-v0103-comm-exchange-tests
+ 14/164 Test  #17: cfd-v0103-comm-exchange-tests ...................   Passed    0.00 sec
+        Start  18: cfd-v0104-transport-tests
+ 15/164 Test  #18: cfd-v0104-transport-tests .......................   Passed    0.00 sec
+        Start  19: cfd-v0105-serialized-transport-tests
+ 16/164 Test  #19: cfd-v0105-serialized-transport-tests ............   Passed    0.00 sec
+        Start  20: cfd-v0105-plasma-tests
+ 17/164 Test  #20: cfd-v0105-plasma-tests ..........................   Passed    0.00 sec
+        Start  21: cfd-v0106-distributed-round-tests
+ 18/164 Test  #21: cfd-v0106-distributed-round-tests ...............   Passed    0.00 sec
+        Start  22: cfd-v0107-distributed-step-tests
+ 19/164 Test  #22: cfd-v0107-distributed-step-tests ................   Passed    0.00 sec
+        Start  23: cfd-v0108-geant4-transport-tests
+ 20/164 Test  #23: cfd-v0108-geant4-transport-tests ................   Passed    0.00 sec
+        Start  24: cfd-v0109-transport-campaign-tests
+ 21/164 Test  #24: cfd-v0109-transport-campaign-tests ..............   Passed    0.00 sec
+        Start  25: cfd-v0110-campaign-execution-tests
+ 22/164 Test   #4: cfd-cst-expansion-tests .........................   Passed    0.36 sec
+        Start  26: cfd-v0111-local-campaign-runner-tests
+ 23/164 Test  #25: cfd-v0110-campaign-execution-tests ..............   Passed    0.00 sec
+        Start  27: cfd-v0112-campaign-control-tests
+ 24/164 Test  #27: cfd-v0112-campaign-control-tests ................   Passed    0.00 sec
+        Start  28: cfd-v0113-multiserver-deploy-tests
+ 25/164 Test  #26: cfd-v0111-local-campaign-runner-tests ...........   Passed    0.01 sec
+        Start  29: cfd-v0114-multiserver-execution-tests
+ 26/164 Test  #28: cfd-v0113-multiserver-deploy-tests ..............   Passed    0.00 sec
+        Start  30: cfd-v0115-multiserver-supervision-tests
+ 27/164 Test  #29: cfd-v0114-multiserver-execution-tests ...........   Passed    0.00 sec
+        Start  31: cfd-v0116-multiserver-controller-tests
+ 28/164 Test  #30: cfd-v0115-multiserver-supervision-tests .........   Passed    0.00 sec
+        Start  32: cfd-v0117-controller-dashboard-tests
+ 29/164 Test  #31: cfd-v0116-multiserver-controller-tests ..........   Passed    0.00 sec
+        Start  33: cfd-v0118-controller-sse-tests
+ 30/164 Test  #32: cfd-v0117-controller-dashboard-tests ............   Passed    0.00 sec
+        Start  34: cfd-v0120-production-controller-tests
+ 31/164 Test  #33: cfd-v0118-controller-sse-tests ..................   Passed    0.04 sec
+ 32/164 Test  #34: cfd-v0120-production-controller-tests ...........   Passed    0.04 sec
+        Start  35: cfd-v0130-xdmf-python-tests
+        Start  36: cfd-v0140-hpc-runtime-tests
+ 33/164 Test  #35: cfd-v0130-xdmf-python-tests .....................   Passed    0.00 sec
+        Start  37: cfd-v0141-lbm-les-qcriterion-tests
+ 34/164 Test  #36: cfd-v0140-hpc-runtime-tests .....................   Passed    0.00 sec
+        Start  38: cfd-v0142-portability-tests
+ 35/164 Test  #38: cfd-v0142-portability-tests .....................   Passed    0.00 sec
+        Start  39: cfd-v0150-fvm-temporal-pressure-tests
+ 36/164 Test  #39: cfd-v0150-fvm-temporal-pressure-tests ...........   Passed    0.01 sec
+        Start  40: cfd-v0151-thermal-coupling-tests
+ 37/164 Test  #40: cfd-v0151-thermal-coupling-tests ................   Passed    0.00 sec
+        Start  41: cfd-v0151-fvm-hdf5-checkpoint-tests
+ 38/164 Test  #41: cfd-v0151-fvm-hdf5-checkpoint-tests .............   Passed    0.00 sec
+        Start  42: cfd-v0152-rans-transport-tests
+ 39/164 Test  #42: cfd-v0152-rans-transport-tests ..................   Passed    0.00 sec
+        Start  43: cfd-v0153-fvm-amr-tests
+ 40/164 Test  #43: cfd-v0153-fvm-amr-tests .........................   Passed    0.00 sec
+        Start  44: cfd-v0154-compressible-weno-tests
+ 41/164 Test  #37: cfd-v0141-lbm-les-qcriterion-tests ..............   Passed    0.03 sec
+        Start  45: cfd-v0155-gpu-residency-tests
+ 42/164 Test  #45: cfd-v0155-gpu-residency-tests ...................   Passed    0.00 sec
+        Start  46: cfd-v0156-gpu-lbm-multiphysics-tests
+ 43/164 Test  #46: cfd-v0156-gpu-lbm-multiphysics-tests ............   Passed    0.00 sec
+        Start  47: cfd-v0157-gpu-fdtd-residency-tests
+ 44/164 Test  #47: cfd-v0157-gpu-fdtd-residency-tests ..............   Passed    0.00 sec
+        Start  48: cfd-v0158-gpu-fvm-residency-tests
+ 45/164 Test  #10: cfd-v096-staggered-pic2d-tests ..................   Passed    0.26 sec
+        Start  49: cfd-v0159-resident-incompressible-sycl-tests
+ 46/164 Test  #48: cfd-v0158-gpu-fvm-residency-tests ...............   Passed    0.00 sec
+        Start  50: cfd-v01510-resident-krylov-scalar-tests
+ 47/164 Test  #49: cfd-v0159-resident-incompressible-sycl-tests ....   Passed    0.00 sec
+        Start  51: cfd-v01511-resident-rans-tests
+ 48/164 Test  #50: cfd-v01510-resident-krylov-scalar-tests .........   Passed    0.00 sec
+        Start  52: cfd-v0160-multibody-dem-tests
+ 49/164 Test  #51: cfd-v01511-resident-rans-tests ..................   Passed    0.01 sec
+ 50/164 Test  #52: cfd-v0160-multibody-dem-tests ...................   Passed    0.00 sec
+        Start  53: cfd-v0161-contact-maturity-tests
+        Start  54: cfd-v0162-resident-dem-sycl-tests
+ 51/164 Test  #53: cfd-v0161-contact-maturity-tests ................   Passed    0.00 sec
+        Start  55: cfd-v0163-bonded-distributed-dem-tests
+ 52/164 Test  #54: cfd-v0162-resident-dem-sycl-tests ...............   Passed    0.00 sec
+        Start  56: cfd-v0164-distributed-contact-tests
+ 53/164 Test  #55: cfd-v0163-bonded-distributed-dem-tests ..........   Passed    0.00 sec
+        Start  57: cfd-v0165-gpu-aware-dem-exchange-tests
+ 54/164 Test  #56: cfd-v0164-distributed-contact-tests .............   Passed    0.00 sec
+        Start  58: cfd-v0166-distributed-resident-dem-tests
+ 55/164 Test  #57: cfd-v0165-gpu-aware-dem-exchange-tests ..........   Passed    0.00 sec
+        Start  59: cfd-v0167-cfd-dem-coupling-tests
+ 56/164 Test  #58: cfd-v0166-distributed-resident-dem-tests ........   Passed    0.00 sec
+        Start  60: cfd-v0168-advanced-multibody-tests
+ 57/164 Test  #59: cfd-v0167-cfd-dem-coupling-tests ................   Passed    0.00 sec
+        Start  61: cfd-v0170-acoustics-tests
+ 58/164 Test  #60: cfd-v0168-advanced-multibody-tests ..............   Passed    0.00 sec
+        Start  62: cfd-v0171-acoustic-multiphysics-tests
+ 59/164 Test  #44: cfd-v0154-compressible-weno-tests ...............   Passed    0.10 sec
+        Start  63: cfd-v0180-tcad-tests
+ 60/164 Test  #63: cfd-v0180-tcad-tests ............................   Passed    0.00 sec
+        Start  64: cfd-v0181-tcad-analysis-tests
+ 61/164 Test  #64: cfd-v0181-tcad-analysis-tests ...................   Passed    0.00 sec
+        Start  65: cfd-v0182-tcad-mos-tests
+ 62/164 Test  #65: cfd-v0182-tcad-mos-tests ........................   Passed    0.05 sec
+        Start  66: cfd-v0183-tcad-bipolar-power-tests
+ 63/164 Test  #66: cfd-v0183-tcad-bipolar-power-tests ..............   Passed    0.00 sec
+        Start  67: cfd-v0191-pack-tests
+ 64/164 Test  #67: cfd-v0191-pack-tests ............................   Passed    0.00 sec
+        Start  68: cfd-v0190-battery-tests
+ 65/164 Test  #68: cfd-v0190-battery-tests .........................   Passed    0.00 sec
+        Start  69: cfd-v0190-example-benchmark-smoke
+ 66/164 Test  #69: cfd-v0190-example-benchmark-smoke ...............   Passed    0.08 sec
+        Start  70: cfd-v0130-python-binding-smoke
+ 67/164 Test  #62: cfd-v0171-acoustic-multiphysics-tests ...........   Passed    0.27 sec
+        Start  71: cfd-osdi-tests
+ 68/164 Test  #71: cfd-osdi-tests ..................................   Passed    0.00 sec
+        Start  72: cfd-completion-tests
+ 69/164 Test  #70: cfd-v0130-python-binding-smoke ..................   Passed    0.08 sec
+        Start  73: cfd-sanitize-smoke
+ 70/164 Test  #73: cfd-sanitize-smoke ..............................   Passed    0.01 sec
+        Start  74: cfd-example-phase01-hpc-smoke
+ 71/164 Test  #74: cfd-example-phase01-hpc-smoke ...................   Passed    0.00 sec
+        Start  75: cfd-example-phase02-lbm-smoke
+ 72/164 Test  #75: cfd-example-phase02-lbm-smoke ...................   Passed    0.01 sec
+        Start  76: cfd-example-phase03-fvm-smoke
+ 73/164 Test  #76: cfd-example-phase03-fvm-smoke ...................   Passed    0.00 sec
+        Start  77: cfd-example-phase04-fem-smoke
+ 74/164 Test  #72: cfd-completion-tests ............................   Passed    0.04 sec
+        Start  78: cfd-example-phase05-fdtd-smoke
+ 75/164 Test  #77: cfd-example-phase04-fem-smoke ...................   Passed    0.00 sec
+        Start  79: cfd-example-phase06-optics-smoke
+ 76/164 Test  #78: cfd-example-phase05-fdtd-smoke ..................   Passed    0.00 sec
+        Start  80: cfd-example-phase07-chemistry-corrosion-smoke
+ 77/164 Test  #79: cfd-example-phase06-optics-smoke ................   Passed    0.00 sec
+        Start  81: cfd-example-phase08-multiphysics-smoke
+ 78/164 Test  #81: cfd-example-phase08-multiphysics-smoke ..........   Passed    0.00 sec
+        Start  82: cfd-example-phase10-rf-smoke
+ 79/164 Test  #80: cfd-example-phase07-chemistry-corrosion-smoke ...   Passed    0.00 sec
+        Start  83: cfd-example-phase11-spice-smoke
+ 80/164 Test  #82: cfd-example-phase10-rf-smoke ....................   Passed    0.00 sec
+        Start  84: cfd-example-phase12-em-pic-smoke
+ 81/164 Test  #83: cfd-example-phase11-spice-smoke .................   Passed    0.00 sec
+        Start  85: cfd-example-phase13-dem-smoke
+ 82/164 Test  #84: cfd-example-phase12-em-pic-smoke ................   Passed    0.00 sec
+        Start  86: cfd-example-phase14-acoustics-smoke
+ 83/164 Test  #85: cfd-example-phase13-dem-smoke ...................   Passed    0.00 sec
+        Start  87: cfd-example-phase15-tcad-smoke
+ 84/164 Test  #87: cfd-example-phase15-tcad-smoke ..................   Passed    0.01 sec
+        Start  88: cfd-example-phase16a-battery-smoke
+ 85/164 Test  #86: cfd-example-phase14-acoustics-smoke .............   Passed    0.01 sec
+        Start  89: cfd-bench-smoke
+ 86/164 Test  #88: cfd-example-phase16a-battery-smoke ..............   Passed    0.00 sec
+        Start  90: cfd-bench-json-smoke
+ 87/164 Test  #89: cfd-bench-smoke .................................   Passed    0.00 sec
+        Start  91: cfd-halo-plan-smoke
+ 88/164 Test  #90: cfd-bench-json-smoke ............................   Passed    0.00 sec
+        Start  92: cfd-validation-catalog-smoke
+ 89/164 Test  #91: cfd-halo-plan-smoke .............................   Passed    0.00 sec
+        Start  93: cfd-lbm-trt-smoke
+ 90/164 Test  #92: cfd-validation-catalog-smoke ....................   Passed    0.00 sec
+        Start  94: cfd-fvm-workspace-smoke
+ 91/164 Test  #93: cfd-lbm-trt-smoke ...............................   Passed    0.06 sec
+        Start  95: cfd-fdtd-pml1d-smoke
+ 92/164 Test  #95: cfd-fdtd-pml1d-smoke ............................   Passed    0.00 sec
+        Start  96: cfd-chemistry-reactor-smoke
+ 93/164 Test  #96: cfd-chemistry-reactor-smoke .....................   Passed    0.00 sec
+        Start  97: cfd-chemistry-equilibrium-smoke
+ 94/164 Test  #97: cfd-chemistry-equilibrium-smoke .................   Passed    0.00 sec
+        Start  98: cfd-optics-gaussian-smoke
+ 95/164 Test  #98: cfd-optics-gaussian-smoke .......................   Passed    0.00 sec
+        Start  99: cfd-multiphysics-thermoelastic-smoke
+ 96/164 Test  #99: cfd-multiphysics-thermoelastic-smoke ............   Passed    0.00 sec
+        Start 100: cfd-em-frequency1d-smoke
+ 97/164 Test #100: cfd-em-frequency1d-smoke ........................   Passed    0.03 sec
+        Start 101: cfd-em-edge2d-smoke
+ 98/164 Test  #94: cfd-fvm-workspace-smoke .........................   Passed    0.11 sec
+        Start 102: cfd-em-edge3d-smoke
+ 99/164 Test #101: cfd-em-edge2d-smoke .............................   Passed    0.00 sec
+        Start 103: cfd-em-waveport-smoke
+100/164 Test #103: cfd-em-waveport-smoke ...........................   Passed    0.00 sec
+        Start 104: cfd-particle-pic1d-smoke
+101/164 Test #104: cfd-particle-pic1d-smoke ........................   Passed    0.00 sec
+        Start 105: cfd-particle-em-pic1d-smoke
+102/164 Test #105: cfd-particle-em-pic1d-smoke .....................   Passed    0.00 sec
+        Start 106: cfd-particle-pic2d-smoke
+103/164 Test #102: cfd-em-edge3d-smoke .............................   Passed    0.01 sec
+        Start 107: cfd-particle-em-pic2d-smoke
+104/164 Test #106: cfd-particle-pic2d-smoke ........................   Passed    0.01 sec
+        Start 108: cfd-particle-staggered-em-pic2d-smoke
+105/164 Test #107: cfd-particle-em-pic2d-smoke .....................   Passed    0.01 sec
+        Start 109: cfd-particle-pic3d-smoke
+106/164 Test #108: cfd-particle-staggered-em-pic2d-smoke ...........   Passed    0.02 sec
+        Start 110: cfd-particle-em-pic3d-smoke
+107/164 Test #109: cfd-particle-pic3d-smoke ........................   Passed    0.02 sec
+        Start 111: cfd-particle-staggered-em-pic3d-smoke
+108/164 Test #110: cfd-particle-em-pic3d-smoke .....................   Passed    0.01 sec
+        Start 112: cfd-particle-local-current3d-smoke
+109/164 Test #112: cfd-particle-local-current3d-smoke ..............   Passed    0.00 sec
+        Start 113: cfd-particle-sort-halo3d-smoke
+110/164 Test #113: cfd-particle-sort-halo3d-smoke ..................   Passed    0.00 sec
+        Start 114: cfd-particle-domain-exchange3d-smoke
+111/164 Test #111: cfd-particle-staggered-em-pic3d-smoke ...........   Passed    0.01 sec
+        Start 115: cfd-particle-comm-exchange3d-smoke
+112/164 Test #114: cfd-particle-domain-exchange3d-smoke ............   Passed    0.00 sec
+        Start 116: cfd-particle-transport3d-smoke
+113/164 Test #115: cfd-particle-comm-exchange3d-smoke ..............   Passed    0.00 sec
+        Start 117: cfd-particle-serialized-transport3d-smoke
+114/164 Test #116: cfd-particle-transport3d-smoke ..................   Passed    0.00 sec
+        Start 118: cfd-particle-distributed-round3d-smoke
+115/164 Test #117: cfd-particle-serialized-transport3d-smoke .......   Passed    0.00 sec
+        Start 119: cfd-particle-field-guards3d-smoke
+116/164 Test #118: cfd-particle-distributed-round3d-smoke ..........   Passed    0.00 sec
+        Start 120: cfd-particle-distributed-step3d-smoke
+117/164 Test #119: cfd-particle-field-guards3d-smoke ...............   Passed    0.00 sec
+        Start 121: cfd-particle-geant4-transport-smoke
+118/164 Test #120: cfd-particle-distributed-step3d-smoke ...........   Passed    0.00 sec
+        Start 122: cfd-particle-transport-dose-bvh-smoke
+119/164 Test #121: cfd-particle-geant4-transport-smoke .............   Passed    0.00 sec
+        Start 123: cfd-particle-campaign-doe-smoke
+120/164 Test #122: cfd-particle-transport-dose-bvh-smoke ...........   Passed    0.00 sec
+        Start 124: cfd-particle-campaign-execution-smoke
+121/164 Test #123: cfd-particle-campaign-doe-smoke .................   Passed    0.00 sec
+        Start 125: cfd-particle-campaign-local-runner-smoke
+122/164 Test #124: cfd-particle-campaign-execution-smoke ...........   Passed    0.00 sec
+        Start 126: cfd-particle-campaign-control-smoke
+123/164 Test #126: cfd-particle-campaign-control-smoke .............   Passed    0.00 sec
+        Start 127: cfd-particle-multiserver-deploy-smoke
+124/164 Test #127: cfd-particle-multiserver-deploy-smoke ...........   Passed    0.00 sec
+        Start 128: cfd-particle-multiserver-execution-smoke
+125/164 Test #125: cfd-particle-campaign-local-runner-smoke ........   Passed    0.01 sec
+        Start 129: cfd-particle-multiserver-supervision-smoke
+126/164 Test #128: cfd-particle-multiserver-execution-smoke ........   Passed    0.00 sec
+        Start 130: cfd-particle-multiserver-controller-smoke
+127/164 Test #129: cfd-particle-multiserver-supervision-smoke ......   Passed    0.00 sec
+        Start 131: cfd-particle-multiserver-dashboard-smoke
+128/164 Test #130: cfd-particle-multiserver-controller-smoke .......   Passed    0.00 sec
+        Start 132: cfd-particle-plasma-chemistry-smoke
+129/164 Test #132: cfd-particle-plasma-chemistry-smoke .............   Passed    0.00 sec
+        Start 133: cfd-particle-breakdown-threshold-smoke
+130/164 Test #131: cfd-particle-multiserver-dashboard-smoke ........   Passed    0.00 sec
+        Start 134: cfd-bioheat-sar-smoke
+131/164 Test #133: cfd-particle-breakdown-threshold-smoke ..........   Passed    0.00 sec
+        Start 135: cfd-rf-dipole-smoke
+132/164 Test #134: cfd-bioheat-sar-smoke ...........................   Passed    0.00 sec
+        Start 136: cfd-rf-microstrip-smoke
+133/164 Test #135: cfd-rf-dipole-smoke .............................   Passed    0.00 sec
+        Start 137: cfd-rf-multiwire-smoke
+134/164 Test #136: cfd-rf-microstrip-smoke .........................   Passed    0.00 sec
+        Start 138: cfd-spice-rc-smoke
+135/164 Test #138: cfd-spice-rc-smoke ..............................   Passed    0.00 sec
+        Start 139: cfd-spice-diode-smoke
+136/164 Test #137: cfd-rf-multiwire-smoke ..........................   Passed    0.00 sec
+        Start 140: cfd-spice-adaptive-smoke
+137/164 Test #139: cfd-spice-diode-smoke ...........................   Passed    0.00 sec
+        Start 141: cfd-spice-pss-pz-smoke
+138/164 Test #140: cfd-spice-adaptive-smoke ........................   Passed    0.00 sec
+        Start 142: cfd-fvm-operators-smoke
+139/164 Test #141: cfd-spice-pss-pz-smoke ..........................   Passed    0.00 sec
+        Start 143: cfd-fvm-projection-smoke
+140/164 Test #142: cfd-fvm-operators-smoke .........................   Passed    0.01 sec
+141/164 Test #143: cfd-fvm-projection-smoke ........................   Passed    0.00 sec
+        Start 144: cfd-fvm-navier-stokes-smoke
+        Start 145: cfd-fvm-collocated-skew-smoke
+142/164 Test #145: cfd-fvm-collocated-skew-smoke ...................   Passed    0.01 sec
+        Start 146: cfd-fvm-collocated-channel-smoke
+143/164 Test #144: cfd-fvm-navier-stokes-smoke .....................   Passed    0.07 sec
+        Start 147: cfd-fvm-scalar-transport-smoke
+144/164 Test #147: cfd-fvm-scalar-transport-smoke ..................   Passed    0.00 sec
+        Start 148: cfd-fem-poisson3d-smoke
+145/164 Test #148: cfd-fem-poisson3d-smoke .........................   Passed    0.01 sec
+        Start 149: cfd-fem-nonlinear-smoke
+146/164 Test #149: cfd-fem-nonlinear-smoke .........................   Passed    0.01 sec
+        Start 150: cfd-fem-darcy-smoke
+147/164 Test #150: cfd-fem-darcy-smoke .............................   Passed    0.00 sec
+        Start 151: cfd-fem-magnetostatic-smoke
+148/164 Test #146: cfd-fvm-collocated-channel-smoke ................   Passed    0.10 sec
+        Start 152: cfd-fem-modal-smoke
+149/164 Test #151: cfd-fem-magnetostatic-smoke .....................   Passed    0.00 sec
+        Start 153: cfd-fdtd-mur1d-smoke
+150/164 Test #152: cfd-fem-modal-smoke .............................   Passed    0.00 sec
+        Start 154: cfd-fdtd-dispersive-smoke
+151/164 Test #153: cfd-fdtd-mur1d-smoke ............................   Passed    0.00 sec
+        Start 155: cfd-fdtd-port-vtk-smoke
+152/164 Test #154: cfd-fdtd-dispersive-smoke .......................   Passed    0.00 sec
+        Start 156: cfd-fdtd-cpml-tfsf-smoke
+153/164 Test #155: cfd-fdtd-port-vtk-smoke .........................   Passed    0.00 sec
+        Start 157: cfd-fdtd-lumped-rlc-smoke
+154/164 Test #156: cfd-fdtd-cpml-tfsf-smoke ........................   Passed    0.00 sec
+        Start 158: cfd-multiphysics-coupling-smoke
+155/164 Test #157: cfd-fdtd-lumped-rlc-smoke .......................   Passed    0.00 sec
+        Start 159: cfd-multiphysics-electrothermal-smoke
+156/164 Test #158: cfd-multiphysics-coupling-smoke .................   Passed    0.00 sec
+        Start 160: cfd-optics-lens-smoke
+157/164 Test #160: cfd-optics-lens-smoke ...........................   Passed    0.00 sec
+        Start 161: cfd-electrochem-corrosion-smoke
+158/164 Test #159: cfd-multiphysics-electrothermal-smoke ...........   Passed    0.00 sec
+        Start 162: cfd-electrochem-pnp-smoke
+159/164 Test #161: cfd-electrochem-corrosion-smoke .................   Passed    0.00 sec
+        Start 163: cfd-electrochem-pnp-poly-smoke
+160/164 Test #162: cfd-electrochem-pnp-smoke .......................   Passed    0.00 sec
+        Start 164: cfd-electrochem-galvanic-smoke
+161/164 Test #163: cfd-electrochem-pnp-poly-smoke ..................   Passed    0.00 sec
+162/164 Test #164: cfd-electrochem-galvanic-smoke ..................   Passed    0.00 sec
+163/164 Test  #61: cfd-v0170-acoustics-tests .......................   Passed    0.79 sec
+164/164 Test   #1: cfd-tests .......................................   Passed    1.49 sec
+
+100% tests passed out of 164
+
+Total Test time (real) =   1.49 sec

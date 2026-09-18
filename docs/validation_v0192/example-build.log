@@ -1,0 +1,4 @@
+[100%] Built target cfd_solvers
+[100%] Building CXX object CMakeFiles/cfd-example-battery-thermal.dir/examples/battery_thermal_pack.cpp.o
+[100%] Linking CXX executable cfd-example-battery-thermal
+[100%] Built target cfd-example-battery-thermal

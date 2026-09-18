@@ -1,0 +1,7 @@
+CMake Warning at CMakeLists.txt:199 (message):
+  HDF5 requested but not found; inline XDMF remains available
+
+
+-- Configuring done (0.2s)
+-- Generating done (0.2s)
+-- Build files have been written to: /workspace/scratch/0720baa3e4a2/work/cfd_solvers-v0.19.0/build

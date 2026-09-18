@@ -1,0 +1,3 @@
+#include "common/benchmark.hpp"
+#include "cfd/solvers/fdtd/maxwell1d.hpp"
+int main(int argc,char**argv){using namespace cfd::examples;const auto o=parse_options(argc,argv);const std::size_t cells=o.quick?256U:4096U*o.scale;const std::size_t steps=o.quick?40U:2500U;Timer setup;cfd::fdtd::Maxwell1D solver({cells,2.5e-5,0.9,1.0,1.0,cfd::fdtd::Boundary1D::cpml,32U,3.0,1e-10,6.0,0.0});solver.set_material(cells/2U,3U*cells/4U,4.0,0.001);solver.initialize_gaussian(0.2,0.02);const double setup_ms=setup.milliseconds();Timer sim;solver.step(steps);const double sim_ms=sim.milliseconds();emit({"phase05_fdtd","dielectric_pulse_cpml","cpu","cell_steps",cells,steps,setup_ms,sim_ms,double(cells)*double(steps),solver.energy()});return 0;}

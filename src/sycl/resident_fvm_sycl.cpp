@@ -242,6 +242,10 @@ void ResidentPolyMeshSycl::release() noexcept {
     free_if(face_geometry_, queue_);
 }
 
+ResidentPolyMeshDeviceView ResidentPolyMeshSycl::device_view() const noexcept {
+    return {cell_count_,face_count_,face_owner_,face_neighbour_,cell_face_offsets_,cell_face_indices_,cell_geometry_,face_geometry_};
+}
+
 std::size_t ResidentPolyMeshSycl::resident_bytes() const noexcept {
     return 2U * face_count_ * sizeof(std::size_t) +
            (cell_count_ + 1U + adjacency_count_) * sizeof(std::size_t) +
@@ -521,7 +525,7 @@ void ResidentPolyMeshSycl::assemble_momentum_system(const double* time_source,
                                                       const std::uint8_t* boundary_kind,
                                                       const double* boundary_velocity,
                                                       double nu,double dt,bool include_convection,
-                                                      double* diagonal,double* mobility,double* rhs) const {
+                                                      double* diagonal,double* mobility,double* rhs,const double* acceleration) const {
     require_pointer(time_source,"null resident FVM momentum time source");require_pointer(pressure_gradient,"null resident FVM momentum pressure gradient");
     require_pointer(flux,"null resident FVM momentum flux");require_pointer(boundary_kind,"null resident FVM momentum boundary kind");
     require_pointer(boundary_velocity,"null resident FVM momentum boundary velocity");require_pointer(diagonal,"null resident FVM momentum diagonal");
@@ -534,6 +538,7 @@ void ResidentPolyMeshSycl::assemble_momentum_system(const double* time_source,
     queue_.parallel_for(sycl::range<1>(nc),[=](sycl::id<1> id){
         const std::size_t c=id[0];double ap=cg[3U*nc+c]/dt;double bx=time_source[c]*ap,by=time_source[nc+c]*ap,bz=time_source[2U*nc+c]*ap;
         bx-=pressure_gradient[c]*cg[3U*nc+c];by-=pressure_gradient[nc+c]*cg[3U*nc+c];bz-=pressure_gradient[2U*nc+c]*cg[3U*nc+c];
+        if(acceleration){const double vol=cg[3U*nc+c];bx+=acceleration[c]*vol;by+=acceleration[nc+c]*vol;bz+=acceleration[2U*nc+c]*vol;}
         for(std::size_t k=offsets[c];k<offsets[c+1U];++k){
             const std::size_t f=face_indices[k],o=owner[f],n=neighbour[f];const double sign=o==c?1.0:-1.0;
             const double phi=sign*flux[f];const double diff=nu*fg[8U*nf+f];
@@ -948,6 +953,7 @@ void ResidentIncompressibleSycl::allocate() {
     predictor_flux_=sycl::malloc_device<double>(nf,q);nonorthogonal_flux_=sycl::malloc_device<double>(nf,q);
     rhs_=sycl::malloc_device<double>(nc,q);mobility_=sycl::malloc_device<double>(nc,q);
     momentum_diagonal_=sycl::malloc_device<double>(nc,q);momentum_rhs_=sycl::malloc_device<double>(3U*nc,q);
+    external_acceleration_=sycl::malloc_device<double>(3U*nc,q);
     boundary_velocity_=sycl::malloc_device<double>(3U*nf,q);boundary_kind_=sycl::malloc_device<std::uint8_t>(nf,q);
     boundary_fixed_=sycl::malloc_device<double>(3U*nf,q);
     pressure_boundary_kind_=sycl::malloc_device<std::uint8_t>(nf,q);
@@ -958,10 +964,11 @@ void ResidentIncompressibleSycl::allocate() {
     continuity_=sycl::malloc_device<double>(nc,q);reduction_scalar_=sycl::malloc_shared<double>(1U,q);
     if(!velocity_||!old_velocity_||!source_velocity_||!velocity_before_||!velocity_work_||!h_by_a_||!pressure_||
        !pressure_before_||!pressure_gradient_||!face_flux_||!predictor_flux_||!nonorthogonal_flux_||!rhs_||!mobility_||
-       !momentum_diagonal_||!momentum_rhs_||!boundary_velocity_||!boundary_kind_||!boundary_fixed_||
+       !momentum_diagonal_||!momentum_rhs_||!external_acceleration_||!boundary_velocity_||!boundary_kind_||!boundary_fixed_||
        !pressure_boundary_kind_||!pressure_boundary_fixed_||!pressure_boundary_values_||!pressure_matrix_values_||
        !momentum_matrix_values_||!continuity_||!reduction_scalar_) { release();throw std::bad_alloc{}; }
     mesh_.fill(velocity_,3U*nc,0.0);mesh_.fill(old_velocity_,3U*nc,0.0);mesh_.fill(source_velocity_,3U*nc,0.0);
+    mesh_.fill(external_acceleration_,3U*nc,0.0);
     mesh_.fill(velocity_before_,3U*nc,0.0);mesh_.fill(velocity_work_,3U*nc,0.0);mesh_.fill(h_by_a_,3U*nc,0.0);
     mesh_.fill(pressure_,nc,0.0);mesh_.fill(pressure_before_,nc,0.0);mesh_.fill(pressure_gradient_,3U*nc,0.0);
     mesh_.fill(face_flux_,nf,0.0);mesh_.fill(predictor_flux_,nf,0.0);mesh_.fill(nonorthogonal_flux_,nf,0.0);
@@ -976,7 +983,7 @@ void ResidentIncompressibleSycl::release() noexcept {
     free_if(velocity_,q);free_if(old_velocity_,q);free_if(source_velocity_,q);free_if(velocity_before_,q);free_if(velocity_work_,q);
     free_if(h_by_a_,q);free_if(pressure_,q);free_if(pressure_before_,q);free_if(pressure_gradient_,q);free_if(face_flux_,q);
     free_if(predictor_flux_,q);free_if(nonorthogonal_flux_,q);free_if(rhs_,q);free_if(mobility_,q);free_if(momentum_diagonal_,q);
-    free_if(momentum_rhs_,q);free_if(boundary_velocity_,q);free_if(boundary_kind_,q);free_if(boundary_fixed_,q);
+    free_if(momentum_rhs_,q);free_if(external_acceleration_,q);free_if(boundary_velocity_,q);free_if(boundary_kind_,q);free_if(boundary_fixed_,q);
     free_if(pressure_boundary_kind_,q);free_if(pressure_boundary_fixed_,q);free_if(pressure_boundary_values_,q);
     free_if(pressure_matrix_values_,q);free_if(momentum_matrix_values_,q);free_if(continuity_,q);free_if(reduction_scalar_,q);
     momentum_solver_.reset();pressure_solver_.reset();
@@ -1031,7 +1038,7 @@ void ResidentIncompressibleSycl::momentum_predictor(const double* time_source) {
     mesh_.boundary_velocity_values(velocity_,boundary_kind_,boundary_fixed_,boundary_velocity_);
     mesh_.assemble_momentum_system(time_source,pressure_gradient_,face_flux_,boundary_kind_,boundary_velocity_,
                                    config_.kinematic_viscosity,config_.dt,config_.include_convection,
-                                   momentum_diagonal_,mobility_,momentum_rhs_);
+                                   momentum_diagonal_,mobility_,momentum_rhs_,external_acceleration_);
     mesh_.assemble_momentum_matrix_values(momentum_solver_->row_offsets_device(),momentum_solver_->column_indices_device(),
                                           momentum_solver_->nonzeros(),face_flux_,boundary_kind_,
                                           config_.kinematic_viscosity,config_.dt,config_.include_convection,
@@ -1152,6 +1159,10 @@ void ResidentIncompressibleSycl::download_velocity(std::span<Vec3> velocity) con
 void ResidentIncompressibleSycl::download_pressure(std::span<double> pressure) const {
     mesh_.download_cell_scalar(pressure_,pressure);
 }
+void ResidentIncompressibleSycl::clear_external_acceleration() {
+    mesh_.fill(external_acceleration_,3U*mesh_.cell_count(),0.0);
+}
+
 void ResidentIncompressibleSycl::reset_transfer_stats() const noexcept {
     transfer_stats_.reset();mesh_.reset_transfer_stats();if(pressure_solver_)pressure_solver_->reset_transfer_stats();
     if(momentum_solver_)momentum_solver_->reset_transfer_stats();
