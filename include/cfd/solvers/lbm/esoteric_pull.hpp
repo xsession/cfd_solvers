@@ -38,25 +38,25 @@ struct MacroscopicFields {
 namespace detail {
 
 inline std::size_t periodic_shift(std::size_t coordinate, int delta, std::size_t extent) noexcept {
-    if (delta > 0) return coordinate + 1U == extent ? 0U : coordinate + 1U;
-    if (delta < 0) return coordinate == 0U ? extent - 1U : coordinate - 1U;
+    if (delta > 0)
+        return coordinate + 1U == extent ? 0U : coordinate + 1U;
+    if (delta < 0)
+        return coordinate == 0U ? extent - 1U : coordinate - 1U;
     return coordinate;
 }
 
-template<class Descriptor>
-inline float equilibrium(int q, float rho, float ux, float uy, float uz) noexcept {
-    const float cu = 3.0F *
-        (static_cast<float>(Descriptor::cx(q)) * ux +
-         static_cast<float>(Descriptor::cy(q)) * uy +
-         static_cast<float>(Descriptor::cz(q)) * uz);
+template <class Descriptor> inline float equilibrium(int q, float rho, float ux, float uy, float uz) noexcept {
+    const float cu = 3.0F * (static_cast<float>(Descriptor::cx(q)) * ux + static_cast<float>(Descriptor::cy(q)) * uy +
+                             static_cast<float>(Descriptor::cz(q)) * uz);
     const float uu = 1.5F * (ux * ux + uy * uy + uz * uz);
     return Descriptor::weight(q) * rho * (1.0F + cu + 0.5F * cu * cu - uu);
 }
 
-template<class Descriptor>
-inline float guo_force(int q, float rho, float ux, float uy, float uz,
-                       float ax, float ay, float az, float omega) noexcept {
-    if (ax == 0.0F && ay == 0.0F && az == 0.0F) return 0.0F;
+template <class Descriptor>
+inline float guo_force(int q, float rho, float ux, float uy, float uz, float ax, float ay, float az,
+                       float omega) noexcept {
+    if (ax == 0.0F && ay == 0.0F && az == 0.0F)
+        return 0.0F;
     const float cx = static_cast<float>(Descriptor::cx(q));
     const float cy = static_cast<float>(Descriptor::cy(q));
     const float cz = static_cast<float>(Descriptor::cz(q));
@@ -66,36 +66,34 @@ inline float guo_force(int q, float rho, float ux, float uy, float uz,
     const float cu = cx * ux + cy * uy + cz * uz;
     const float cf = cx * fx + cy * fy + cz * fz;
     const float uf = ux * fx + uy * fy + uz * fz;
-    return Descriptor::weight(q) * (1.0F - 0.5F * omega) *
-           (3.0F * (cf - uf) + 9.0F * cu * cf);
+    return Descriptor::weight(q) * (1.0F - 0.5F * omega) * (3.0F * (cf - uf) + 9.0F * cu * cf);
 }
 
-
-template<class Descriptor>
-inline float smagorinsky_relaxation_time(const std::array<float, Descriptor::q>& populations,
-                                         float rho, float ux, float uy, float uz,
-                                         float base_tau) noexcept {
-    if (!(rho > 0.0F)) return base_tau;
+template <class Descriptor>
+inline float smagorinsky_relaxation_time(const std::array<float, Descriptor::q>& populations, float rho, float ux,
+                                         float uy, float uz, float base_tau) noexcept {
+    if (!(rho > 0.0F))
+        return base_tau;
     float pi[3][3]{};
     for (int d = 0; d < Descriptor::q; ++d) {
-        const float neq = populations[static_cast<std::size_t>(d)] -
-                          equilibrium<Descriptor>(d, rho, ux, uy, uz);
-        const float e[3]{static_cast<float>(Descriptor::cx(d)),
-                         static_cast<float>(Descriptor::cy(d)),
+        const float neq = populations[static_cast<std::size_t>(d)] - equilibrium<Descriptor>(d, rho, ux, uy, uz);
+        const float e[3]{static_cast<float>(Descriptor::cx(d)), static_cast<float>(Descriptor::cy(d)),
                          static_cast<float>(Descriptor::cz(d))};
         for (int a = 0; a < 3; ++a) {
-            for (int b = 0; b < 3; ++b) pi[a][b] += e[a] * e[b] * neq;
+            for (int b = 0; b < 3; ++b)
+                pi[a][b] += e[a] * e[b] * neq;
         }
     }
     float q = 0.0F;
-    for (const auto& row : pi) for (float value : row) q += value * value;
+    for (const auto& row : pi)
+        for (float value : row)
+            q += value * value;
     // FluidX3D documents this Smagorinsky-Lilly closure in terms of the
     // non-equilibrium momentum-flux tensor. Keep it isolated here so the
     // collision path can remain ordinary BGK when the option is disabled.
     constexpr float coefficient =
         16.0F * 1.4142135623730950488F / (3.0F * std::numbers::pi_v<float> * std::numbers::pi_v<float>);
-    return 0.5F * (base_tau +
-                   std::sqrt(base_tau * base_tau + coefficient * std::sqrt(q) / rho));
+    return 0.5F * (base_tau + std::sqrt(base_tau * base_tau + coefficient * std::sqrt(q) / rho));
 }
 
 } // namespace detail
@@ -103,16 +101,13 @@ inline float smagorinsky_relaxation_time(const std::array<float, Descriptor::q>&
 // Thread-safe, single-population-grid implementation of the published Esoteric-Pull
 // streaming pattern. No FluidX3D source is used here; the access pattern follows the
 // public algorithm description in Lehmann, Computation 2022, 10(6), 92.
-template<class Descriptor>
-class EsotericPullSolver {
+template <class Descriptor> class EsotericPullSolver {
 public:
     static constexpr int q = Descriptor::q;
     static constexpr std::size_t pair_count = static_cast<std::size_t>((q - 1) / 2);
 
     explicit EsotericPullSolver(InPlaceLbmConfig config)
-        : config_(normalized_config(config)),
-          cells_(config_.nx * config_.ny * config_.nz),
-          f_(cells_) {
+        : config_(normalized_config(config)), cells_(config_.nx * config_.ny * config_.nz), f_(cells_) {
         if (config_.tau <= 0.5F) {
             throw std::invalid_argument("LBM tau must be > 0.5 for positive viscosity");
         }
@@ -120,9 +115,7 @@ public:
     }
 
     void initialize_uniform(float rho = 1.0F, float ux = 0.0F, float uy = 0.0F, float uz = 0.0F) {
-        initialize([=](std::size_t, std::size_t, std::size_t) {
-            return std::array<float, 4>{rho, ux, uy, uz};
-        });
+        initialize([=](std::size_t, std::size_t, std::size_t) { return std::array<float, 4>{rho, ux, uy, uz}; });
     }
 
     void initialize_taylor_green(float amplitude = 0.03F) {
@@ -139,15 +132,13 @@ public:
                 const float zf = (static_cast<float>(z) + 0.5F) / static_cast<float>(config_.nz);
                 z_factor = std::cos(two_pi * zf);
             }
-            return std::array<float, 4>{1.0F,
-                                        amplitude * sx * cy * z_factor,
-                                       -amplitude * cx * sy * z_factor,
-                                        0.0F};
+            return std::array<float, 4>{1.0F, amplitude * sx * cy * z_factor, -amplitude * cx * sy * z_factor, 0.0F};
         });
     }
 
     void step(std::size_t count = 1) {
-        for (std::size_t iteration = 0; iteration < count; ++iteration) step_once();
+        for (std::size_t iteration = 0; iteration < count; ++iteration)
+            step_once();
     }
 
     void set_local_body_acceleration(std::span<const float> ax, std::span<const float> ay, std::span<const float> az) {
@@ -160,18 +151,36 @@ public:
     }
 
     void clear_local_body_acceleration() noexcept {
-        local_ax_.clear(); local_ay_.clear(); local_az_.clear();
+        local_ax_.clear();
+        local_ay_.clear();
+        local_az_.clear();
     }
 
     [[nodiscard]] bool has_local_body_acceleration() const noexcept { return !local_ax_.empty(); }
 
+    // Enables stationary mid-link bounce-back for a voxelized solid mask. The
+    // mask is copied so callers can release or reuse their geometry buffer.
+    void set_solid_mask(std::span<const std::uint8_t> mask) {
+        if (mask.size() != cells_)
+            throw std::invalid_argument("LBM solid mask size mismatch");
+        solid_.assign(mask.begin(), mask.end());
+        solid_current_.resize(static_cast<std::size_t>(q) * cells_);
+        solid_next_.resize(static_cast<std::size_t>(q) * cells_);
+    }
+
+    void clear_solid_mask() noexcept {
+        solid_.clear();
+        solid_current_.clear();
+        solid_next_.clear();
+    }
+
+    [[nodiscard]] bool has_solid_mask() const noexcept { return !solid_.empty(); }
+    [[nodiscard]] const std::vector<std::uint8_t>& solid_mask() const noexcept { return solid_; }
+
     [[nodiscard]] MacroscopicFields compute_macroscopic() const {
         MacroscopicFields fields{
-            cfd::core::AlignedVector<float>(cells_, 0.0F),
-            cfd::core::AlignedVector<float>(cells_, 0.0F),
-            cfd::core::AlignedVector<float>(cells_, 0.0F),
-            cfd::core::AlignedVector<float>(cells_, 0.0F)
-        };
+            cfd::core::AlignedVector<float>(cells_, 0.0F), cfd::core::AlignedVector<float>(cells_, 0.0F),
+            cfd::core::AlignedVector<float>(cells_, 0.0F), cfd::core::AlignedVector<float>(cells_, 0.0F)};
         cfd::core::parallel_for(cells_, [&](std::size_t n) {
             std::array<float, q> fin{};
             load_cell(n, fin);
@@ -181,9 +190,16 @@ public:
             float uz = 0.0F;
             accumulate_macroscopic(fin, rho, ux, uy, uz);
             const bool local_force = !local_ax_.empty();
-            ux += 0.5F * (config_.acceleration_x + (local_force ? local_ax_[n] : 0.0F));
-            uy += 0.5F * (config_.acceleration_y + (local_force ? local_ay_[n] : 0.0F));
-            uz += 0.5F * (config_.acceleration_z + (local_force ? local_az_[n] : 0.0F));
+            const bool solid = !solid_.empty() && solid_[n] != 0U;
+            if (!solid) {
+                ux += 0.5F * (config_.acceleration_x + (local_force ? local_ax_[n] : 0.0F));
+                uy += 0.5F * (config_.acceleration_y + (local_force ? local_ay_[n] : 0.0F));
+                uz += 0.5F * (config_.acceleration_z + (local_force ? local_az_[n] : 0.0F));
+            } else {
+                ux = 0.0F;
+                uy = 0.0F;
+                uz = 0.0F;
+            }
             fields.rho[n] = rho;
             fields.ux[n] = ux;
             fields.uy[n] = uy;
@@ -197,29 +213,28 @@ public:
             std::array<float, q> fin{};
             load_cell(n, fin);
             float rho = 0.0F;
-            for (float value : fin) rho += value;
+            for (float value : fin)
+                rho += value;
             return rho;
         });
     }
 
     [[nodiscard]] double kinetic_energy() const {
         return 0.5 * cfd::core::parallel_sum(cells_, [&](std::size_t n) {
-            std::array<float, q> fin{};
-            load_cell(n, fin);
-            float rho = 0.0F;
-            float ux = 0.0F;
-            float uy = 0.0F;
-            float uz = 0.0F;
-            accumulate_macroscopic(fin, rho, ux, uy, uz);
-            const bool local_force = !local_ax_.empty();
-            ux += 0.5F * (config_.acceleration_x + (local_force ? local_ax_[n] : 0.0F));
-            uy += 0.5F * (config_.acceleration_y + (local_force ? local_ay_[n] : 0.0F));
-            uz += 0.5F * (config_.acceleration_z + (local_force ? local_az_[n] : 0.0F));
-            return static_cast<double>(rho) *
-                   (static_cast<double>(ux) * ux +
-                    static_cast<double>(uy) * uy +
-                    static_cast<double>(uz) * uz);
-        });
+                   std::array<float, q> fin{};
+                   load_cell(n, fin);
+                   float rho = 0.0F;
+                   float ux = 0.0F;
+                   float uy = 0.0F;
+                   float uz = 0.0F;
+                   accumulate_macroscopic(fin, rho, ux, uy, uz);
+                   const bool local_force = !local_ax_.empty();
+                   ux += 0.5F * (config_.acceleration_x + (local_force ? local_ax_[n] : 0.0F));
+                   uy += 0.5F * (config_.acceleration_y + (local_force ? local_ay_[n] : 0.0F));
+                   uz += 0.5F * (config_.acceleration_z + (local_force ? local_az_[n] : 0.0F));
+                   return static_cast<double>(rho) *
+                          (static_cast<double>(ux) * ux + static_cast<double>(uy) * uy + static_cast<double>(uz) * uz);
+               });
     }
 
     [[nodiscard]] float max_speed() const {
@@ -257,9 +272,7 @@ public:
     [[nodiscard]] std::size_t population_bytes() const noexcept {
         return static_cast<std::size_t>(q) * cells_ * sizeof(float);
     }
-    [[nodiscard]] std::size_t two_lattice_population_bytes() const noexcept {
-        return 2U * population_bytes();
-    }
+    [[nodiscard]] std::size_t two_lattice_population_bytes() const noexcept { return 2U * population_bytes(); }
     [[nodiscard]] const cfd::core::StaticSoA<float, static_cast<std::size_t>(q)>& raw_storage() const noexcept {
         return f_;
     }
@@ -271,6 +284,9 @@ private:
     std::vector<float> local_ax_;
     std::vector<float> local_ay_;
     std::vector<float> local_az_;
+    std::vector<std::uint8_t> solid_;
+    std::vector<float> solid_current_;
+    std::vector<float> solid_next_;
     std::uint64_t time_step_{0};
 
     static InPlaceLbmConfig normalized_config(InPlaceLbmConfig config) {
@@ -293,8 +309,7 @@ private:
         return (zn * config_.ny + yn) * config_.nx + xn;
     }
 
-    template<class Initializer>
-    void initialize(Initializer&& initializer) {
+    template <class Initializer> void initialize(Initializer&& initializer) {
         time_step_ = 0;
         cfd::core::parallel_for(cells_, [&](std::size_t n) {
             const std::size_t x = n % config_.nx;
@@ -303,17 +318,16 @@ private:
             const std::size_t z = yz / config_.ny;
             const auto state = initializer(x, y, z);
             const float rho = state[0];
-            const float ux = state[1];
-            const float uy = state[2];
-            const float uz = state[3];
+            const bool solid = !solid_.empty() && solid_[n] != 0U;
+            const float ux = solid ? 0.0F : state[1];
+            const float uy = solid ? 0.0F : state[2];
+            const float uz = solid ? 0.0F : state[3];
 
             f_(0, n) = detail::equilibrium<Descriptor>(0, rho, ux, uy, uz);
             for (int i = 1; i < q; i += 2) {
                 const std::size_t neighbor = neighbor_index(x, y, z, i + 1);
-                f_(static_cast<std::size_t>(i), neighbor) =
-                    detail::equilibrium<Descriptor>(i, rho, ux, uy, uz);
-                f_(static_cast<std::size_t>(i + 1), n) =
-                    detail::equilibrium<Descriptor>(i + 1, rho, ux, uy, uz);
+                f_(static_cast<std::size_t>(i), neighbor) = detail::equilibrium<Descriptor>(i, rho, ux, uy, uz);
+                f_(static_cast<std::size_t>(i + 1), n) = detail::equilibrium<Descriptor>(i + 1, rho, ux, uy, uz);
             }
         });
     }
@@ -332,8 +346,7 @@ private:
         load_cell(n, x, y, z, fin, neighbors);
     }
 
-    void load_cell(std::size_t n, std::size_t x, std::size_t y, std::size_t z,
-                   std::array<float, q>& fin,
+    void load_cell(std::size_t n, std::size_t x, std::size_t y, std::size_t z, std::array<float, q>& fin,
                    std::array<std::size_t, pair_count>& neighbors) const noexcept {
         const bool odd = (time_step_ & 1U) != 0U;
         fin[0] = f_(0, n);
@@ -351,8 +364,7 @@ private:
         }
     }
 
-    void store_cell(std::size_t n,
-                    const std::array<std::size_t, pair_count>& neighbors,
+    void store_cell(std::size_t n, const std::array<std::size_t, pair_count>& neighbors,
                     const std::array<float, q>& fout) noexcept {
         const bool odd = (time_step_ & 1U) != 0U;
         f_(0, n) = fout[0];
@@ -369,8 +381,8 @@ private:
         }
     }
 
-    static void accumulate_macroscopic(const std::array<float, q>& fin,
-                                       float& rho, float& ux, float& uy, float& uz) noexcept {
+    static void accumulate_macroscopic(const std::array<float, q>& fin, float& rho, float& ux, float& uy,
+                                       float& uz) noexcept {
         rho = 0.0F;
         ux = 0.0F;
         uy = 0.0F;
@@ -393,7 +405,98 @@ private:
         }
     }
 
+    void collide_cell(std::array<float, q>& populations, std::size_t n) const noexcept {
+        float rho = 0.0F;
+        float ux = 0.0F;
+        float uy = 0.0F;
+        float uz = 0.0F;
+        accumulate_macroscopic(populations, rho, ux, uy, uz);
+        const bool local_force = !local_ax_.empty();
+        const float ax = config_.acceleration_x + (local_force ? local_ax_[n] : 0.0F);
+        const float ay = config_.acceleration_y + (local_force ? local_ay_[n] : 0.0F);
+        const float az = config_.acceleration_z + (local_force ? local_az_[n] : 0.0F);
+        ux += 0.5F * ax;
+        uy += 0.5F * ay;
+        uz += 0.5F * az;
+
+        const float local_tau =
+            config_.smagorinsky_les
+                ? detail::smagorinsky_relaxation_time<Descriptor>(populations, rho, ux, uy, uz, config_.tau)
+                : config_.tau;
+        const float omega = 1.0F / local_tau;
+        for (int d = 0; d < q; ++d) {
+            const std::size_t index = static_cast<std::size_t>(d);
+            populations[index] -= omega * (populations[index] - detail::equilibrium<Descriptor>(d, rho, ux, uy, uz));
+            populations[index] += detail::guo_force<Descriptor>(d, rho, ux, uy, uz, ax, ay, az, omega);
+        }
+    }
+
+    void step_once_with_solids() {
+        const auto population_index = [this](int direction, std::size_t cell) {
+            return static_cast<std::size_t>(direction) * cells_ + cell;
+        };
+
+        cfd::core::parallel_for(cells_, [&](std::size_t n) {
+            std::array<float, q> fin{};
+            load_cell(n, fin);
+            for (int d = 0; d < q; ++d)
+                solid_current_[population_index(d, n)] = fin[static_cast<std::size_t>(d)];
+        });
+
+        cfd::core::parallel_for(cells_, [&](std::size_t n) {
+            if (solid_[n] != 0U) {
+                for (int d = 0; d < q; ++d)
+                    solid_next_[population_index(d, n)] = solid_current_[population_index(d, n)];
+                return;
+            }
+
+            std::array<float, q> fout{};
+            for (int d = 0; d < q; ++d)
+                fout[static_cast<std::size_t>(d)] = solid_current_[population_index(d, n)];
+            collide_cell(fout, n);
+
+            const std::size_t x = n % config_.nx;
+            const std::size_t yz = n / config_.nx;
+            const std::size_t y = yz % config_.ny;
+            const std::size_t z = yz / config_.ny;
+            for (int d = 0; d < q; ++d) {
+                const std::size_t target = neighbor_index(x, y, z, d);
+                if (solid_[target] != 0U) {
+                    solid_next_[population_index(Descriptor::opposite(d), n)] = fout[static_cast<std::size_t>(d)];
+                } else {
+                    solid_next_[population_index(d, target)] = fout[static_cast<std::size_t>(d)];
+                }
+            }
+        });
+
+        const bool new_odd = ((time_step_ + 1U) & 1U) != 0U;
+        cfd::core::parallel_for(cells_, [&](std::size_t n) {
+            const std::size_t x = n % config_.nx;
+            const std::size_t yz = n / config_.nx;
+            const std::size_t y = yz % config_.ny;
+            const std::size_t z = yz / config_.ny;
+            f_(0, n) = solid_next_[population_index(0, n)];
+            for (int i = 1; i < q; i += 2) {
+                const std::size_t backward = neighbor_index(x, y, z, i + 1);
+                if (new_odd) {
+                    const std::size_t forward = neighbor_index(x, y, z, i);
+                    f_(static_cast<std::size_t>(i), n) = solid_next_[population_index(i + 1, forward)];
+                    f_(static_cast<std::size_t>(i + 1), backward) = solid_next_[population_index(i, n)];
+                } else {
+                    f_(static_cast<std::size_t>(i), backward) = solid_next_[population_index(i, n)];
+                    f_(static_cast<std::size_t>(i + 1), n) = solid_next_[population_index(i + 1, n)];
+                }
+            }
+        });
+        ++time_step_;
+    }
+
     void step_once() {
+        if (!solid_.empty()) {
+            step_once_with_solids();
+            return;
+        }
+
         cfd::core::parallel_for(cells_, [&](std::size_t n) {
             const std::size_t x = n % config_.nx;
             const std::size_t yz = n / config_.nx;
@@ -404,31 +507,7 @@ private:
             std::array<std::size_t, pair_count> neighbors{};
             load_cell(n, x, y, z, fout, neighbors);
 
-            float rho = 0.0F;
-            float ux = 0.0F;
-            float uy = 0.0F;
-            float uz = 0.0F;
-            accumulate_macroscopic(fout, rho, ux, uy, uz);
-            const bool local_force = !local_ax_.empty();
-            const float ax = config_.acceleration_x + (local_force ? local_ax_[n] : 0.0F);
-            const float ay = config_.acceleration_y + (local_force ? local_ay_[n] : 0.0F);
-            const float az = config_.acceleration_z + (local_force ? local_az_[n] : 0.0F);
-            ux += 0.5F * ax;
-            uy += 0.5F * ay;
-            uz += 0.5F * az;
-
-            const float local_tau = config_.smagorinsky_les
-                ? detail::smagorinsky_relaxation_time<Descriptor>(fout, rho, ux, uy, uz, config_.tau)
-                : config_.tau;
-            const float omega = 1.0F / local_tau;
-            for (int d = 0; d < q; ++d) {
-                const std::size_t index = static_cast<std::size_t>(d);
-                const float feq = detail::equilibrium<Descriptor>(d, rho, ux, uy, uz);
-                fout[index] -= omega * (fout[index] - feq);
-                fout[index] += detail::guo_force<Descriptor>(
-                    d, rho, ux, uy, uz,
-                    ax, ay, az, omega);
-            }
+            collide_cell(fout, n);
             store_cell(n, neighbors, fout);
         });
         ++time_step_;

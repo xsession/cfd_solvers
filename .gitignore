@@ -9,3 +9,5 @@ cmake-build-*/
 build-*/
 
 build*/
+examples/output/
+__pycache__/

@@ -324,7 +324,10 @@ if(CFD_BUILD_EXAMPLES)
         cfd-example-phase13-dem
         cfd-example-phase14-acoustics
         cfd-example-phase15-tcad
-        cfd-example-phase16a-battery)
+        cfd-example-phase16a-battery
+        cfd-example-real-openfoam-channel
+        cfd-example-real-fdtd-radome-vtk
+        cfd-example-real-lbm3d-model)
     set(CFD_EXAMPLE_SOURCES
         examples/phase01_hpc_multigrid.cpp
         examples/phase02_lbm_taylor_green.cpp
@@ -340,7 +343,10 @@ if(CFD_BUILD_EXAMPLES)
         examples/phase13_dem_settling.cpp
         examples/phase14_acoustics_photoacoustic.cpp
         examples/phase15_tcad_pn.cpp
-        examples/phase16a_battery_drive_cycle.cpp)
+        examples/phase16a_battery_drive_cycle.cpp
+        examples/real_openfoam_channel.cpp
+        examples/real_fdtd_radome_vtk.cpp
+        examples/real_lbm3d_model.cpp)
     list(LENGTH CFD_EXAMPLE_TARGETS _cfd_example_count)
     math(EXPR _cfd_example_last "${_cfd_example_count} - 1")
     foreach(_i RANGE 0 ${_cfd_example_last})
@@ -364,6 +370,10 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     add_test(NAME cfd-tests COMMAND cfd-tests)
     add_executable(cfd-completion-tests tests/test_completion.cpp)
     target_link_libraries(cfd-completion-tests PRIVATE cfd::solvers)
+    add_executable(cfd-real-3d-model-tests tests/test_real_3d_model.cpp)
+    target_link_libraries(cfd-real-3d-model-tests PRIVATE cfd::solvers)
+    target_compile_definitions(cfd-real-3d-model-tests PRIVATE CFD_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME cfd-real-3d-model-tests COMMAND cfd-real-3d-model-tests)
     add_executable(cfd-spice-io-tests tests/test_spice_io.cpp)
     target_link_libraries(cfd-spice-io-tests PRIVATE cfd::solvers)
     add_test(NAME cfd-spice-io-tests COMMAND cfd-spice-io-tests)

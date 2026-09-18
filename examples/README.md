@@ -27,8 +27,34 @@ CFD_BENCH {"schema":1,...,"setup_ms":...,"simulation_ms":...,"throughput":...,"c
 | `cfd-example-phase14-acoustics` | 2-D photoacoustic k-space propagation |
 | `cfd-example-phase15-tcad` | PN-junction equilibrium and I-V sweep |
 | `cfd-example-phase16a-battery` | SPMe current/rest/charge drive cycle |
+| `cfd-example-real-openfoam-channel` | ventilated channel / wind-tunnel FVM case with minimal OpenFOAM case and ParaView VTK export |
+| `cfd-example-real-fdtd-radome-vtk` | dielectric-window/radome FDTD pulse with ParaView VTK snapshots |
+| `cfd-example-real-lbm3d-model` | 3-D voxelized Ahmed-style bluff body with live JSON frames, VTK snapshots, and Q-criterion output |
 
 Phase 9 is workflow/orchestration rather than a simulation kernel, so the benchmark runner itself is the practical example for that layer.
+
+## Visualization examples
+
+These examples write files that can be opened directly in ParaView:
+
+```bash
+build/cfd-example-real-openfoam-channel --quick
+build/cfd-example-real-fdtd-radome-vtk --quick
+build/cfd-example-real-lbm3d-model --quick
+```
+
+Default outputs are written under `examples/output/openfoam_channel`, `examples/output/fdtd_radome`, and `examples/output/lbm3d_model`. Use `--output <dir>` to redirect them. The channel example writes `paraview/channel_final.vtk` plus a minimal OpenFOAM case under `openfoam` (`constant/polyMesh`, `constant/transportProperties`, `system/controlDict`, and `0/U`/`0/p`). The FDTD example writes `radome_mid.vtk`, `radome_late.vtk`, and `radome_final.vtk`. The 3-D LBM example writes full-volume `vtk/frame_*.vtk`, `vtk/q_criterion_final.vtk`, and a polling state at `live/state.json`.
+
+### Live 3-D viewer
+
+Start the viewer in one terminal, then run the model example in another:
+
+```bash
+python3 examples/live_3d_viewer.py --dir build/example_outputs/cfd-example-real-lbm3d-model/repeat_0/live
+build/cfd-example-real-lbm3d-model --quick --output build/example_outputs/cfd-example-real-lbm3d-model/repeat_0
+```
+
+Open `http://127.0.0.1:8765/`. The browser polls the latest state, so it works while the simulation is still running. With `--stl path/to/model.stl`, the example loads and normalizes an ASCII STL model before voxelization. The example applies stationary mid-link bounce-back to the voxelized body and a small streamwise body force; the outer domain remains periodic, making this a compact obstacle-flow regression rather than a calibrated Ahmed-body drag benchmark.
 
 ## Reproducible timing
 

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+
+git diff --cached --name-only --diff-filter=ACMR -z -- \
+    '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp' '*.hxx' >"$tmp"
+
+if [ ! -s "$tmp" ]; then
+    exit 0
+fi
+
+formatter="${CLANG_FORMAT:-}"
+if [ -z "$formatter" ]; then
+    if command -v clang-format >/dev/null 2>&1; then
+        formatter="clang-format"
+    elif command -v clang-format.exe >/dev/null 2>&1; then
+        formatter="clang-format.exe"
+    else
+        echo "pre-commit: clang-format is required but was not found on PATH." >&2
+        echo "Install clang-format, set CLANG_FORMAT=/path/to/clang-format, or commit with --no-verify." >&2
+        exit 1
+    fi
+fi
+
+blocked=0
+while IFS= read -r -d '' file; do
+    if ! git diff --quiet -- "$file"; then
+        echo "pre-commit: $file has unstaged edits; stage or stash them before auto-formatting." >&2
+        blocked=1
+    fi
+done <"$tmp"
+
+if [ "$blocked" -ne 0 ]; then
+    exit 1
+fi
+
+while IFS= read -r -d '' file; do
+    "$formatter" -i "$file"
+    git add -- "$file"
+done <"$tmp"
+
+exit 0

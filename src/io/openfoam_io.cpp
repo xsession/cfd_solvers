@@ -7,25 +7,216 @@
 #include <sstream>
 #include <stdexcept>
 #include <unordered_set>
-namespace cfd::io {namespace {
+namespace cfd::io {
+namespace {
 using cfd::fvm::Vec3;
-std::string read_text(const std::filesystem::path&p){std::ifstream in(p);if(!in)throw std::runtime_error("cannot open OpenFOAM file: "+p.string());std::ostringstream s;s<<in.rdbuf();return s.str();}
-std::string strip_comments(std::string s){s=std::regex_replace(s,std::regex(R"(//[^\n\r]*)"),"");s=std::regex_replace(s,std::regex(R"(/\*[\s\S]*?\*/)"),"");return s;}
-std::string list_body(const std::string&text){std::smatch m;std::regex start(R"((\d+)\s*\()" );if(!std::regex_search(text,m,start))throw std::runtime_error("OpenFOAM list header not found");const auto open=static_cast<std::size_t>(m.position(0)+m.length(0)-1);int depth=0;for(std::size_t i=open;i<text.size();++i){if(text[i]=='(')++depth;else if(text[i]==')'&&--depth==0)return text.substr(open+1,i-open-1);}throw std::runtime_error("unterminated OpenFOAM list");}
-std::vector<Vec3> read_points(const std::filesystem::path&p){auto body=list_body(strip_comments(read_text(p)));std::regex point(R"(\(\s*([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s*\))");std::vector<Vec3> out;for(auto it=std::sregex_iterator(body.begin(),body.end(),point);it!=std::sregex_iterator();++it)out.push_back({std::stod((*it)[1]),std::stod((*it)[2]),std::stod((*it)[3])});if(out.empty())throw std::runtime_error("OpenFOAM points list empty");return out;}
-std::vector<std::vector<std::size_t>> read_faces(const std::filesystem::path&p){auto body=list_body(strip_comments(read_text(p)));std::regex face(R"((\d+)\s*\(([^\)]*)\))");std::vector<std::vector<std::size_t>> out;for(auto it=std::sregex_iterator(body.begin(),body.end(),face);it!=std::sregex_iterator();++it){const auto n=static_cast<std::size_t>(std::stoull((*it)[1]));std::istringstream ss((*it)[2].str());std::vector<std::size_t> f;std::size_t q;while(ss>>q)f.push_back(q);if(f.size()!=n||n<3)throw std::runtime_error("malformed OpenFOAM face");out.push_back(std::move(f));}if(out.empty())throw std::runtime_error("OpenFOAM faces list empty");return out;}
-std::vector<std::size_t> read_labels(const std::filesystem::path&p){auto body=list_body(strip_comments(read_text(p)));std::istringstream ss(body);std::vector<std::size_t> out;std::size_t x;while(ss>>x)out.push_back(x);return out;}
-Vec3 cross(Vec3 a,Vec3 b){return {a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x};}
-Vec3 polygon_center(const std::vector<std::size_t>&f,const std::vector<Vec3>&p){Vec3 c{};for(auto i:f){if(i>=p.size())throw std::runtime_error("OpenFOAM face point index out of range");c+=p[i];}return c/static_cast<double>(f.size());}
-Vec3 polygon_area(const std::vector<std::size_t>&f,const std::vector<Vec3>&p){const Vec3 o=p[f[0]];Vec3 a{};for(std::size_t i=1;i+1<f.size();++i)a+=cross(p[f[i]]-o,p[f[i+1]]-o)*0.5;return a;}
-struct PatchRaw{std::string name;std::size_t n{},start{};};
-std::vector<PatchRaw> read_boundary(const std::filesystem::path&p){const auto text=strip_comments(read_text(p));const auto body=list_body(text);std::regex patch(R"(([A-Za-z0-9_\.\-]+)\s*\{([^\}]*)\})");std::vector<PatchRaw> out;for(auto it=std::sregex_iterator(body.begin(),body.end(),patch);it!=std::sregex_iterator();++it){std::string b=(*it)[2].str();std::smatch nm,sm;if(!std::regex_search(b,nm,std::regex(R"(nFaces\s+(\d+)\s*;)"))||!std::regex_search(b,sm,std::regex(R"(startFace\s+(\d+)\s*;)")))throw std::runtime_error("OpenFOAM boundary patch missing nFaces/startFace");out.push_back({(*it)[1].str(),static_cast<std::size_t>(std::stoull(nm[1])),static_cast<std::size_t>(std::stoull(sm[1]))});}return out;}
+std::string read_text(const std::filesystem::path& p) {
+    std::ifstream in(p);
+    if (!in)
+        throw std::runtime_error("cannot open OpenFOAM file: " + p.string());
+    std::ostringstream s;
+    s << in.rdbuf();
+    return s.str();
 }
-cfd::fvm::PolyMesh read_openfoam_polymesh(const std::filesystem::path&dir){const auto points=read_points(dir/"points");const auto raw_faces=read_faces(dir/"faces");const auto owner=read_labels(dir/"owner");const auto neighbour=read_labels(dir/"neighbour");if(owner.size()!=raw_faces.size())throw std::runtime_error("OpenFOAM owner count mismatch");std::size_t cells=0;for(auto c:owner)cells=std::max(cells,c+1);for(auto c:neighbour)cells=std::max(cells,c+1);std::vector<cfd::fvm::BoundaryPatch> patches;const auto raw_patches=read_boundary(dir/"boundary");for(const auto&p:raw_patches)patches.push_back({p.name});std::vector<std::size_t> face_patch(raw_faces.size(),cfd::fvm::invalid_patch);for(std::size_t p=0;p<raw_patches.size();++p)for(std::size_t f=raw_patches[p].start;f<raw_patches[p].start+raw_patches[p].n;++f){if(f>=raw_faces.size())throw std::runtime_error("OpenFOAM boundary face range invalid");face_patch[f]=p;}
-    std::vector<cfd::fvm::Face> faces(raw_faces.size());std::vector<Vec3> center_sum(cells);std::vector<double> center_weight(cells);for(std::size_t f=0;f<raw_faces.size();++f){Vec3 fc=polygon_center(raw_faces[f],points),sf=polygon_area(raw_faces[f],points);std::size_t nb=f<neighbour.size()?neighbour[f]:cfd::fvm::invalid_cell;faces[f]={owner[f],nb,fc,sf,face_patch[f]};double w=std::max(cfd::fvm::magnitude(sf),1e-30);center_sum[owner[f]]+=fc*w;center_weight[owner[f]]+=w;if(nb!=cfd::fvm::invalid_cell){center_sum[nb]+=fc*w;center_weight[nb]+=w;}}
-    std::vector<cfd::fvm::Cell> cell(cells);for(std::size_t c=0;c<cells;++c){if(!(center_weight[c]>0))throw std::runtime_error("OpenFOAM cell has no faces");cell[c].center=center_sum[c]/center_weight[c];}
-    std::vector<double> vol(cells);for(const auto&f:faces){vol[f.owner]+=cfd::fvm::dot(f.area,f.center)/3.0;if(!f.boundary())vol[f.neighbour]-=cfd::fvm::dot(f.area,f.center)/3.0;}for(std::size_t c=0;c<cells;++c){cell[c].volume=std::abs(vol[c]);if(!(cell[c].volume>0))throw std::runtime_error("OpenFOAM cell volume non-positive");}
-    return {std::move(cell),std::move(faces),std::move(patches)};}
-std::vector<double> read_openfoam_vol_scalar_field(const std::filesystem::path&p,std::size_t expected){const auto text=strip_comments(read_text(p));std::smatch m;if(std::regex_search(text,m,std::regex(R"(internalField\s+uniform\s+([-+0-9.eE]+)\s*;)")))return std::vector<double>(expected,std::stod(m[1]));if(!std::regex_search(text,m,std::regex(R"(internalField\s+nonuniform\s+List<scalar>\s+(\d+)\s*\(([\s\S]*?)\)\s*;)")))throw std::runtime_error("unsupported OpenFOAM scalar internalField");const auto n=static_cast<std::size_t>(std::stoull(m[1]));if(n!=expected)throw std::runtime_error("OpenFOAM scalar field size mismatch");std::istringstream ss(m[2].str());std::vector<double> v;double x;while(ss>>x)v.push_back(x);if(v.size()!=n)throw std::runtime_error("malformed OpenFOAM scalar field");return v;}
-void write_openfoam_vol_scalar_field(const std::filesystem::path&p,const std::string&name,const std::vector<double>&v,const std::string&dim){std::ofstream o(p);if(!o)throw std::runtime_error("cannot create OpenFOAM scalar field");o<<"FoamFile\n{ version 2.0; format ascii; class volScalarField; object "<<name<<"; }\n"<<"dimensions "<<dim<<";\ninternalField nonuniform List<scalar>\n"<<v.size()<<"\n(\n";for(double x:v)o<<x<<"\n";o<<")\n;\nboundaryField {}\n";}
+std::string strip_comments(std::string s) {
+    s = std::regex_replace(s, std::regex(R"(//[^\n\r]*)"), "");
+    s = std::regex_replace(s, std::regex(R"(/\*[\s\S]*?\*/)"), "");
+    return s;
+}
+std::string list_body(const std::string& text) {
+    std::smatch m;
+    std::regex start(R"((\d+)\s*\()");
+    if (!std::regex_search(text, m, start))
+        throw std::runtime_error("OpenFOAM list header not found");
+    const auto open = static_cast<std::size_t>(m.position(0) + m.length(0) - 1);
+    int depth = 0;
+    for (std::size_t i = open; i < text.size(); ++i) {
+        if (text[i] == '(')
+            ++depth;
+        else if (text[i] == ')' && --depth == 0)
+            return text.substr(open + 1, i - open - 1);
+    }
+    throw std::runtime_error("unterminated OpenFOAM list");
+}
+std::vector<Vec3> read_points(const std::filesystem::path& p) {
+    auto body = list_body(strip_comments(read_text(p)));
+    std::regex point(R"(\(\s*([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\s*\))");
+    std::vector<Vec3> out;
+    for (auto it = std::sregex_iterator(body.begin(), body.end(), point); it != std::sregex_iterator(); ++it)
+        out.push_back({std::stod((*it)[1]), std::stod((*it)[2]), std::stod((*it)[3])});
+    if (out.empty())
+        throw std::runtime_error("OpenFOAM points list empty");
+    return out;
+}
+std::vector<std::vector<std::size_t>> read_faces(const std::filesystem::path& p) {
+    auto body = list_body(strip_comments(read_text(p)));
+    std::regex face(R"((\d+)\s*\(([^\)]*)\))");
+    std::vector<std::vector<std::size_t>> out;
+    for (auto it = std::sregex_iterator(body.begin(), body.end(), face); it != std::sregex_iterator(); ++it) {
+        const auto n = static_cast<std::size_t>(std::stoull((*it)[1]));
+        std::istringstream ss((*it)[2].str());
+        std::vector<std::size_t> f;
+        std::size_t q;
+        while (ss >> q)
+            f.push_back(q);
+        if (f.size() != n || n < 3)
+            throw std::runtime_error("malformed OpenFOAM face");
+        out.push_back(std::move(f));
+    }
+    if (out.empty())
+        throw std::runtime_error("OpenFOAM faces list empty");
+    return out;
+}
+std::vector<std::size_t> read_labels(const std::filesystem::path& p) {
+    auto body = list_body(strip_comments(read_text(p)));
+    std::istringstream ss(body);
+    std::vector<std::size_t> out;
+    std::size_t x;
+    while (ss >> x)
+        out.push_back(x);
+    return out;
+}
+Vec3 cross(Vec3 a, Vec3 b) {
+    return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
+}
+Vec3 polygon_center(const std::vector<std::size_t>& f, const std::vector<Vec3>& p) {
+    Vec3 c{};
+    for (auto i : f) {
+        if (i >= p.size())
+            throw std::runtime_error("OpenFOAM face point index out of range");
+        c += p[i];
+    }
+    return c / static_cast<double>(f.size());
+}
+Vec3 polygon_area(const std::vector<std::size_t>& f, const std::vector<Vec3>& p) {
+    const Vec3 o = p[f[0]];
+    Vec3 a{};
+    for (std::size_t i = 1; i + 1 < f.size(); ++i)
+        a += cross(p[f[i]] - o, p[f[i + 1]] - o) * 0.5;
+    return a;
+}
+struct PatchRaw {
+    std::string name;
+    std::size_t n{}, start{};
+};
+std::vector<PatchRaw> read_boundary(const std::filesystem::path& p) {
+    const auto text = strip_comments(read_text(p));
+    const auto body = list_body(text);
+    std::regex patch(R"(([A-Za-z0-9_\.\-]+)\s*\{([^\}]*)\})");
+    std::vector<PatchRaw> out;
+    for (auto it = std::sregex_iterator(body.begin(), body.end(), patch); it != std::sregex_iterator(); ++it) {
+        std::string b = (*it)[2].str();
+        std::smatch nm, sm;
+        if (!std::regex_search(b, nm, std::regex(R"(nFaces\s+(\d+)\s*;)")) ||
+            !std::regex_search(b, sm, std::regex(R"(startFace\s+(\d+)\s*;)")))
+            throw std::runtime_error("OpenFOAM boundary patch missing nFaces/startFace");
+        out.push_back({(*it)[1].str(), static_cast<std::size_t>(std::stoull(nm[1])),
+                       static_cast<std::size_t>(std::stoull(sm[1]))});
+    }
+    return out;
+}
+} // namespace
+cfd::fvm::PolyMesh read_openfoam_polymesh(const std::filesystem::path& dir) {
+    const auto points = read_points(dir / "points");
+    const auto raw_faces = read_faces(dir / "faces");
+    const auto owner = read_labels(dir / "owner");
+    const auto neighbour = read_labels(dir / "neighbour");
+    if (owner.size() != raw_faces.size())
+        throw std::runtime_error("OpenFOAM owner count mismatch");
+    std::size_t cells = 0;
+    for (auto c : owner)
+        cells = std::max(cells, c + 1);
+    for (auto c : neighbour)
+        cells = std::max(cells, c + 1);
+    std::vector<cfd::fvm::BoundaryPatch> patches;
+    const auto raw_patches = read_boundary(dir / "boundary");
+    for (const auto& p : raw_patches)
+        patches.push_back({p.name});
+    std::vector<std::size_t> face_patch(raw_faces.size(), cfd::fvm::invalid_patch);
+    for (std::size_t p = 0; p < raw_patches.size(); ++p)
+        for (std::size_t f = raw_patches[p].start; f < raw_patches[p].start + raw_patches[p].n; ++f) {
+            if (f >= raw_faces.size())
+                throw std::runtime_error("OpenFOAM boundary face range invalid");
+            face_patch[f] = p;
+        }
+    std::vector<cfd::fvm::Face> faces(raw_faces.size());
+    std::vector<Vec3> center_sum(cells);
+    std::vector<double> center_weight(cells);
+    for (std::size_t f = 0; f < raw_faces.size(); ++f) {
+        Vec3 fc = polygon_center(raw_faces[f], points), sf = polygon_area(raw_faces[f], points);
+        std::size_t nb = f < neighbour.size() ? neighbour[f] : cfd::fvm::invalid_cell;
+        faces[f] = {owner[f], nb, fc, sf, face_patch[f]};
+        double w = std::max(cfd::fvm::magnitude(sf), 1e-30);
+        center_sum[owner[f]] += fc * w;
+        center_weight[owner[f]] += w;
+        if (nb != cfd::fvm::invalid_cell) {
+            center_sum[nb] += fc * w;
+            center_weight[nb] += w;
+        }
+    }
+    std::vector<cfd::fvm::Cell> cell(cells);
+    for (std::size_t c = 0; c < cells; ++c) {
+        if (!(center_weight[c] > 0))
+            throw std::runtime_error("OpenFOAM cell has no faces");
+        cell[c].center = center_sum[c] / center_weight[c];
+    }
+    std::vector<double> vol(cells);
+    for (const auto& f : faces) {
+        vol[f.owner] += cfd::fvm::dot(f.area, f.center) / 3.0;
+        if (!f.boundary())
+            vol[f.neighbour] -= cfd::fvm::dot(f.area, f.center) / 3.0;
+    }
+    for (std::size_t c = 0; c < cells; ++c) {
+        cell[c].volume = std::abs(vol[c]);
+        if (!(cell[c].volume > 0))
+            throw std::runtime_error("OpenFOAM cell volume non-positive");
+    }
+    return {std::move(cell), std::move(faces), std::move(patches)};
+}
+std::vector<double> read_openfoam_vol_scalar_field(const std::filesystem::path& p, std::size_t expected) {
+    const auto text = strip_comments(read_text(p));
+    std::smatch m;
+    if (std::regex_search(text, m, std::regex(R"(internalField\s+uniform\s+([-+0-9.eE]+)\s*;)")))
+        return std::vector<double>(expected, std::stod(m[1]));
+    if (!std::regex_search(text, m,
+                           std::regex(R"(internalField\s+nonuniform\s+List<scalar>\s+(\d+)\s*\(([\s\S]*?)\)\s*;)")))
+        throw std::runtime_error("unsupported OpenFOAM scalar internalField");
+    const auto n = static_cast<std::size_t>(std::stoull(m[1]));
+    if (n != expected)
+        throw std::runtime_error("OpenFOAM scalar field size mismatch");
+    std::istringstream ss(m[2].str());
+    std::vector<double> v;
+    double x;
+    while (ss >> x)
+        v.push_back(x);
+    if (v.size() != n)
+        throw std::runtime_error("malformed OpenFOAM scalar field");
+    return v;
+}
+void write_openfoam_vol_scalar_field(const std::filesystem::path& p, const std::string& name,
+                                     const std::vector<double>& v, const std::string& dim,
+                                     const std::string& boundary) {
+    std::ofstream o(p);
+    if (!o)
+        throw std::runtime_error("cannot create OpenFOAM scalar field");
+    o << "FoamFile\n{ version 2.0; format ascii; class volScalarField; object " << name << "; }\n"
+      << "dimensions " << dim << ";\ninternalField nonuniform List<scalar>\n"
+      << v.size() << "\n(\n";
+    for (double x : v)
+        o << x << "\n";
+    o << ")\n;\n" << boundary;
+}
+void write_openfoam_vol_vector_field(const std::filesystem::path& p, const std::string& name,
+                                     const std::vector<cfd::fvm::Vec3>& v, const std::string& dim,
+                                     const std::string& boundary) {
+    std::ofstream o(p);
+    if (!o)
+        throw std::runtime_error("cannot create OpenFOAM vector field");
+    o << "FoamFile\n{ version 2.0; format ascii; class volVectorField; object " << name << "; }\n"
+      << "dimensions " << dim << ";\ninternalField nonuniform List<vector>\n"
+      << v.size() << "\n(\n";
+    for (const auto& x : v)
+        o << "(" << x.x << ' ' << x.y << ' ' << x.z << ")\n";
+    o << ")\n;\n" << boundary;
+}
 } // namespace cfd::io
