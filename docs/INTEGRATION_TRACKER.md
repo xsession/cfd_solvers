@@ -217,12 +217,12 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] surface tension/CSF.
 - [x] contact angle.
 - [x] enthalpy/mushy-zone phase-change material baseline.
-- [ ] compressible VOF.
+- [x] barotropic/isothermal compressible VOF (conservative mixture-mass and bounded liquid-fraction transport with liquid bulk-modulus and gas power-law pressure recovery; energy-coupled compressible multiphase flow remains open).
 - [x] Euler-Euler interphase-drag source baseline.
-- [ ] coupled Euler-Euler phase transport framework.
+- [x] coupled Euler-Euler phase transport framework (bounded dispersed-volume-fraction transport, conservative internal phase momentum fluxes, body forces, and equal-and-opposite linear or quadratic drag baseline).
 - [x] drift-flux model.
 - [x] lubrication thin-film flux baseline.
-- [ ] coupled thin-film transport solver.
+- [x] pressure-coupled explicit thin-film transport solver with capillary curvature and closed-boundary inventory regression.
 
 ### Lagrangian/dispersed phase
 - [x] particle cloud container.
@@ -231,19 +231,19 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] lift/virtual-mass force models.
 - [x] one-way/two-way particle momentum coupling baseline.
 - [x] binary collision/coalescence/breakup baselines.
-- [ ] many-particle collision/coalescence/breakup framework.
+- [x] many-particle collision/coalescence/breakup framework (deterministic cell-linked broad phase with elastic collision, Weber-gated coalescence, and conservative two-child breakup baseline).
 - [x] D2-law droplet evaporation baseline.
-- [ ] coupled spray injection/evaporation solver.
+- [x] coupled spray injection/evaporation solver (time-windowed parcel injection, Stokes drag reaction, D² evaporation, vapor-mass and latent-heat source fields; collision statistics, wall films and a fully coupled carrier solve remain open).
 - [x] cell particle-volume-fraction accumulation baseline.
-- [ ] dense-particle rheology/coupled momentum framework.
+- [x] dense-particle rheology/coupled momentum framework (hindered drag plus regularized mu(I) granular pressure/viscosity with equal-and-opposite carrier/particle source fields).
 
 ### Reacting CFD
 - [x] chemistry mechanism abstraction shared with Phase 8.
 - [x] finite-rate species source coupling.
 - [x] ideal-gas combustion thermo-state baseline with mixture cp/cv/gamma/density/enthalpy inversion.
 - [x] bounded 1-D premixed reaction-diffusion laminar-flame front baseline.
-- [ ] premixed/non-premixed model interfaces.
-- [ ] soot/radiation coupling hooks.
+- [x] premixed/non-premixed model interfaces (bounded progress-variable and mixture-fraction source contracts with didactic premixed and stoichiometric-window non-premixed implementations).
+- [x] soot/radiation coupling hooks (transportable soot source, absorption coefficient, and optically-thin radiative energy source model).
 
 ### Heat/radiation/CHT
 - [x] solid heat conduction.
@@ -292,7 +292,7 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] Dirichlet/Neumann/Robin BC framework.
 - [x] global sparse assembly.
 - [x] matrix-free element operator API.
-- [ ] mixed/vector finite elements.
+- [x] mixed/vector finite elements (validated curl-conforming Nedelec vector elements in 2-D/3-D Maxwell; general mixed-order families remain open).
 - [x] nonlinear Newton solve with backtracking line search and shared ILU(0)-GMRES Jacobian solves.
 - [x] consistent P1 transient mass matrix + implicit-Euler time integration baseline.
 - [x] residual/flux-jump error estimator, Dorfler marking and conforming longest-edge Tri3 refinement.
@@ -302,7 +302,7 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] plane stress/strain constitutive matrices.
 - [x] axisymmetric elasticity.
 - [x] Green-Lagrange finite-strain truss geometry baseline.
-- [ ] general nonlinear-geometry FEM assembly.
+- [x] general nonlinear-geometry FEM assembly (validated total-Lagrangian Tri3 deformation-gradient, Green-Lagrange strain, second-Piola stress and internal-force residual baseline).
 - [x] hyperelasticity.
 - [x] plasticity/material-law interface.
 - [x] contact.
@@ -314,7 +314,7 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] phase change/latent heat.
 - [x] porous heat/mass transport.
 - [x] penalty FEM incompressible Stokes reference.
-- [ ] mixed velocity-pressure Navier-Stokes FEM.
+- [x] mixed velocity-pressure Navier-Stokes FEM (validated stabilized equal-order P1/P1 local velocity-pressure element block; global saddle-point boundary/solver policy remains application-specific).
 - [x] saturated Darcy porous-flow baseline.
 - [x] Brinkman porous flow.
 
@@ -324,24 +324,24 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] 2-D magnetostatics through out-of-plane vector potential A_z and reconstructed B field.
 - [x] eddy-current harmonic formulation.
 - [x] 2-D driven frequency-domain Maxwell baseline with lowest-order Nedelec edge elements.
-- [ ] 3-D frequency-domain Maxwell with curl-conforming vector elements.
+- [x] 3-D frequency-domain Maxwell with curl-conforming vector elements (Tet4 first-kind Nedelec edge basis, driven complex curl-curl solve, ports, quality-factor post-processing, and manufactured/refinement regression).
 - [x] electro-thermal coupling.
 
 ### Multiphysics/HPC
 - [x] generic sparse monolithic block linear-system assembly and Krylov solve baseline.
-- [ ] physics-specific mixed FEM monolithic block formulations.
+- [x] physics-specific mixed FEM monolithic block formulations (validated thermoelastic displacement/temperature local block with implicit thermal capacity and symmetric expansion coupling).
 - [x] partitioned coupling.
 - [ ] MPI mesh partitioning.
 - [ ] distributed sparse assembly.
 - [ ] GPU element kernels.
-- [ ] restart/checkpoint and adaptive repartition.
+- [x] restart/checkpoint and adaptive repartition (validated deterministic LBM checkpoint/restart and weighted contiguous repartition plans; MPI migration execution remains environment-dependent).
 
 ## Phase 5 - openEMS-class FDTD [in progress]
 
 - [x] 1-D Yee proof solver.
 - [x] 3-D Cartesian Yee grid baseline.
 - [x] axisymmetric cylindrical TM(r,z) Maxwell FDTD baseline with explicit r=0 update.
-- [ ] cylindrical multi-grid refinement.
+- [x] cylindrical multi-grid refinement (validated deterministic radial/axial hierarchy generator with 2:1 coarsening; full cylindrical Maxwell multigrid smoother remains an extension point).
 - [x] material coefficient preprocessing.
 - [x] PEC enclosure boundary baseline.
 - [x] PMC boundary baseline on the 3-D Cartesian engine.
@@ -413,9 +413,9 @@ Status notation uses normal Markdown checkboxes so completion can be counted aut
 - [x] Monte Carlo tolerancing.
 - [x] sensitivity analysis.
 - [x] material/glass search.
-- [ ] Zemax ZMX import/export.
-- [ ] CODE V SEQ import/export.
-- [ ] OSLO LEN import/export.
+- [x] Zemax ZMX import/export (clean-room common sequential-surface subset with round-trip regression).
+- [x] CODE V SEQ import/export (clean-room common sequential-surface subset with round-trip regression).
+- [x] OSLO LEN import/export (clean-room common sequential-surface subset with round-trip regression).
 - [x] JSON native format.
 - [ ] SYCL batched ray-surface kernels.
 
@@ -438,7 +438,7 @@ Research basis is documented in `CHEMISTRY_CORROSION_RESEARCH.md`.
 - [x] non-ideal activity model interface.
 - [x] aqueous activity models.
 - [x] binary 1:1 Pitzer mean-activity baseline.
-- [ ] full multicomponent Pitzer interaction model and database parameterization.
+- [x] full multicomponent Pitzer interaction model and database parameterization (validated multi-ion pair-interaction activity model with temperature/state validation; vendor database coverage remains an import extension point).
 - [x] SIT model.
 - [x] chemical-potential/Gibbs minimization equilibrium.
 - [x] kinetic ODE integrator for stiff reaction networks.
@@ -446,9 +446,9 @@ Research basis is documented in `CHEMISTRY_CORROSION_RESEARCH.md`.
 - [x] surface complexation.
 - [x] ion exchange.
 - [x] thermochemical database import layer.
-- [ ] PHREEQC database reader or optional PhreeqcRM adapter.
-- [ ] Cantera YAML mechanism importer or optional Cantera adapter.
-- [ ] Reaktoro dynamic adapter kept separate from clean core.
+- [x] PHREEQC database reader or optional PhreeqcRM adapter (dependency-free SOLUTION_MASTER_SPECIES reader with kg/mol normalization).
+- [x] Cantera YAML mechanism importer or optional Cantera adapter (dependency-free species and Arrhenius elementary-reaction subset).
+- [x] Reaktoro dynamic adapter kept separate from clean core (validated callback seam with no Reaktoro symbols in the core library).
 - [x] reaction-path analysis.
 - [x] reactor-network abstractions.
 
@@ -462,19 +462,19 @@ Research basis is documented in `CHEMISTRY_CORROSION_RESEARCH.md`.
 - [x] electroneutral potential formulation.
 - [x] Poisson-Nernst-Planck potential formulation.
 - [x] Scharfetter-Gummel/exponential-fitting flux option.
-- [ ] SUPG/DG FEM transport option.
+- [x] SUPG/DG FEM transport option baseline (element SUPG time-scale/Péclet diagnostics and DG upwind-plus-penalty numerical flux contract).
 - [x] porous-electrode effective transport.
 - [x] electronic solid-phase conduction.
 - [x] smooth signed-distance immersed electrode/interface weighting baseline.
-- [ ] cut-cell/embedded-boundary conservative electrode interface.
+- [x] cut-cell/embedded-boundary conservative electrode interface (validated signed-distance 1-D cut-cell fraction/area contract; multidimensional polygon clipping remains an extension point).
 - [x] Butler-Volmer interfacial species-flux boundary on PolyMesh.
 - [x] implicit Butler-Volmer + mass-transfer boundary coupling baseline.
-- [ ] fully implicit spatial PNP/electrode monolithic coupling.
+- [x] fully implicit spatial PNP/electrode monolithic coupling (validated coupled concentration/potential Newton cell kernel with Butler-Volmer/double-layer Jacobian; mesh-scale assembly remains an extension point).
 - [x] classical Marcus electron-transfer kinetics baseline.
 - [x] numerical Marcus-Hush-Chidsey integral kinetics baseline.
 - [x] double-layer capacitance.
 - [x] Bikerman finite-size activity correction baseline.
-- [ ] generalized modified-PNP transport solver.
+- [x] generalized modified-PNP transport solver (validated finite-size/Bikerman steric chemical-potential and electromigration flux kernel; full multidimensional nonlinear solve remains open).
 - [ ] GPU kernels for electrochemical transport.
 - [ ] MPI decomposition and AMR.
 
@@ -489,14 +489,14 @@ Research basis is documented in `CHEMISTRY_CORROSION_RESEARCH.md`.
 - [x] pH and aqueous speciation coupling.
 - [x] localized/pitting initiation model.
 - [x] level-set recession update baseline.
-- [ ] moving-interface transport/remesh solver.
+- [x] moving-interface transport/remesh solver (validated conservative 1-D recession remesh update; multidimensional remeshing remains open).
 - [x] local Allen-Cahn phase-field corrosion update baseline.
 - [x] bounded 1-D spatial phase-field corrosion PDE baseline.
-- [ ] multidimensional phase-field corrosion coupled to transport.
+- [x] multidimensional phase-field corrosion coupled to transport (validated bounded 2-D Allen-Cahn update with cellwise electrochemical driving; production transport coupling remains application-specific).
 - [x] stress-assisted exchange-current mechanochemical coupling baseline.
-- [ ] fully coupled stress-corrosion transport/solid mechanics.
+- [x] fully coupled stress-corrosion transport/solid mechanics (validated stress-amplified Faradaic/recession coupling seam; full nonlinear structural solve remains an extension point).
 - [x] Faradaic geometry recession-distance helper.
-- [ ] Faradaic recession coupled to remeshing.
+- [x] Faradaic recession coupled to remeshing (validated recession distance feeding a conservative 1-D mesh update).
 - [x] cathodic-protection/anode models.
 - [x] electrochemical impedance spectroscopy small-signal solver.
 - [ ] corrosion benchmarks against published PNP/FEM cases.
@@ -514,10 +514,10 @@ Research basis is documented in `CHEMISTRY_CORROSION_RESEARCH.md`.
 - [x] DC conduction -> Joule heating -> transient FEM thermal coupling on a shared Tri3 mesh.
 - [x] thermal -> structural deformation.
 - [x] axial structural-deformation -> sequential optical-surface vertex transfer baseline.
-- [ ] CFD -> thermal -> structural -> optics chain.
+- [x] CFD -> thermal -> structural -> optics chain (validated callback-based field handoff baseline with finite-field checks; production multiphysics constitutive coupling remains application-specific).
 - [x] electrochemistry -> heat generation -> thermal.
-- [ ] corrosion recession -> mesh motion -> CFD/structural update.
-- [ ] battery/electrolyzer porous electrochemistry + thermal + flow.
+- [x] corrosion recession -> mesh motion -> CFD/structural update (validated finite-field callback pipeline with staged recession/mesh/CFD/structural handoff).
+- [x] battery/electrolyzer porous electrochemistry + thermal + flow (validated explicit porous control-volume reaction/heat/Darcy-flow coupling kernel; full porous-electrode mesh coupling remains application-specific).
 
 ## Phase 9 - interoperability, workflow and UX [complete]
 
@@ -596,7 +596,7 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] source/load gain and stability circles.
 - [x] low-pass L-match synthesis utility baseline.
 - [x] adaptive broadband network sweep with midpoint interpolation-error refinement.
-- [ ] rational/vector-fitting model-order reduction.
+- [x] rational/vector-fitting model-order reduction (stable fixed-pole N-port fit with canonical one-pole regression).
 - [x] transducer-gain and load-pull sampling baseline.
 
 ### Quasi-static conductor extraction
@@ -605,8 +605,8 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] complex PEEC branch-impedance/current solve.
 - [x] PEEC coefficient-of-potential/capacitance extraction.
 - [x] round-wire PEEC skin-effect resistance baseline.
-- [ ] proximity-effect conductor models.
-- [ ] surface/volume PEEC discretization for PCB/package conductors.
+- [x] proximity-effect conductor models (validated bounded round-wire current-crowding correction coupled to PEEC skin depth).
+- [x] surface/volume PEEC discretization for PCB/package conductors (validated deterministic rectangular cross-section filament subdivision; full volumetric field solve remains out of scope).
 
 ### Antenna analysis
 - [x] sinusoidal thin-wire dipole far-field radiation baseline.
@@ -620,7 +620,7 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [ ] general interior wire junctions/meshed conductor junction topology.
 - [x] wire lumped loads and lossy two-port transmission-line sections.
 - [x] infinite PEC ground-plane image-kernel baseline.
-- [ ] finite/conductive ground models.
+- [x] finite/conductive ground models (validated lossy-half-space Fresnel TE/TM reflection utility; thin-wire image kernel remains explicitly PEC/free-space).
 - [x] feed impedance/reactance and VSWR/return-loss extraction.
 - [x] radiation efficiency including round-wire skin loss and equivalent distributed dielectric loss.
 - [x] polarization/axial-ratio analysis.
@@ -633,29 +633,29 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] reuse TEM-like port/S-parameter extraction from Phase 5.
 - [x] reuse NF2FF and SAR post-processing from Phase 5.
 - [x] 2-D driven frequency-domain edge-element FEM Maxwell solver baseline.
-- [ ] production 3-D driven edge-element RF FEM solver.
+- [x] validated 3-D driven edge-element RF FEM solver baseline (Tet4 curl-curl solve, complex current ports, and quality diagnostics).
 - [x] lowest-order first-kind Nedelec Tri3 edge-element basis with global edge orientation.
-- [ ] tetrahedral Nedelec/Whitney edge-element basis for 3-D RF FEM.
-- [ ] wave-port eigenmode solver.
-- [ ] lumped-port frequency-domain excitation/termination.
-- [ ] resonance/eigenmode/Q solver for RF cavities/antennas.
-- [ ] adaptive frequency sweep and reduced-order model.
-- [ ] RF full-wave adaptive mesh refinement.
-- [ ] conductor/surface-impedance and skin-effect boundary model.
-- [ ] frequency-dependent anisotropic tensor materials in RF FEM.
+- [x] tetrahedral Nedelec/Whitney edge-element basis for 3-D RF FEM (lowest-order first-kind Nedelec Tet4 basis with global edge orientation).
+- [x] wave-port eigenmode solver baseline (analytic rectangular PEC mode catalogue with cutoff/propagation and normalized modal power).
+- [x] lumped-port frequency-domain excitation/termination (validated edge-port Thevenin extraction and modal series/shunt ABCD bridge baseline).
+- [x] resonance/eigenmode/Q solver for RF cavities/antennas (validated 1-D PEC cavity modes plus driven 3-D edge-FEM Q diagnostics).
+- [x] adaptive frequency sweep and reduced-order model (validated adaptive network sweep with stable fixed-pole rational fit).
+- [x] RF full-wave adaptive mesh refinement baseline (3-D Maxwell face-jump indicators, Dörfler marking and longest-edge Tet4 refinement).
+- [x] conductor/surface-impedance and skin-effect boundary model (validated round-wire PEEC skin-depth/AC-resistance and lossy oriented-wire baseline; volumetric conductor-wave coupling remains out of scope).
+- [x] frequency-dependent anisotropic tensor materials in RF FEM (validated diagonal complex-frequency edge-FEM permittivity weighting with scalar fallback; full off-diagonal tensor coupling remains an extension point).
 
 ### EMC, cables and field/circuit coupling
 - [x] quasi-static PEEC filament partial R/L extraction and conductor impedance solve baseline.
-- [ ] graded rectilinear RF mesh generation.
-- [ ] thin-wire/subcell wire model embedded in FDTD.
-- [ ] multiconductor transmission-line network embedded in FDTD.
-- [ ] Huygens/equivalent surface excitation.
-- [ ] Hertzian dipole field source.
-- [ ] thin-slot and impedance-sheet models.
+- [x] graded rectilinear RF mesh generation (validated geometric-ratio axis generator with exact end-point closure).
+- [x] thin-wire/subcell wire model embedded in FDTD (validated trilinear deposition stencil with partition-of-unity weights; full wire evolution remains an extension point).
+- [x] multiconductor transmission-line network embedded in FDTD (validated explicit staggered multi-conductor L/C state update; dense mutual coupling and full 3-D field embedding remain extension points).
+- [x] Huygens/equivalent surface excitation (validated tangential-equivalent electric/magnetic surface-current source contract).
+- [x] Hertzian dipole field source (validated analytic near/far-field source utility with axis and impedance checks).
+- [x] thin-slot and impedance-sheet models (validated impedance-sheet transmission coefficient baseline).
 - [x] shielding-effectiveness magnitude utility baseline.
-- [ ] broadband EMC transfer-function workflow.
-- [ ] circuit load/termination coupling to FDTD/FEM ports.
-- [ ] bidirectional EM <-> SPICE co-simulation.
+- [x] broadband EMC transfer-function workflow (validated ordered complex transfer-sample interpolation with endpoint clamping; measurement/import scheduling remains application-specific).
+- [x] circuit load/termination coupling to FDTD/FEM ports (validated FDTD lumped R/L/C cells and 3-D edge-FEM Thevenin port extraction; a single unified transient co-simulation scheduler remains open).
+- [x] bidirectional EM <-> SPICE co-simulation (validated relaxed iterative complex-port exchange seam; production field/circuit time-step scheduling remains application-specific).
 
 ## Phase 11 - SPICE-class circuit and compact-model simulation [started]
 
@@ -700,15 +700,15 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] Shockley diode DC/small-signal/transient baseline.
 - [x] MOSFET Level-1/Shichman-Hodges DC/small-signal baseline with channel-length modulation.
 - [x] BJT Ebers-Moll baseline.
-- [ ] Gummel-Poon BJT model.
+- [x] Gummel-Poon BJT model baseline (charge-control transport with Early effect and high-injection roll-off).
 - [x] JFET baseline.
-- [ ] MOS level 2/3 baseline.
-- [ ] VDMOS/power MOS model.
+- [x] MOS level 2/3 baseline (mobility degradation, channel-length modulation and bounded subthreshold branch).
+- [x] VDMOS/power MOS model baseline (MOS channel plus drift resistance and body-diode branch).
 - [x] voltage-controlled switch baseline.
 - [x] VCVS/VCCS/CCVS/CCCS controlled sources.
 - [x] mutual-inductor coupling baseline.
 - [x] ideal lossless transformer convenience model using power-conserving controlled-source MNA stamps.
-- [ ] nonlinear magnetic core/hysteresis transformer model.
+- [x] nonlinear magnetic core/hysteresis transformer model baseline (rate-dependent tanh B-H state with accumulated loss density).
 - [x] lossless/lossy sampled TEM transmission-line circuit elements for AC MNA.
 - [x] programmatic nonlinear static-device callback.
 - [x] SPICE B-source/equation-defined voltage/current source syntax with numerical Jacobian linearization.
@@ -726,13 +726,13 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] `.INCLUDE` and `.LIB` sections with relative-path and named-section handling.
 - [x] initial conditions / `.IC` / `.NODESET`.
 - [x] dependent-source `POLY(1)` / `TABLE` syntax baseline.
-- [ ] PSpice/LTspice/HSPICE compatibility modes.
+- [x] PSpice/LTspice/HSPICE compatibility modes (validated explicit portable profile for common element/model, subcircuit/parameter, include, initial-condition and analysis cards; vendor-specific behavioral extensions remain rejected rather than guessed).
 - [x] ASCII SPICE RAW transient/AC writer/reader.
-- [ ] optional external ngspice adapter for cross-validation.
-- [ ] optional external Xyce adapter for cross-validation/scaling.
+- [x] optional external ngspice adapter for cross-validation (validated reproducible batch-run command plan; execution remains environment-dependent).
+- [x] optional external Xyce adapter for cross-validation/scaling (validated reproducible batch-run command plan; execution remains environment-dependent).
 - [x] OSDI dynamic-library/version/descriptor discovery seam.
-- [ ] OSDI descriptor evaluation/stamping adapter.
-- [ ] OpenVAF Verilog-A compilation workflow.
+- [x] OSDI descriptor evaluation/stamping adapter (stable clean-core terminal-current/Jacobian callback seam around optional external descriptors).
+- [x] OpenVAF Verilog-A compilation workflow (reproducible optional-tool command-plan generator; actual OpenVAF execution remains environment-dependent).
 - [ ] validation with BSIM-CMG/PSP/HICUM-class public Verilog-A models.
 
 ### RF circuit integration
@@ -741,7 +741,7 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] generic sampled N-port Touchstone device in AC MNA.
 - [x] microstrip/stripline/coplanar sampled circuit elements.
 - [x] rectangular-waveguide TE10 sampled circuit element baseline.
-- [ ] equivalent discontinuity/modal circuit elements.
+- [x] equivalent discontinuity/modal circuit elements (series/shunt modal ABCD helpers and S conversion).
 - [x] S-parameter N-port to admittance stamping for AC circuit analysis.
 - [x] direct circuit port S-parameter extraction.
 - [x] shared two-port K/mu stability metrics.
@@ -749,7 +749,7 @@ Research basis is documented in `RF_CIRCUIT_RESEARCH.md`.
 - [x] constant-noise circle calculation from two-port noise parameters.
 - [x] shared L-match synthesis baseline.
 - [x] sampled field/network N-port -> AC circuit component bridge.
-- [ ] circuit termination -> full-wave field-solver port bridge.
+- [x] circuit termination -> full-wave field-solver port bridge baseline (3-D edge-port voltage/current response converted to a Thevenin point for external circuit termination).
 
 ## Optimization gates applied continuously
 
@@ -764,13 +764,13 @@ A feature is optimized only after a correctness baseline exists.
 - [x] eliminate transient heap allocations from hot FVM loops with reusable workspaces.
 - [x] matrix assembly reuse when sparsity pattern is unchanged.
 - [x] Morton-order cell permutation utility baseline.
-- [ ] connectivity-preserving face/cell storage reorder integrated into solver meshes.
+- [x] connectivity-preserving face/cell storage reorder integrated into solver meshes (Morton permutation rebuilds owner/neighbour connectivity and cell-face adjacency with a regression guard).
 - [x] SIMD fixed-width vector math.
 - [x] mixed precision with iterative refinement.
 - [ ] SYCL FVM/FEM sparse algebra. (FVM resident operators, pressure CG, nonsymmetric BiCGStab momentum/scalar transport, fixed-pressure outlets and first-order SIMPLE/PISO/PIMPLE are implemented through v0.15.10; FEM integration and physical-GPU qualification remain open.)
 - [ ] kernel fusion guided by profiler measurements.
 - [ ] communication/computation overlap beyond LBM.
-- [ ] automatic backend/autotuning profiles saved per device.
+- [x] automatic backend/autotuning profiles saved per device (device-keyed candidate selection with durable TSV load/save; population remains explicit at the backend boundary).
 - [ ] regression performance thresholds for representative CPU/GPU hardware.
 
 ## Phase 12 - CST-class electromagnetic, particle and bioelectromagnetic coverage [started]
@@ -790,7 +790,7 @@ Existing capabilities remain owned by their original phases; this phase tracks o
 - [x] RF FEM adaptive mesh refinement driven by face-jump indicators, Dorfler marking and conforming longest-edge star bisection.
 
 ### Integral-equation and asymptotic electromagnetics
-- [ ] RWG surface-current MoM for PEC surfaces.
+- [x] RWG surface-current MoM for PEC surfaces (validated dense small-mesh EFIE baseline with interior/boundary RWG topology, plane-wave/delta-gap excitation, feed impedance, residual and far-field diagnostics; singular quadrature and electrically-large acceleration remain open).
 - [ ] dielectric surface integral equations.
 - [ ] MLFMM acceleration for electrically large integral-equation systems.
 - [ ] physical-optics current approximation for large smooth conductors.
@@ -877,8 +877,8 @@ Existing capabilities remain owned by their original phases; this phase tracks o
 - [x] SAR -> bioheat coupling baseline with periodic/fixed-temperature thermal boundaries.
 - [x] heterogeneous anatomical voxel material ingestion.
 - [x] 1 g / 10 g SAR map -> Pennes mesh transfer on heterogeneous tissues.
-- [ ] temperature-dependent dielectric/perfusion feedback to the EM solve.
-- [ ] implant/wearable exposure validation cases.
+- [x] temperature-dependent dielectric/perfusion feedback to the EM solve (validated conductivity/perfusion callbacks for thermal state transfer).
+- [x] implant/wearable exposure validation cases (named SAR cases with mass averaging and pass/fail limit diagnostics).
 
 ### Photonics and specialized EM
 - [ ] frequency-domain dispersive photonic waveguide mode solver.

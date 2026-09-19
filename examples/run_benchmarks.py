@@ -8,6 +8,7 @@ import json
 import os
 import pathlib
 import platform
+import stat
 import subprocess
 import sys
 
@@ -15,6 +16,13 @@ TARGETS = [
     "cfd-example-phase01-hpc",
     "cfd-example-phase02-lbm",
     "cfd-example-phase03-fvm",
+    "cfd-example-phase03-vof",
+    "cfd-example-phase03-thin-film",
+    "cfd-example-phase03-euler-euler",
+    "cfd-example-phase03-compressible-vof",
+    "cfd-example-phase03-spray",
+    "cfd-example-phase03-particle-rheology",
+    "cfd-example-phase03-reacting-hooks",
     "cfd-example-phase04-fem",
     "cfd-example-phase05-fdtd",
     "cfd-example-phase06-optics",
@@ -23,10 +31,14 @@ TARGETS = [
     "cfd-example-phase10-rf",
     "cfd-example-phase11-spice",
     "cfd-example-phase12-em-pic",
+    "cfd-example-phase12-surface-mom",
     "cfd-example-phase13-dem",
     "cfd-example-phase14-acoustics",
     "cfd-example-phase15-tcad",
     "cfd-example-phase16a-battery",
+    "cfd-example-battery-dfn",
+    "cfd-example-battery-pack",
+    "cfd-example-battery-thermal",
     "cfd-example-real-openfoam-channel",
     "cfd-example-real-fdtd-radome-vtk",
     "cfd-example-real-lbm3d-model",
@@ -42,6 +54,15 @@ def executable_path(build: pathlib.Path, target: str) -> pathlib.Path:
         for name in names:
             candidate = build / config / name if config else build / name
             if candidate.exists():
+                if os.name != "nt" and not os.access(candidate, os.X_OK):
+                    # A few networked or mounted workspaces preserve the file
+                    # but drop its execute bits. Repair that local metadata so
+                    # the benchmark reports the solver result instead of a
+                    # misleading permission error.
+                    try:
+                        candidate.chmod(candidate.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+                    except OSError:
+                        pass
                 return candidate
     return build / names[-1]
 
@@ -97,6 +118,20 @@ def command_for_target(build: pathlib.Path, target: str, quick: bool, scale: int
         cmd += ["--scale", str(scale)]
     if target.startswith("cfd-example-real-"):
         cmd += ["--output", str(build / "example_outputs" / target / f"repeat_{repeat}")]
+    elif target in {
+        "cfd-example-phase03-vof",
+        "cfd-example-phase03-thin-film",
+        "cfd-example-phase03-euler-euler",
+        "cfd-example-phase03-compressible-vof",
+        "cfd-example-phase03-spray",
+        "cfd-example-phase03-particle-rheology",
+        "cfd-example-phase03-reacting-hooks",
+        "cfd-example-phase12-surface-mom",
+        "cfd-example-battery-dfn",
+        "cfd-example-battery-pack",
+        "cfd-example-battery-thermal",
+    }:
+        cmd += ["--output", str(build / "example_outputs" / target / f"repeat_{repeat}.csv")]
     return cmd
 
 

@@ -29,12 +29,9 @@ constexpr float tau = 0.73F;
 constexpr float amplitude = 0.017F;
 constexpr std::size_t steps = 7;
 
-template<class Descriptor>
-void gather_and_verify(const cfd::distributed::MpiCartesianRuntime& runtime,
-                       const cfd::lbm::MacroscopicFields& local,
-                       cfd::distributed::Extent3 global,
-                       const cfd::distributed::Brick& b,
-                       const char* label) {
+template <class Descriptor>
+void gather_and_verify(const cfd::distributed::MpiCartesianRuntime& runtime, const cfd::lbm::MacroscopicFields& local,
+                       cfd::distributed::Extent3 global, const cfd::distributed::Brick& b, const char* label) {
     const int local_cells = static_cast<int>(b.extent.cells());
     std::vector<unsigned long long> local_indices(static_cast<std::size_t>(local_cells));
     std::vector<float> local_values(static_cast<std::size_t>(local_cells) * 4U);
@@ -55,7 +52,8 @@ void gather_and_verify(const cfd::distributed::MpiCartesianRuntime& runtime,
     }
 
     std::vector<int> counts;
-    if (runtime.rank() == 0) counts.resize(static_cast<std::size_t>(runtime.size()));
+    if (runtime.rank() == 0)
+        counts.resize(static_cast<std::size_t>(runtime.size()));
     MPI_Gather(&local_cells, 1, MPI_INT, counts.data(), 1, MPI_INT, 0, runtime.communicator());
 
     std::vector<int> displacements;
@@ -80,13 +78,11 @@ void gather_and_verify(const cfd::distributed::MpiCartesianRuntime& runtime,
         all_values.resize(static_cast<std::size_t>(value_total));
     }
 
-    MPI_Gatherv(local_indices.data(), local_cells, MPI_UNSIGNED_LONG_LONG,
-                all_indices.data(), counts.data(), displacements.data(), MPI_UNSIGNED_LONG_LONG,
-                0, runtime.communicator());
+    MPI_Gatherv(local_indices.data(), local_cells, MPI_UNSIGNED_LONG_LONG, all_indices.data(), counts.data(),
+                displacements.data(), MPI_UNSIGNED_LONG_LONG, 0, runtime.communicator());
     const int local_value_count = 4 * local_cells;
-    MPI_Gatherv(local_values.data(), local_value_count, MPI_FLOAT,
-                all_values.data(), value_counts.data(), value_displacements.data(), MPI_FLOAT,
-                0, runtime.communicator());
+    MPI_Gatherv(local_values.data(), local_value_count, MPI_FLOAT, all_values.data(), value_counts.data(),
+                value_displacements.data(), MPI_FLOAT, 0, runtime.communicator());
 
     int ok = 1;
     if (runtime.rank() == 0) {
@@ -108,11 +104,11 @@ void gather_and_verify(const cfd::distributed::MpiCartesianRuntime& runtime,
         }
     }
     MPI_Bcast(&ok, 1, MPI_INT, 0, runtime.communicator());
-    if (!ok) throw std::runtime_error(std::string(label) + " parity regression");
+    if (!ok)
+        throw std::runtime_error(std::string(label) + " parity regression");
 }
 
-template<class Descriptor>
-void run_cpu_case(const cfd::distributed::MpiCartesianRuntime& runtime) {
+template <class Descriptor> void run_cpu_case(const cfd::distributed::MpiCartesianRuntime& runtime) {
     const auto global = runtime.brick().global;
     cfd::lbm::DistributedPullBlock<Descriptor> block({global, tau}, runtime.brick());
     block.initialize_taylor_green(amplitude);
@@ -129,16 +125,14 @@ void run_cpu_case(const cfd::distributed::MpiCartesianRuntime& runtime) {
 }
 
 #if defined(CFD_HAS_SYCL)
-template<class Descriptor>
-void run_sycl_case(const cfd::distributed::MpiCartesianRuntime& runtime) {
+template <class Descriptor> void run_sycl_case(const cfd::distributed::MpiCartesianRuntime& runtime) {
     const auto global = runtime.brick().global;
-    const auto device = cfd::distributed::device_for_local_rank(
-        static_cast<std::size_t>(runtime.local_rank()),
-        static_cast<std::size_t>(runtime.local_size()));
+    const auto device = cfd::distributed::device_for_local_rank(static_cast<std::size_t>(runtime.local_rank()),
+                                                                static_cast<std::size_t>(runtime.local_size()));
     cfd::lbm::DistributedSyclPullBlock<Descriptor> block({global, tau}, runtime.brick(), device);
     block.initialize_taylor_green(amplitude);
-    cfd::distributed::MpiSyclSelectiveHaloExchange<Descriptor> exchange(
-        runtime, block, cfd::distributed::GpuMpiMode::staged_host);
+    cfd::distributed::MpiSyclSelectiveHaloExchange<Descriptor> exchange(runtime, block,
+                                                                        cfd::distributed::GpuMpiMode::staged_host);
 
     for (std::size_t i = 0; i < steps; ++i) {
         exchange.begin();
@@ -161,13 +155,16 @@ void run_distributed_sparse_krylov(const cfd::distributed::MpiCartesianRuntime& 
 
     cfd::core::CsrBuilder builder(n, n);
     for (std::size_t i = 0U; i < n; ++i) {
-        if (i > 0U) builder.add(i, i - 1U, -1.0);
+        if (i > 0U)
+            builder.add(i, i - 1U, -1.0);
         builder.add(i, i, 2.0);
-        if (i + 1U < n) builder.add(i, i + 1U, -1.0);
+        if (i + 1U < n)
+            builder.add(i, i + 1U, -1.0);
     }
     const auto matrix = builder.build();
     std::vector<double> exact(n);
-    for (std::size_t i = 0U; i < n; ++i) exact[i] = 1.0 + 0.125 * static_cast<double>(i);
+    for (std::size_t i = 0U; i < n; ++i)
+        exact[i] = 1.0 + 0.125 * static_cast<double>(i);
     std::vector<double> global_rhs(n);
     matrix.multiply(exact, global_rhs);
 
@@ -175,10 +172,27 @@ void run_distributed_sparse_krylov(const cfd::distributed::MpiCartesianRuntime& 
                                   global_rhs.begin() + static_cast<std::ptrdiff_t>(end));
     std::vector<double> local_x(end - begin, 0.0);
     cfd::distributed::MpiDistributedCsrOperator distributed(matrix, begin, end, runtime.communicator());
+    std::vector<double> local_probe(exact.begin() + static_cast<std::ptrdiff_t>(begin),
+                                    exact.begin() + static_cast<std::ptrdiff_t>(end));
+    std::vector<double> local_probe_y(end - begin, 0.0);
+    distributed.begin_multiply(local_probe);
+    double independent_work = 0.0;
+    for (const double value : local_rhs)
+        independent_work += value * value;
+    distributed.finish_multiply(local_probe, local_probe_y);
+    if (!std::isfinite(independent_work) || distributed.multiply_pending()) {
+        throw std::runtime_error("MPI nonblocking sparse exchange lifecycle regression");
+    }
+    for (std::size_t i = begin; i < end; ++i) {
+        if (std::abs(local_probe_y[i - begin] - global_rhs[i]) >= 1.0e-12) {
+            throw std::runtime_error("MPI nonblocking sparse exchange result regression");
+        }
+    }
     cfd::core::KrylovWorkspace workspace;
-    const auto result = cfd::distributed::mpi_distributed_conjugate_gradient(
-        distributed, local_rhs, local_x, workspace, 256U, 1.0e-12);
-    if (!result.converged) throw std::runtime_error("MPI distributed CG failed to converge");
+    const auto result =
+        cfd::distributed::mpi_distributed_conjugate_gradient(distributed, local_rhs, local_x, workspace, 256U, 1.0e-12);
+    if (!result.converged)
+        throw std::runtime_error("MPI distributed CG failed to converge");
 
     double local_error = 0.0;
     for (std::size_t i = begin; i < end; ++i) {
@@ -186,66 +200,100 @@ void run_distributed_sparse_krylov(const cfd::distributed::MpiCartesianRuntime& 
     }
     double global_error = 0.0;
     MPI_Allreduce(&local_error, &global_error, 1, MPI_DOUBLE, MPI_MAX, runtime.communicator());
-    if (global_error >= 1.0e-9) throw std::runtime_error("MPI distributed CG solution regression");
+    if (global_error >= 1.0e-9)
+        throw std::runtime_error("MPI distributed CG solution regression");
 
     if (runtime.size() > 1 && distributed.halo_value_count() == 0U) {
         throw std::runtime_error("MPI distributed CSR partition unexpectedly has no halo columns");
     }
 }
 
-
 void run_distributed_dem_exchange(const cfd::distributed::MpiCartesianRuntime& runtime) {
     using namespace cfd::multibody;
-    DemSlabDecomposition decomposition{0.0,static_cast<double>(runtime.size()),runtime.size()};
-    MpiDemDomainExchange exchange(decomposition,runtime.communicator());
-    const int destination=(runtime.rank()+1)%runtime.size();
+    DemSlabDecomposition decomposition{0.0, static_cast<double>(runtime.size()), runtime.size()};
+    MpiDemDomainExchange exchange(decomposition, runtime.communicator());
+    const int destination = (runtime.rank() + 1) % runtime.size();
     DistributedDemParticle particle;
-    particle.global_id=static_cast<std::uint64_t>(runtime.rank()+1000);
-    particle.state.position={static_cast<double>(destination)+0.25,0.0,0.0};
-    particle.radius=0.05;
-    particle.owner_rank=runtime.rank();
+    particle.global_id = static_cast<std::uint64_t>(runtime.rank() + 1000);
+    particle.state.position = {static_cast<double>(destination) + 0.25, 0.0, 0.0};
+    particle.radius = 0.05;
+    particle.owner_rank = runtime.rank();
     std::vector<DistributedDemParticle> owned{particle};
-    auto ghosts=exchange.exchange(owned,0.30);
-    if(owned.size()!=1U || owned.front().owner_rank!=runtime.rank()) throw std::runtime_error("MPI DEM ownership migration regression");
-    if(decomposition.owner_rank(owned.front().state.position.x)!=runtime.rank()) throw std::runtime_error("MPI DEM migrated particle on wrong rank");
-    const int local_ghosts=static_cast<int>(ghosts.size());
-    int global_ghosts=0;
-    MPI_Allreduce(&local_ghosts,&global_ghosts,1,MPI_INT,MPI_SUM,runtime.communicator());
-    const int expected=std::max(0,runtime.size()-1);
-    if(global_ghosts!=expected) throw std::runtime_error("MPI DEM ghost exchange count regression");
+    auto ghosts = exchange.exchange(owned, 0.30);
+    if (owned.size() != 1U || owned.front().owner_rank != runtime.rank())
+        throw std::runtime_error("MPI DEM ownership migration regression");
+    if (decomposition.owner_rank(owned.front().state.position.x) != runtime.rank())
+        throw std::runtime_error("MPI DEM migrated particle on wrong rank");
+    const int local_ghosts = static_cast<int>(ghosts.size());
+    int global_ghosts = 0;
+    MPI_Allreduce(&local_ghosts, &global_ghosts, 1, MPI_INT, MPI_SUM, runtime.communicator());
+    const int expected = std::max(0, runtime.size() - 1);
+    if (global_ghosts != expected)
+        throw std::runtime_error("MPI DEM ghost exchange count regression");
 }
 
 void run_distributed_dem_contact_step(const cfd::distributed::MpiCartesianRuntime& runtime) {
     using namespace cfd::multibody;
-    if(runtime.size()<2) return;
-    DemSlabDecomposition decomposition{0.0,static_cast<double>(runtime.size()),runtime.size()};
-    MpiDemDomainExchange exchange(decomposition,runtime.communicator());
+    if (runtime.size() < 2)
+        return;
+    DemSlabDecomposition decomposition{0.0, static_cast<double>(runtime.size()), runtime.size()};
+    MpiDemDomainExchange exchange(decomposition, runtime.communicator());
     std::vector<DistributedDemParticle> owned;
-    if(runtime.rank()==0){
-        DistributedDemParticle p; p.global_id=100;p.owner_rank=0;p.state.position={0.95,0,0};p.mass=1.0;p.radius=0.1;p.inertia_diagonal={0.004,0.004,0.004};owned.push_back(p);
-    }else if(runtime.rank()==1){
-        DistributedDemParticle p; p.global_id=200;p.owner_rank=1;p.state.position={1.05,0,0};p.mass=1.0;p.radius=0.1;p.inertia_diagonal={0.004,0.004,0.004};owned.push_back(p);
+    if (runtime.rank() == 0) {
+        DistributedDemParticle p;
+        p.global_id = 100;
+        p.owner_rank = 0;
+        p.state.position = {0.95, 0, 0};
+        p.mass = 1.0;
+        p.radius = 0.1;
+        p.inertia_diagonal = {0.004, 0.004, 0.004};
+        owned.push_back(p);
+    } else if (runtime.rank() == 1) {
+        DistributedDemParticle p;
+        p.global_id = 200;
+        p.owner_rank = 1;
+        p.state.position = {1.05, 0, 0};
+        p.mass = 1.0;
+        p.radius = 0.1;
+        p.inertia_diagonal = {0.004, 0.004, 0.004};
+        owned.push_back(p);
     }
     std::vector<DistributedDemContactHistory> history;
     std::vector<DistributedDemBond> bonds;
-    HertzMindlinContactModel model; model.normal_stiffness=1.0e4;model.normal_damping=0.0;model.tangential_stiffness=100.0;model.tangential_damping=0.0;model.rolling_resistance=0.0;
-    const auto stats=exchange.step(owned,history,bonds,0.15,1.0e-4,{0,0,0},model);
-    unsigned long long local_contacts=static_cast<unsigned long long>(stats.contacts),global_contacts=0;
-    MPI_Allreduce(&local_contacts,&global_contacts,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,runtime.communicator());
-    if(global_contacts!=1ULL) throw std::runtime_error("MPI DEM cross-rank contact ownership regression");
-    double local_momentum=0.0;for(const auto& p:owned)local_momentum+=p.mass*p.state.linear_velocity.x;double global_momentum=0.0;
-    MPI_Allreduce(&local_momentum,&global_momentum,1,MPI_DOUBLE,MPI_SUM,runtime.communicator());
-    if(std::abs(global_momentum)>1.0e-10) throw std::runtime_error("MPI DEM reverse-force momentum regression");
+    HertzMindlinContactModel model;
+    model.normal_stiffness = 1.0e4;
+    model.normal_damping = 0.0;
+    model.tangential_stiffness = 100.0;
+    model.tangential_damping = 0.0;
+    model.rolling_resistance = 0.0;
+    const auto stats = exchange.step(owned, history, bonds, 0.15, 1.0e-4, {0, 0, 0}, model);
+    unsigned long long local_contacts = static_cast<unsigned long long>(stats.contacts), global_contacts = 0;
+    MPI_Allreduce(&local_contacts, &global_contacts, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, runtime.communicator());
+    if (global_contacts != 1ULL)
+        throw std::runtime_error("MPI DEM cross-rank contact ownership regression");
+    double local_momentum = 0.0;
+    for (const auto& p : owned)
+        local_momentum += p.mass * p.state.linear_velocity.x;
+    double global_momentum = 0.0;
+    MPI_Allreduce(&local_momentum, &global_momentum, 1, MPI_DOUBLE, MPI_SUM, runtime.communicator());
+    if (std::abs(global_momentum) > 1.0e-10)
+        throw std::runtime_error("MPI DEM reverse-force momentum regression");
 
     // Move the lower-ID/history owner across the slab and ensure the persistent
     // pair state follows it to rank 1 during the next ownership exchange.
-    if(runtime.rank()==0){for(auto& p:owned)if(p.global_id==100U)p.state.position.x=1.20;}
-    auto ghosts=exchange.exchange(owned,history,bonds,0.15);
+    if (runtime.rank() == 0) {
+        for (auto& p : owned)
+            if (p.global_id == 100U)
+                p.state.position.x = 1.20;
+    }
+    auto ghosts = exchange.exchange(owned, history, bonds, 0.15);
     (void)ghosts;
-    unsigned long long local_history=static_cast<unsigned long long>(history.size()),global_history=0;
-    MPI_Allreduce(&local_history,&global_history,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,runtime.communicator());
-    if(global_history!=1ULL) throw std::runtime_error("MPI DEM contact-history migration count regression");
-    if(runtime.rank()==1 && (history.size()!=1U || history.front().particle_a!=100U || history.front().particle_b!=200U)) {
+    unsigned long long local_history = static_cast<unsigned long long>(history.size()), global_history = 0;
+    MPI_Allreduce(&local_history, &global_history, 1, MPI_UNSIGNED_LONG_LONG, MPI_SUM, runtime.communicator());
+    if (global_history != 1ULL)
+        throw std::runtime_error("MPI DEM contact-history migration count regression");
+    if (runtime.rank() == 1 &&
+        (history.size() != 1U || history.front().particle_a != 100U || history.front().particle_b != 200U)) {
         throw std::runtime_error("MPI DEM contact history did not follow lower-ID owner");
     }
 }
@@ -265,7 +313,8 @@ int main(int argc, char** argv) {
         run_sycl_case<cfd::lbm::D3Q19Descriptor>(runtime);
         run_sycl_case<cfd::lbm::D3Q27Descriptor>(runtime);
 #endif
-        if (runtime.rank() == 0) std::cout << "MPI distributed tests passed\n";
+        if (runtime.rank() == 0)
+            std::cout << "MPI distributed tests passed\n";
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "MPI test failure: " << e.what() << '\n';

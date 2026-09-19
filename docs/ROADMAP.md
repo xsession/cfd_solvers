@@ -23,7 +23,7 @@ D2Q9/D3Q19/D3Q27, two-grid reference and single-grid in-place streaming, forcing
 
 ## Phase 3 - OpenFOAM-class finite volume
 
-Owner/neighbour `PolyMesh`, Gauss operators, bounded reconstruction, transient and collocated incompressible flow, Rhie-Chow, SIMPLE/PISO/PIMPLE, non-orthogonal correction, scalar transport and shared Krylov momentum solves are in place. Remaining groups include runtime-selectable schemes, higher-order temporal integration, turbulence, compressible flow, VOF/multiphase, reacting/species/energy equations, particles, moving mesh/AMR and production I/O.
+Owner/neighbour `PolyMesh`, Gauss operators, bounded reconstruction, transient and collocated incompressible flow, Rhie-Chow, SIMPLE/PISO/PIMPLE, non-orthogonal correction, scalar transport and shared Krylov momentum solves are in place. Remaining groups include runtime-selectable schemes, higher-order temporal integration, turbulence, compressible flow, VOF/multiphase, reacting/species/energy equations, particles, moving mesh/AMR and production I/O. Pressure-coupled explicit thin-film transport covers capillary relaxation and closed-boundary inventory conservation, the coupled Euler–Euler baseline advances bounded dispersed volume fraction, phase momentum and drag exchange, a barotropic compressible-VOF baseline conserves mixture mass while recovering pressure from phase compressibility laws, the spray baseline couples scheduled parcels to D² evaporation and carrier source fields, and the particle/rheology slice adds deterministic many-particle interactions, dense drag, and regularized granular stress. Reacting hooks now expose premixed/non-premixed source contracts and soot/radiation source fields.
 
 ## Phase 4 - Elmer-class finite element
 
@@ -52,6 +52,11 @@ The tracker, upstream pin manifest, benchmark history and reproducible release t
 ## Phase 10 - RF, antennas and microwave networks
 
 Started in v0.8.0. Validated baselines include generic N-port network math, Touchstone SnP, de-embedding, mixed-mode transforms, stability/gain metrics, common transmission-line/waveguide models, thin-wire dipole/array utilities, center-fed, coupled parallel-wire and arbitrary-orientation disjoint-wire MoM references, PEEC conductor extraction and circuit-port S-parameter bridges. Remaining work includes higher-fidelity MoM/NEC arbitrary connected geometry, junction basis functions, ground/image models and canonical convergence validation, broadband vector fitting/model-order reduction, PEEC capacitive/proximity effects, discontinuity/modal matching, full 3-D RF FEM wave ports/eigenmodes and hardware-backed distributed/GPU RF.
+
+The Phase-12 continuation now adds a small clean-room PEC surface-current MoM reference with
+RWG/half-RWG basis construction, delta-gap and plane-wave excitation, residual/feed diagnostics,
+and current-based far-field output. It is intentionally a dense reference path; singular
+quadrature, dielectric SIE, MLFMM and asymptotic/hybrid coupling remain separate increments.
 
 ## Phase 11 - SPICE-class circuits and compact models
 

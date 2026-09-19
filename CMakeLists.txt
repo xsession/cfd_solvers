@@ -35,6 +35,9 @@ add_library(cfd_solvers
     src/multibody/distributed_dem.cpp
     src/multibody/cfd_dem_coupling.cpp
     src/multibody/advanced_dynamics.cpp
+    src/multiphysics/pipeline.cpp
+    src/multiphysics/porous_electrothermal.cpp
+    src/multiphysics/em_spice_bridge.cpp
     src/spectral/fft.cpp
     src/acoustics/kspace2d.cpp
     src/acoustics/postprocess.cpp
@@ -42,6 +45,7 @@ add_library(cfd_solvers
     src/tcad/semiconductor1d.cpp
     src/tcad/mos.cpp
     src/tcad/bipolar_power.cpp
+    src/tcad/advanced_devices.cpp
     src/battery/lithium_ion.cpp
     src/battery/pack.cpp
     src/battery/thermal3d.cpp
@@ -51,10 +55,15 @@ add_library(cfd_solvers
     src/rf/peec.cpp
     src/rf/antenna.cpp
     src/rf/thin_wire_mom.cpp
+    src/rf/surface_mom.cpp
+    src/rf/modal_elements.cpp
+    src/rf/conductor_models.cpp
     src/circuit/spice.cpp
     src/circuit/analysis.cpp
     src/circuit/raw.cpp
     src/circuit/osdi_loader.cpp
+    src/circuit/osdi_adapter.cpp
+    src/circuit/external_spice_adapter.cpp
     src/core/task_graph.cpp
     src/physics/material.cpp
     src/physics/material_bridge.cpp
@@ -74,12 +83,20 @@ add_library(cfd_solvers
     src/fvm/turbulence.cpp
     src/fvm/rans_transport.cpp
     src/fvm/vof.cpp
+    src/fvm/thin_film.cpp
+    src/fvm/euler_euler.cpp
+    src/fvm/compressible_vof.cpp
+    src/fvm/spray.cpp
     src/fvm/particles.cpp
+    src/fvm/particle_interactions.cpp
+    src/fvm/dense_particle_rheology.cpp
     src/fvm/compressible1d.cpp
     src/fvm/advanced_models.cpp
     src/fvm/reacting.cpp
     src/fvm/radiation.cpp
     src/fvm/premixed_flame1d.cpp
+    src/fvm/flame_models.cpp
+    src/fvm/soot_radiation.cpp
     src/fvm/radiation_network.cpp
     src/fvm/mesh_motion.cpp
     src/fvm/adaptive_mesh.cpp
@@ -115,6 +132,7 @@ add_library(cfd_solvers
     src/optics/optimization.cpp
     src/optics/freeform.cpp
     src/optics/serialization.cpp
+    src/optics/interchange.cpp
     src/electrochemistry/corrosion_models.cpp
     src/lbm/d2q9.cpp
     src/lbm/esoteric_pull.cpp
@@ -151,11 +169,15 @@ add_library(cfd_solvers
     src/fem/eddy_current2d.cpp
     src/fem/material_laws.cpp
     src/fem/phase_change.cpp
+    src/fem/transport_stabilization.cpp
+    src/fem/mixed_stokes.cpp
+    src/fem/thermoelastic_block.cpp
     src/fem/modal_bar1d.cpp
     src/fdtd/maxwell1d.cpp
     src/fdtd/monitor.cpp
     src/fdtd/port.cpp
     src/fdtd/maxwell3d.cpp
+    src/fdtd/emc_sources.cpp
     src/fdtd/vtk_io.cpp
     src/fdtd/postprocess.cpp
     src/optics/ray.cpp
@@ -168,6 +190,7 @@ add_library(cfd_solvers
     src/chemistry/kinetics.cpp
     src/chemistry/thermo.cpp
     src/chemistry/advanced_thermo.cpp
+    src/chemistry/database_io.cpp
     src/chemistry/implicit_reactor.cpp
     src/chemistry/reactor_network.cpp
     src/chemistry/aqueous_equilibrium.cpp
@@ -178,11 +201,14 @@ add_library(cfd_solvers
     src/electrochemistry/nernst_planck1d.cpp
     src/electrochemistry/nernst_planck_poly.cpp
     src/electrochemistry/mixed_potential.cpp
+    src/electrochemistry/implicit_pnp.cpp
     src/multiphysics/field_registry.cpp
     src/multiphysics/transfer.cpp
     src/multiphysics/partitioned.cpp
     src/multiphysics/electro_thermal.cpp
     src/fdtd/cylindrical_tm.cpp
+    src/fdtd/cylindrical_multigrid.cpp
+    src/fdtd/multiconductor_tline.cpp
     src/fvm/function_objects.cpp
     src/fvm/combustion.cpp
     src/multiphysics/deformation_optics.cpp
@@ -295,6 +321,9 @@ endif()
 add_executable(cfd-bench apps/cfd-bench.cpp)
 target_link_libraries(cfd-bench PRIVATE cfd::solvers)
 
+add_executable(cfd-performance-bench apps/cfd-performance-bench.cpp)
+target_link_libraries(cfd-performance-bench PRIVATE cfd::solvers)
+
 add_executable(cfd-halo-plan apps/cfd-halo-plan.cpp)
 target_link_libraries(cfd-halo-plan PRIVATE cfd::solvers)
 
@@ -305,14 +334,17 @@ if(CFD_ENABLE_SYCL)
 endif()
 
 if(CFD_BUILD_EXAMPLES)
-    add_executable(cfd-example-battery-thermal examples/battery_thermal_pack.cpp)
-    target_link_libraries(cfd-example-battery-thermal PRIVATE cfd::solvers)
-    add_executable(cfd-example-battery-pack examples/battery_series_pack.cpp)
-    target_link_libraries(cfd-example-battery-pack PRIVATE cfd::solvers)
     set(CFD_EXAMPLE_TARGETS
         cfd-example-phase01-hpc
         cfd-example-phase02-lbm
         cfd-example-phase03-fvm
+        cfd-example-phase03-vof
+        cfd-example-phase03-thin-film
+        cfd-example-phase03-euler-euler
+        cfd-example-phase03-compressible-vof
+        cfd-example-phase03-spray
+        cfd-example-phase03-particle-rheology
+        cfd-example-phase03-reacting-hooks
         cfd-example-phase04-fem
         cfd-example-phase05-fdtd
         cfd-example-phase06-optics
@@ -321,10 +353,14 @@ if(CFD_BUILD_EXAMPLES)
         cfd-example-phase10-rf
         cfd-example-phase11-spice
         cfd-example-phase12-em-pic
+        cfd-example-phase12-surface-mom
         cfd-example-phase13-dem
         cfd-example-phase14-acoustics
         cfd-example-phase15-tcad
         cfd-example-phase16a-battery
+        cfd-example-battery-dfn
+        cfd-example-battery-pack
+        cfd-example-battery-thermal
         cfd-example-real-openfoam-channel
         cfd-example-real-fdtd-radome-vtk
         cfd-example-real-lbm3d-model)
@@ -332,6 +368,13 @@ if(CFD_BUILD_EXAMPLES)
         examples/phase01_hpc_multigrid.cpp
         examples/phase02_lbm_taylor_green.cpp
         examples/phase03_fvm_lid_cavity.cpp
+        examples/phase03_vof_dam_break.cpp
+        examples/phase03_fvm_thin_film.cpp
+        examples/phase03_euler_euler.cpp
+        examples/phase03_compressible_vof.cpp
+        examples/phase03_spray.cpp
+        examples/phase03_particle_rheology.cpp
+        examples/phase03_reacting_hooks.cpp
         examples/phase04_fem_dynamic_bar.cpp
         examples/phase05_fdtd_pulse.cpp
         examples/phase06_optics_lens.cpp
@@ -340,10 +383,14 @@ if(CFD_BUILD_EXAMPLES)
         examples/phase10_rf_sweep.cpp
         examples/phase11_spice_rc.cpp
         examples/phase12_em_pic.cpp
+        examples/phase12_surface_mom.cpp
         examples/phase13_dem_settling.cpp
         examples/phase14_acoustics_photoacoustic.cpp
         examples/phase15_tcad_pn.cpp
         examples/phase16a_battery_drive_cycle.cpp
+        examples/battery_dfn.cpp
+        examples/battery_series_pack.cpp
+        examples/battery_thermal_pack.cpp
         examples/real_openfoam_channel.cpp
         examples/real_fdtd_radome_vtk.cpp
         examples/real_lbm3d_model.cpp)
@@ -679,6 +726,10 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     endif()
     add_test(NAME cfd-bench-smoke COMMAND cfd-bench --lattice d3q19 --nx 8 --ny 8 --nz 8 --warmup 1 --steps 2 --threads 1 --csv)
     add_test(NAME cfd-bench-json-smoke COMMAND cfd-bench --lattice d3q19 --nx 8 --ny 8 --nz 8 --warmup 1 --steps 2 --threads 1 --json)
+    add_test(NAME cfd-performance-bench-smoke COMMAND cfd-performance-bench --quick --threads 1)
+    add_executable(cfd-structured-stencil-tests tests/test_structured_stencil.cpp)
+    target_link_libraries(cfd-structured-stencil-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-structured-stencil-tests COMMAND cfd-structured-stencil-tests)
     add_test(NAME cfd-halo-plan-smoke COMMAND cfd-halo-plan --lattice d3q27 --nx 8 --ny 8 --nz 8)
     add_test(NAME cfd-validation-catalog-smoke COMMAND cfd-validate)
     add_test(NAME cfd-battery-dfn-smoke COMMAND cfd-solve battery-dfn)
@@ -691,6 +742,126 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
     add_test(NAME cfd-fvm-collocated-skew-smoke COMMAND cfd-solve fvm-collocated-skew)
     add_test(NAME cfd-fvm-collocated-channel-smoke COMMAND cfd-solve fvm-collocated-channel)
     add_test(NAME cfd-fvm-scalar-transport-smoke COMMAND cfd-solve fvm-scalar-transport)
+    add_executable(cfd-thin-film-tests tests/test_thin_film.cpp)
+    target_link_libraries(cfd-thin-film-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-thin-film-tests COMMAND cfd-thin-film-tests)
+    add_executable(cfd-euler-euler-tests tests/test_euler_euler.cpp)
+    target_link_libraries(cfd-euler-euler-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-euler-euler-tests COMMAND cfd-euler-euler-tests)
+    add_executable(cfd-compressible-vof-tests tests/test_compressible_vof.cpp)
+    target_link_libraries(cfd-compressible-vof-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-compressible-vof-tests COMMAND cfd-compressible-vof-tests)
+    add_executable(cfd-spray-tests tests/test_spray.cpp)
+    target_link_libraries(cfd-spray-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-spray-tests COMMAND cfd-spray-tests)
+
+    add_executable(cfd-particle-interaction-tests tests/test_particle_interactions.cpp)
+    target_link_libraries(cfd-particle-interaction-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-particle-interaction-tests COMMAND cfd-particle-interaction-tests)
+
+    add_executable(cfd-reacting-hooks-tests tests/test_reacting_hooks.cpp)
+    target_link_libraries(cfd-reacting-hooks-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-reacting-hooks-tests COMMAND cfd-reacting-hooks-tests)
+
+    add_executable(cfd-optics-interchange-tests tests/test_optics_interchange.cpp)
+    target_link_libraries(cfd-optics-interchange-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-optics-interchange-tests COMMAND cfd-optics-interchange-tests)
+
+    add_executable(cfd-fvm-reordering-tests tests/test_reordering.cpp)
+    target_link_libraries(cfd-fvm-reordering-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-fvm-reordering-tests COMMAND cfd-fvm-reordering-tests)
+
+    add_executable(cfd-chemistry-database-tests tests/test_chemistry_database.cpp)
+    target_link_libraries(cfd-chemistry-database-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-chemistry-database-tests COMMAND cfd-chemistry-database-tests)
+
+    add_executable(cfd-multicomponent-pitzer-tests tests/test_multicomponent_pitzer.cpp)
+    target_link_libraries(cfd-multicomponent-pitzer-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-multicomponent-pitzer-tests COMMAND cfd-multicomponent-pitzer-tests)
+
+    add_executable(cfd-tcad-advanced-device-tests tests/test_tcad_advanced_devices.cpp)
+    target_link_libraries(cfd-tcad-advanced-device-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-tcad-advanced-device-tests COMMAND cfd-tcad-advanced-device-tests)
+
+    add_executable(cfd-bioelectromagnetic-feedback-tests tests/test_bioelectromagnetic_feedback.cpp)
+    target_link_libraries(cfd-bioelectromagnetic-feedback-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-bioelectromagnetic-feedback-tests COMMAND cfd-bioelectromagnetic-feedback-tests)
+
+    add_executable(cfd-rf-modal-port-tests tests/test_rf_modal_port.cpp)
+    target_link_libraries(cfd-rf-modal-port-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-rf-modal-port-tests COMMAND cfd-rf-modal-port-tests)
+
+    add_executable(cfd-rf-conductor-model-tests tests/test_rf_conductor_models.cpp)
+    target_link_libraries(cfd-rf-conductor-model-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-rf-conductor-model-tests COMMAND cfd-rf-conductor-model-tests)
+
+    add_executable(cfd-rf-surface-mom-tests tests/test_rf_surface_mom.cpp)
+    target_link_libraries(cfd-rf-surface-mom-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-rf-surface-mom-tests COMMAND cfd-rf-surface-mom-tests)
+
+    add_executable(cfd-fem-transport-stabilization-tests tests/test_fem_transport_stabilization.cpp)
+    target_link_libraries(cfd-fem-transport-stabilization-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-fem-transport-stabilization-tests COMMAND cfd-fem-transport-stabilization-tests)
+
+    add_executable(cfd-mixed-stokes-tests tests/test_mixed_stokes.cpp)
+    target_link_libraries(cfd-mixed-stokes-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-mixed-stokes-tests COMMAND cfd-mixed-stokes-tests)
+
+    add_executable(cfd-nonlinear-triangle-tests tests/test_nonlinear_triangle.cpp)
+    target_link_libraries(cfd-nonlinear-triangle-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-nonlinear-triangle-tests COMMAND cfd-nonlinear-triangle-tests)
+
+    add_executable(cfd-thermoelastic-block-tests tests/test_thermoelastic_block.cpp)
+    target_link_libraries(cfd-thermoelastic-block-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-thermoelastic-block-tests COMMAND cfd-thermoelastic-block-tests)
+
+    add_executable(cfd-fdtd-emc-source-tests tests/test_fdtd_emc_sources.cpp)
+    target_link_libraries(cfd-fdtd-emc-source-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-fdtd-emc-source-tests COMMAND cfd-fdtd-emc-source-tests)
+
+    add_executable(cfd-cylindrical-multigrid-tests tests/test_cylindrical_multigrid.cpp)
+    target_link_libraries(cfd-cylindrical-multigrid-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-cylindrical-multigrid-tests COMMAND cfd-cylindrical-multigrid-tests)
+
+    add_executable(cfd-multiconductor-tline-tests tests/test_multiconductor_tline.cpp)
+    target_link_libraries(cfd-multiconductor-tline-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-multiconductor-tline-tests COMMAND cfd-multiconductor-tline-tests)
+
+    add_executable(cfd-osdi-adapter-tests tests/test_osdi_adapter.cpp)
+    target_link_libraries(cfd-osdi-adapter-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-osdi-adapter-tests COMMAND cfd-osdi-adapter-tests)
+
+    add_executable(cfd-external-spice-adapter-tests tests/test_external_spice_adapter.cpp)
+    target_link_libraries(cfd-external-spice-adapter-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-external-spice-adapter-tests COMMAND cfd-external-spice-adapter-tests)
+
+    add_executable(cfd-spice-compat-tests tests/test_spice_compat.cpp)
+    target_link_libraries(cfd-spice-compat-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-spice-compat-tests COMMAND cfd-spice-compat-tests)
+
+    add_executable(cfd-cut-cell-electrode-tests tests/test_cut_cell_electrode.cpp)
+    target_link_libraries(cfd-cut-cell-electrode-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-cut-cell-electrode-tests COMMAND cfd-cut-cell-electrode-tests)
+
+    add_executable(cfd-corrosion-advanced-tests tests/test_corrosion_advanced.cpp)
+    target_link_libraries(cfd-corrosion-advanced-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-corrosion-advanced-tests COMMAND cfd-corrosion-advanced-tests)
+
+    add_executable(cfd-implicit-pnp-tests tests/test_implicit_pnp.cpp)
+    target_link_libraries(cfd-implicit-pnp-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-implicit-pnp-tests COMMAND cfd-implicit-pnp-tests)
+
+    add_executable(cfd-multiphysics-pipeline-tests tests/test_multiphysics_pipeline.cpp)
+    target_link_libraries(cfd-multiphysics-pipeline-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-multiphysics-pipeline-tests COMMAND cfd-multiphysics-pipeline-tests)
+
+    add_executable(cfd-porous-electrothermal-tests tests/test_porous_electrothermal.cpp)
+    target_link_libraries(cfd-porous-electrothermal-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-porous-electrothermal-tests COMMAND cfd-porous-electrothermal-tests)
+
+    add_executable(cfd-em-spice-bridge-tests tests/test_em_spice_bridge.cpp)
+    target_link_libraries(cfd-em-spice-bridge-tests PRIVATE cfd::solvers)
+    add_test(NAME cfd-em-spice-bridge-tests COMMAND cfd-em-spice-bridge-tests)
     add_test(NAME cfd-fem-poisson3d-smoke COMMAND cfd-solve fem-poisson3d)
     add_test(NAME cfd-fem-nonlinear-smoke COMMAND cfd-solve fem-nonlinear-poisson)
     add_test(NAME cfd-fem-darcy-smoke COMMAND cfd-solve fem-darcy)
@@ -730,5 +901,48 @@ if(CFD_BUILD_TESTS AND BUILD_TESTING)
                     --backend cpu --lattice d3q27 --nx 18 --ny 14 --nz 10 --steps 4
                     ${MPIEXEC_POSTFLAGS})
         set_tests_properties(cfd-mpi-cli-d3q19 cfd-mpi-cli-d3q27 PROPERTIES PROCESSORS 4)
+    endif()
+endif()
+
+# Some shared or mounted workspaces lose the executable bit when build products
+# are materialized. Keep a manual repair target for that environment, while the
+# CTest fixture and benchmark runner below repair modes immediately before use.
+if(UNIX)
+    get_property(_cfd_directory_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+    set(_cfd_executable_files)
+    foreach(_target IN LISTS _cfd_directory_targets)
+        get_target_property(_target_type ${_target} TYPE)
+        if(_target_type STREQUAL "EXECUTABLE")
+            list(APPEND _cfd_executable_files "$<TARGET_FILE:${_target}>")
+            add_custom_command(TARGET ${_target} POST_BUILD
+                COMMAND ${CMAKE_COMMAND}
+                        "-DTARGET_FILE=$<TARGET_FILE:${_target}>"
+                        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ensure_executable.cmake
+                VERBATIM)
+        endif()
+    endforeach()
+    add_custom_target(cfd-ensure-executable-modes
+        COMMAND ${CMAKE_COMMAND}
+                "-DTARGET_FILES=${_cfd_executable_files}"
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ensure_executable.cmake
+        VERBATIM)
+endif()
+
+# Run the same mode repair immediately before the CTest graph. This keeps test
+# execution deterministic even when a build directory was populated by a
+# different process after the build target ran.
+if(UNIX AND CFD_BUILD_TESTS AND BUILD_TESTING)
+    add_test(
+        NAME cfd-executable-mode-smoke
+        COMMAND ${CMAKE_COMMAND}
+                "-DTARGET_FILES=${_cfd_executable_files}"
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ensure_executable.cmake)
+    set_tests_properties(cfd-executable-mode-smoke PROPERTIES
+        FIXTURES_SETUP cfd_executable_modes)
+    get_property(_cfd_tests DIRECTORY PROPERTY TESTS)
+    list(REMOVE_ITEM _cfd_tests cfd-executable-mode-smoke)
+    if(_cfd_tests)
+        set_tests_properties(${_cfd_tests} PROPERTIES
+            FIXTURES_REQUIRED cfd_executable_modes)
     endif()
 endif()

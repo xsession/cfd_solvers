@@ -17,9 +17,7 @@ namespace cfd::distributed {
 // only the vector values referenced by remote columns before local SpMV.
 class MpiDistributedCsrOperator {
 public:
-    MpiDistributedCsrOperator(const cfd::core::CsrMatrix& global_matrix,
-                              std::size_t row_begin,
-                              std::size_t row_end,
+    MpiDistributedCsrOperator(const cfd::core::CsrMatrix& global_matrix, std::size_t row_begin, std::size_t row_end,
                               MPI_Comm communicator = MPI_COMM_WORLD);
     ~MpiDistributedCsrOperator();
 
@@ -32,7 +30,15 @@ public:
     [[nodiscard]] MPI_Comm communicator() const noexcept { return communicator_; }
     [[nodiscard]] const cfd::core::DistributedCsrPartition& partition() const noexcept { return partition_; }
     [[nodiscard]] std::size_t halo_value_count() const noexcept { return partition_.halo_columns().size(); }
+    [[nodiscard]] std::size_t halo_message_count() const noexcept;
+    [[nodiscard]] std::size_t halo_bytes_per_step() const noexcept;
+    [[nodiscard]] bool multiply_pending() const noexcept { return multiply_pending_; }
 
+    // Start only the communication phase. The caller may execute independent
+    // local work before finish_multiply() waits, unpacks the halo, and runs
+    // the local sparse operator.
+    void begin_multiply(std::span<const double> local_x);
+    void finish_multiply(std::span<const double> local_x, std::span<double> local_y);
     void multiply(std::span<const double> local_x, std::span<double> local_y);
     [[nodiscard]] double global_sum(double local_value) const;
 
@@ -56,17 +62,16 @@ private:
     std::vector<double> send_values_;
     std::vector<double> receive_values_;
     std::vector<double> halo_values_;
+    MPI_Request multiply_request_{MPI_REQUEST_NULL};
+    bool multiply_pending_{false};
 
     [[nodiscard]] int owner_of(std::size_t global_index) const;
 };
 
-[[nodiscard]] cfd::core::IterativeSolverResult mpi_distributed_conjugate_gradient(
-    MpiDistributedCsrOperator& matrix,
-    std::span<const double> local_rhs,
-    std::span<double> local_x,
-    cfd::core::KrylovWorkspace& workspace,
-    std::size_t max_iterations,
-    double relative_tolerance);
+[[nodiscard]] cfd::core::IterativeSolverResult
+mpi_distributed_conjugate_gradient(MpiDistributedCsrOperator& matrix, std::span<const double> local_rhs,
+                                   std::span<double> local_x, cfd::core::KrylovWorkspace& workspace,
+                                   std::size_t max_iterations, double relative_tolerance);
 
 } // namespace cfd::distributed
 #endif
